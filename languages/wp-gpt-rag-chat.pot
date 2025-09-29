@@ -1,0 +1,102 @@
+# WP GPT RAG Chat
+# Copyright (C) 2024
+# This file is distributed under the same license as the WP GPT RAG Chat package.
+msgid ""
+msgstr ""
+"Project-Id-Version: WP GPT RAG Chat 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-01-01 00:00+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"PO-Revision-Date: 2024-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+
+#: wp-gpt-rag-chat.php:15
+msgid "WP GPT RAG Chat requires PHP 7.4 or higher. Please upgrade your PHP version."
+msgstr ""
+
+#: wp-gpt-rag-chat.php:22
+msgid "WP GPT RAG Chat requires WordPress 6.6 or higher. Please upgrade WordPress."
+msgstr ""
+
+#: includes/class-settings.php:45
+msgid "OpenAI Configuration"
+msgstr ""
+
+#: includes/class-settings.php:52
+msgid "OpenAI API Key"
+msgstr ""
+
+#: includes/class-settings.php:60
+msgid "Embedding Model"
+msgstr ""
+
+#: includes/class-settings.php:75
+msgid "GPT Model"
+msgstr ""
+
+#: includes/class-settings.php:90
+msgid "Max Tokens"
+msgstr ""
+
+#: includes/class-settings.php:105
+msgid "Temperature"
+msgstr ""
+
+#: includes/class-settings.php:120
+msgid "Pinecone Configuration"
+msgstr ""
+
+#: includes/class-settings.php:127
+msgid "Pinecone API Key"
+msgstr ""
+
+#: includes/class-settings.php:135
+msgid "Pinecone Environment"
+msgstr ""
+
+#: includes/class-settings.php:143
+msgid "Pinecone Index Name"
+msgstr ""
+
+#: includes/class-settings.php:151
+msgid "Top K Results"
+msgstr ""
+
+#: includes/class-settings.php:159
+msgid "Similarity Threshold"
+msgstr ""
+
+#: includes/class-settings.php:167
+msgid "Content Chunking"
+msgstr ""
+
+#: includes/class-settings.php:174
+msgid "Chunk Size (characters)"
+msgstr ""
+
+#: includes/class-settings.php:182
+msgid "Chunk Overlap (characters)"
+msgstr ""
+
+#: includes/class-settings.php:190
+msgid "Privacy & Logging"
+msgstr ""
+
+#: includes/class-settings.php:197
+msgid "Log Retention (days)"
+msgstr ""
+
+#: includes/class-settings.php:205
+msgid "Anonymize IP Addresses"
+msgstr ""
+
+#: includes/class-settings.php:213
+msgid "Require Privacy Consent"
+msgstr ""
+
+#: includes/class-settings.php:220
+msgid "Enable"
+msgstr ""

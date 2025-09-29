@@ -1,0 +1,441 @@
+/**
+ * Admin CSS for WP GPT RAG Chat
+ */
+
+/* Settings Page */
+.wp-gpt-rag-chat-settings-info {
+    margin-top: 30px;
+}
+
+.wp-gpt-rag-chat-settings-info .card {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.wp-gpt-rag-chat-settings-info h3 {
+    margin-top: 0;
+    color: #23282d;
+}
+
+.wp-gpt-rag-chat-settings-info ol,
+.wp-gpt-rag-chat-settings-info ul {
+    margin-left: 20px;
+}
+
+.wp-gpt-rag-chat-settings-info li {
+    margin-bottom: 8px;
+}
+
+/* Connection Test */
+#connection-test-result {
+    padding: 10px;
+    border-radius: 4px;
+    display: none;
+}
+
+#connection-test-result.success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+#connection-test-result.error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+/* Indexing Page */
+.wp-gpt-rag-chat-stats {
+    margin-bottom: 30px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.stat-card h3 {
+    margin: 0 0 10px 0;
+    color: #646970;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.stat-number {
+    font-size: 32px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.post-type-breakdown {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.post-type-breakdown h3 {
+    margin-top: 0;
+    color: #1d2327;
+}
+
+.post-type-breakdown ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.post-type-breakdown li {
+    margin-bottom: 8px;
+}
+
+/* Bulk Actions */
+.bulk-action-section {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.bulk-action-section h3 {
+    margin-top: 0;
+    color: #1d2327;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background: #f0f0f1;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #2271b1;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    text-align: center;
+    font-size: 14px;
+    color: #646970;
+}
+
+/* Post List */
+.wp-gpt-rag-chat-post-list {
+    margin-top: 30px;
+}
+
+.wp-gpt-rag-chat-post-list .wp-list-table {
+    margin-top: 10px;
+}
+
+.status-indexed {
+    color: #00a32a;
+    font-weight: 500;
+}
+
+.status-not-indexed {
+    color: #d63638;
+    font-weight: 500;
+}
+
+/* Metabox */
+.wp-gpt-rag-chat-metabox {
+    font-size: 13px;
+}
+
+.wp-gpt-rag-chat-metabox h4 {
+    margin: 15px 0 10px 0;
+    font-size: 13px;
+    color: #1d2327;
+}
+
+.indexing-status {
+    background: #f6f7f7;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 12px;
+    margin: 15px 0;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.status-item:last-child {
+    margin-bottom: 0;
+}
+
+.status-indicator {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #c3c4c7;
+}
+
+.metabox-actions {
+    margin: 15px 0;
+}
+
+.metabox-actions .button {
+    margin-right: 5px;
+    margin-bottom: 5px;
+}
+
+.metabox-info {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #c3c4c7;
+}
+
+.metabox-info .description {
+    margin: 0;
+    font-style: italic;
+    color: #646970;
+}
+
+/* Bulk Actions in Post List */
+.bulk-actions {
+    margin-bottom: 10px;
+}
+
+.bulk-actions select {
+    margin-right: 10px;
+}
+
+.bulk-actions .button {
+    margin-right: 5px;
+}
+
+/* Admin Notices */
+.wp-gpt-rag-chat-notice {
+    margin: 15px 0;
+    padding: 12px;
+    border-left: 4px solid #007cba;
+    background: #f0f6fc;
+}
+
+.wp-gpt-rag-chat-notice.notice-error {
+    border-left-color: #d63638;
+    background: #fcf0f1;
+}
+
+.wp-gpt-rag-chat-notice.notice-warning {
+    border-left-color: #dba617;
+    background: #fcf9e8;
+}
+
+.wp-gpt-rag-chat-notice.notice-success {
+    border-left-color: #00a32a;
+    background: #f0f6fc;
+}
+
+/* Form Fields */
+.wp-gpt-rag-chat-field-group {
+    margin-bottom: 20px;
+}
+
+.wp-gpt-rag-chat-field-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.wp-gpt-rag-chat-field-group .description {
+    margin-top: 5px;
+    font-style: italic;
+    color: #646970;
+}
+
+.wp-gpt-rag-chat-field-group input[type="text"],
+.wp-gpt-rag-chat-field-group input[type="password"],
+.wp-gpt-rag-chat-field-group input[type="number"],
+.wp-gpt-rag-chat-field-group select {
+    width: 100%;
+    max-width: 400px;
+}
+
+/* Chunking Test */
+#chunking-test-result {
+    padding: 15px;
+    border-radius: 4px;
+    display: none;
+    margin-top: 15px;
+}
+
+#chunking-test-result.success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+#chunking-test-result.error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+#chunking-test-result h4,
+#chunking-test-result h5 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+#chunking-test-result ol {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+#chunking-test-result li {
+    margin-bottom: 5px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+/* Settings Validation */
+#settings-validation-errors {
+    margin-bottom: 20px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .bulk-action-section {
+        padding: 15px;
+    }
+    
+    .wp-gpt-rag-chat-settings-info .card {
+        padding: 15px;
+    }
+}
+
+/* Loading States */
+.wp-gpt-rag-chat-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.wp-gpt-rag-chat-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #007cba;
+    border-radius: 50%;
+    animation: wp-gpt-rag-chat-spin 1s linear infinite;
+}
+
+@keyframes wp-gpt-rag-chat-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Tooltips */
+[data-tooltip] {
+    position: relative;
+    cursor: help;
+}
+
+[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+}
+
+[data-tooltip]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #000;
+    z-index: 1000;
+}
+
+/* Accessibility */
+.wp-gpt-rag-chat-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Focus States */
+.wp-gpt-rag-chat-focusable:focus {
+    outline: 2px solid #007cba;
+    outline-offset: 2px;
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+    .wp-gpt-rag-chat-settings-info .card,
+    .bulk-action-section,
+    .stat-card,
+    .post-type-breakdown {
+        border: 2px solid #000;
+    }
+    
+    .status-indexed {
+        color: #000;
+        font-weight: bold;
+    }
+    
+    .status-not-indexed {
+        color: #000;
+        font-weight: bold;
+    }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    .progress-fill,
+    .wp-gpt-rag-chat-loading::after {
+        transition: none;
+        animation: none;
+    }
+}

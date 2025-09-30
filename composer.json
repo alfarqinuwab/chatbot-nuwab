@@ -1,0 +1,26 @@
+{
+    "name": "wp-gpt-rag-chat/chatbot-nuwab",
+    "description": "WordPress GPT RAG Chat Plugin with PDF and CSV import capabilities",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "WP GPT RAG Chat Team"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "smalot/pdfparser": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "WP_GPT_RAG_Chat\\": "includes/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

@@ -1,0 +1,297 @@
+/**
+ * Enhanced Settings Page Design
+ * Applies card-based layout to WordPress core settings pages
+ */
+
+/* Main Settings Container */
+.wrap {
+    background: #f8f9fa;
+    margin: 20px 0 0 -20px;
+    padding: 0;
+    min-height: 100vh;
+}
+
+.wrap h1 {
+    background: #ffffff;
+    padding: 24px 40px;
+    margin: 0;
+    border-bottom: 1px solid #e1e5e9;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    border-radius: 0;
+}
+
+/* Form Table Styling */
+.form-table {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e1e5e9;
+    margin: 40px;
+    overflow: hidden;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.form-table th {
+    background: #f8f9fa;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e1e5e9;
+    font-weight: 600;
+    color: #1d2327;
+    font-size: 14px;
+    width: 200px;
+    vertical-align: top;
+}
+
+.form-table td {
+    padding: 20px 24px;
+    border-bottom: 1px solid #f0f0f1;
+    vertical-align: top;
+}
+
+.form-table tr:last-child th,
+.form-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* Form Input Styling */
+.form-table input[type="text"],
+.form-table input[type="email"],
+.form-table input[type="url"],
+.form-table input[type="password"],
+.form-table input[type="number"],
+.form-table select,
+.form-table textarea {
+    width: 100%;
+    max-width: 400px;
+    padding: 12px 16px;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.form-table input:focus,
+.form-table select:focus,
+.form-table textarea:focus {
+    border-color: #0073aa;
+    box-shadow: 0 0 0 3px rgba(0, 115, 170, 0.1);
+    outline: none;
+    transform: translateY(-1px);
+}
+
+.form-table input:hover,
+.form-table select:hover,
+.form-table textarea:hover {
+    border-color: #0073aa;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* Description Text */
+.form-table .description {
+    color: #646970;
+    font-size: 13px;
+    margin-top: 8px;
+    line-height: 1.5;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #0073aa;
+    display: block;
+}
+
+/* Checkbox Styling */
+.form-table input[type="checkbox"] {
+    margin-right: 12px;
+    transform: scale(1.2);
+    accent-color: #0073aa;
+}
+
+/* Fieldset Styling */
+.form-table fieldset {
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 16px;
+    background: #f8f9fa;
+    margin: 8px 0;
+}
+
+.form-table legend {
+    font-weight: 600;
+    color: #1d2327;
+    padding: 0 8px;
+    background: #ffffff;
+    border-radius: 4px;
+}
+
+/* Submit Button Styling */
+.submit {
+    background: #ffffff;
+    padding: 24px 40px;
+    margin: 0 40px 40px 40px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e1e5e9;
+    text-align: center;
+}
+
+.submit .button-primary {
+    padding: 16px 40px;
+    font-size: 16px;
+    height: auto;
+    border-radius: 8px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 115, 170, 0.3);
+    transition: all 0.3s ease;
+}
+
+.submit .button-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 115, 170, 0.4);
+}
+
+/* Settings Sections */
+.settings-section {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e1e5e9;
+    margin: 40px;
+    padding: 32px 40px;
+}
+
+.settings-section h2 {
+    font-size: 20px;
+    margin: 0 0 20px 0;
+    color: #1d2327;
+    font-weight: 600;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #f0f0f1;
+}
+
+.settings-section .description {
+    color: #646970;
+    font-size: 14px;
+    margin: 0 0 24px 0;
+    line-height: 1.5;
+}
+
+/* Admin Notices */
+.wp-admin .notice {
+    margin: 20px 40px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e1e5e9;
+}
+
+/* Help Tabs */
+.contextual-help-tabs {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e1e5e9;
+    margin: 40px;
+    overflow: hidden;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .form-table {
+        margin: 20px;
+    }
+    
+    .settings-section {
+        margin: 20px;
+        padding: 24px 32px;
+    }
+    
+    .submit {
+        margin: 0 20px 20px 20px;
+        padding: 20px 32px;
+    }
+    
+    .wrap h1 {
+        padding: 20px 32px;
+    }
+}
+
+@media (max-width: 768px) {
+    .form-table {
+        margin: 16px;
+    }
+    
+    .form-table th,
+    .form-table td {
+        padding: 16px 20px;
+    }
+    
+    .settings-section {
+        margin: 16px;
+        padding: 20px 24px;
+    }
+    
+    .submit {
+        margin: 0 16px 16px 16px;
+        padding: 16px 24px;
+    }
+    
+    .wrap h1 {
+        padding: 16px 24px;
+        font-size: 22px;
+    }
+    
+    .form-table input[type="text"],
+    .form-table input[type="email"],
+    .form-table input[type="url"],
+    .form-table input[type="password"],
+    .form-table input[type="number"],
+    .form-table select,
+    .form-table textarea {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 600px) {
+    .wrap {
+        margin: 20px 0 0 0;
+    }
+    
+    .form-table {
+        margin: 12px;
+    }
+    
+    .form-table th,
+    .form-table td {
+        padding: 12px 16px;
+        display: block;
+        width: 100%;
+    }
+    
+    .form-table th {
+        background: #f8f9fa;
+        border-bottom: none;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+    
+    .settings-section {
+        margin: 12px;
+        padding: 16px 20px;
+    }
+    
+    .submit {
+        margin: 0 12px 12px 12px;
+        padding: 12px 20px;
+    }
+    
+    .wrap h1 {
+        padding: 12px 20px;
+        font-size: 20px;
+    }
+}

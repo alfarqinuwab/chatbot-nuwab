@@ -17,6 +17,7 @@ class Settings {
      */
     public function __construct() {
         add_action('admin_init', [$this, 'register_settings']);
+        add_action('wp_ajax_wp_gpt_rag_chat_save_settings', [$this, 'ajax_save_settings']);
     }
     
     /**
@@ -278,37 +279,136 @@ class Settings {
         
         // OpenAI settings
         $sanitized['openai_api_key'] = sanitize_text_field($input['openai_api_key'] ?? '');
-        $sanitized['embedding_model'] = sanitize_text_field($input['embedding_model'] ?? 'text-embedding-3-large');
-        $sanitized['gpt_model'] = sanitize_text_field($input['gpt_model'] ?? 'gpt-4');
-        $sanitized['max_tokens'] = intval($input['max_tokens'] ?? 1000);
-        $sanitized['temperature'] = floatval($input['temperature'] ?? 0.7);
+        $sanitized['openai_environment'] = sanitize_text_field($input['openai_environment'] ?? 'openai');
+        $sanitized['chat_model'] = sanitize_text_field($input['chat_model'] ?? 'gpt-4.1');
+        $sanitized['openai_vision'] = isset($input['openai_vision']) ? (bool) $input['openai_vision'] : false;
+        $sanitized['max_tokens'] = intval($input['max_tokens'] ?? 1024);
+        $sanitized['temperature'] = floatval($input['temperature'] ?? 0.8);
         
         // Pinecone settings
+        $sanitized['pinecone_name'] = sanitize_text_field($input['pinecone_name'] ?? 'Pinecone');
+        $sanitized['pinecone_type'] = sanitize_text_field($input['pinecone_type'] ?? 'pinecone');
         $sanitized['pinecone_api_key'] = sanitize_text_field($input['pinecone_api_key'] ?? '');
         $sanitized['pinecone_host'] = esc_url_raw($input['pinecone_host'] ?? '');
+        $sanitized['pinecone_namespace'] = sanitize_text_field($input['pinecone_namespace'] ?? '');
+        $sanitized['pinecone_dimensions'] = intval($input['pinecone_dimensions'] ?? '');
+        $sanitized['embedding_dimensions'] = intval($input['embedding_dimensions'] ?? '');
+        $sanitized['pinecone_env_id'] = sanitize_text_field($input['pinecone_env_id'] ?? '');
+        $sanitized['pinecone_score_threshold'] = floatval($input['pinecone_score_threshold'] ?? 0.7);
+        
+        // Chatbot behavior settings
+        $sanitized['system_prompt'] = sanitize_textarea_field($input['system_prompt'] ?? 'You are a helpful AI assistant. Answer questions based on the provided context.');
+        
+        // Indexing settings
+        $sanitized['post_types'] = isset($input['post_types']) ? array_map('sanitize_text_field', $input['post_types']) : ['post', 'page'];
+        $sanitized['auto_sync'] = isset($input['auto_sync']) ? (bool) $input['auto_sync'] : true;
+        
+        // Chat settings
+        $sanitized['enable_chatbot'] = isset($input['enable_chatbot']) ? (bool) $input['enable_chatbot'] : true;
+        $sanitized['widget_placement'] = sanitize_text_field($input['widget_placement'] ?? 'floating');
+        $sanitized['greeting_text'] = sanitize_text_field($input['greeting_text'] ?? 'Hello! How can I help you today?');
+        $sanitized['enable_history'] = isset($input['enable_history']) ? (bool) $input['enable_history'] : true;
+        $sanitized['max_conversation_length'] = intval($input['max_conversation_length'] ?? 10);
+        $sanitized['allow_anonymous'] = isset($input['allow_anonymous']) ? (bool) $input['allow_anonymous'] : true;
+        
+        // Advanced settings
+        $sanitized['debug_mode'] = isset($input['debug_mode']) ? (bool) $input['debug_mode'] : false;
+        $sanitized['logging_level'] = sanitize_text_field($input['logging_level'] ?? 'error');
+        $sanitized['embedding_model'] = sanitize_text_field($input['embedding_model'] ?? 'text-embedding-3-small');
+        
+        // Legacy settings (for backward compatibility)
+        $sanitized['embedding_model'] = sanitize_text_field($input['embedding_model'] ?? 'text-embedding-3-large');
+        $sanitized['gpt_model'] = sanitize_text_field($input['gpt_model'] ?? 'gpt-4');
         $sanitized['pinecone_index_name'] = sanitize_text_field($input['pinecone_index_name'] ?? '');
         $sanitized['top_k'] = intval($input['top_k'] ?? 5);
         $sanitized['similarity_threshold'] = floatval($input['similarity_threshold'] ?? 0.7);
-        
-        // Chunking settings
         $sanitized['chunk_size'] = intval($input['chunk_size'] ?? 1400);
         $sanitized['chunk_overlap'] = intval($input['chunk_overlap'] ?? 150);
-        
-        // Privacy settings
         $sanitized['log_retention_days'] = intval($input['log_retention_days'] ?? 30);
         $sanitized['anonymize_ips'] = isset($input['anonymize_ips']) ? (bool) $input['anonymize_ips'] : false;
         $sanitized['require_consent'] = isset($input['require_consent']) ? (bool) $input['require_consent'] : true;
         
         // Validate ranges
-        $sanitized['max_tokens'] = max(100, min(4000, $sanitized['max_tokens']));
+        $sanitized['max_tokens'] = max(1, min(32768, $sanitized['max_tokens']));
         $sanitized['temperature'] = max(0, min(2, $sanitized['temperature']));
+        $sanitized['pinecone_dimensions'] = max(1, min(2048, $sanitized['pinecone_dimensions']));
+        $sanitized['pinecone_score_threshold'] = max(0, min(1, $sanitized['pinecone_score_threshold']));
+        $sanitized['max_conversation_length'] = max(1, min(50, $sanitized['max_conversation_length']));
         $sanitized['top_k'] = max(1, min(20, $sanitized['top_k']));
         $sanitized['similarity_threshold'] = max(0, min(1, $sanitized['similarity_threshold']));
         $sanitized['chunk_size'] = max(500, min(2000, $sanitized['chunk_size']));
         $sanitized['chunk_overlap'] = max(50, min(500, $sanitized['chunk_overlap']));
         $sanitized['log_retention_days'] = max(1, min(365, $sanitized['log_retention_days']));
         
+        // Add redirect with success message after settings are saved
+        add_action('admin_init', [$this, 'redirect_after_save'], 20);
+        
         return $sanitized;
+    }
+    
+    /**
+     * AJAX handler for saving settings
+     */
+    public function ajax_save_settings() {
+        // Verify nonce for security
+        if (!wp_verify_nonce($_POST['nonce'], 'wp_gpt_rag_chat_settings_nonce')) {
+            wp_send_json_error([
+                'message' => __('Security check failed. Please refresh the page and try again.', 'wp-gpt-rag-chat')
+            ]);
+        }
+        
+        // Check user capabilities
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error([
+                'message' => __('You do not have permission to save settings.', 'wp-gpt-rag-chat')
+            ]);
+        }
+        
+        // Get and sanitize the settings data
+        $input = $_POST['settings'] ?? [];
+        $sanitized_settings = $this->sanitize_settings($input);
+        
+        // Get current settings to compare
+        $current_settings = get_option(self::OPTION_NAME, []);
+        
+        // Save the settings
+        $result = update_option(self::OPTION_NAME, $sanitized_settings);
+        
+        if ($result) {
+            wp_send_json_success([
+                'message' => __('Settings saved successfully!', 'wp-gpt-rag-chat'),
+                'settings' => $sanitized_settings
+            ]);
+        } else {
+            // Check if settings are actually different
+            if ($current_settings === $sanitized_settings) {
+                wp_send_json_success([
+                    'message' => __('Settings are already up to date.', 'wp-gpt-rag-chat'),
+                    'settings' => $sanitized_settings
+                ]);
+            } else {
+                wp_send_json_error([
+                    'message' => __('Failed to save settings. Please try again.', 'wp-gpt-rag-chat')
+                ]);
+            }
+        }
+    }
+    
+    /**
+     * Redirect after settings save with success message (legacy method for non-AJAX)
+     */
+    public function redirect_after_save() {
+        // Only redirect if we're on the settings page and settings were just saved
+        if (isset($_POST['option_page']) && $_POST['option_page'] === 'wp_gpt_rag_chat_settings') {
+            $redirect_url = add_query_arg([
+                'page' => 'wp-gpt-rag-chat-settings',
+                'status' => 'success',
+                'message' => urlencode(__('Settings saved successfully!', 'wp-gpt-rag-chat'))
+            ], admin_url('admin.php'));
+            
+            wp_redirect($redirect_url);
+            exit;
+        }
     }
     
     /**
@@ -316,14 +416,48 @@ class Settings {
      */
     public static function get_settings() {
         $defaults = [
+            // OpenAI settings
             'openai_api_key' => '',
+            'openai_environment' => 'openai',
+            'chat_model' => 'gpt-4.1',
+            'openai_vision' => false,
+            'max_tokens' => 1024,
+            'temperature' => 0.8,
+            
+            // Pinecone settings
+            'pinecone_name' => 'Pinecone',
+            'pinecone_type' => 'pinecone',
             'pinecone_api_key' => '',
             'pinecone_host' => '',
-            'pinecone_index_name' => '',
-            'embedding_model' => 'text-embedding-3-large',
+            'pinecone_namespace' => '',
+            'pinecone_dimensions' => '',
+            'embedding_dimensions' => 512,
+            'pinecone_env_id' => '',
+            'pinecone_score_threshold' => 0.7,
+            
+            // Chatbot behavior settings
+            'system_prompt' => 'You are a helpful AI assistant. Answer questions based on the provided context.',
+            
+            // Indexing settings
+            'post_types' => ['post', 'page'],
+            'auto_sync' => true,
+            
+            // Chat settings
+            'enable_chatbot' => true,
+            'widget_placement' => 'floating',
+            'greeting_text' => 'Hello! How can I help you today?',
+            'enable_history' => true,
+            'max_conversation_length' => 10,
+            'allow_anonymous' => true,
+            
+            // Advanced settings
+            'debug_mode' => false,
+            'logging_level' => 'error',
+            'embedding_model' => 'text-embedding-3-small',
+            
+            // Legacy settings (for backward compatibility)
             'gpt_model' => 'gpt-4',
-            'max_tokens' => 1000,
-            'temperature' => 0.7,
+            'pinecone_index_name' => '',
             'top_k' => 5,
             'similarity_threshold' => 0.7,
             'chunk_size' => 1400,

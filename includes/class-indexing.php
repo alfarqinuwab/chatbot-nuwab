@@ -322,12 +322,11 @@ class Indexing {
     /**
      * Index all content
      */
-    public function index_all_content($limit = 50, $offset = 0) {
-        $posts = get_posts([
+    public function index_all_content($limit = 50, $offset = 0, $post_type = '') {
+        $query_args = [
             'numberposts' => $limit,
             'offset' => $offset,
             'post_status' => ['publish', 'private'],
-            'post_type' => get_post_types(['public' => true]),
             'meta_query' => [
                 [
                     'key' => '_wp_gpt_rag_chat_include',
@@ -335,7 +334,16 @@ class Indexing {
                     'compare' => '='
                 ]
             ]
-        ]);
+        ];
+        
+        // Add post type filter if specified
+        if ($post_type && $post_type !== 'all') {
+            $query_args['post_type'] = $post_type;
+        } else {
+            $query_args['post_type'] = get_post_types(['public' => true]);
+        }
+        
+        $posts = get_posts($query_args);
         
         $results = [
             'processed' => 0,
@@ -361,12 +369,64 @@ class Indexing {
     }
     
     /**
+     * Index a single post
+     */
+    public function index_single_post($post_type = '') {
+        $query_args = [
+            'numberposts' => 1,
+            'post_status' => ['publish', 'private'],
+            'meta_query' => [
+                [
+                    'key' => '_wp_gpt_rag_chat_include',
+                    'value' => '1',
+                    'compare' => '='
+                ]
+            ]
+        ];
+        
+        // Add post type filter if specified
+        if ($post_type && $post_type !== 'all') {
+            $query_args['post_type'] = $post_type;
+        } else {
+            $query_args['post_type'] = get_post_types(['public' => true]);
+        }
+        
+        $posts = get_posts($query_args);
+        
+        $results = [
+            'processed' => 0,
+            'total' => count($posts),
+            'errors' => []
+        ];
+        
+        if (!empty($posts)) {
+            $post = $posts[0];
+            $success = $this->index_post($post->ID);
+            
+            if ($success) {
+                $results['processed'] = 1;
+            } else {
+                $results['errors'][] = sprintf(__('Failed to index post: %s', 'wp-gpt-rag-chat'), $post->post_title);
+            }
+        }
+        
+        return $results;
+    }
+    
+    /**
      * Reindex changed content
      */
-    public function reindex_changed_content($limit = 50, $offset = 0) {
+    public function reindex_changed_content($limit = 50, $offset = 0, $post_type = '') {
         global $wpdb;
         
         $vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
+        
+        // Build post type filter
+        if ($post_type && $post_type !== 'all') {
+            $post_type_filter = "'" . esc_sql($post_type) . "'";
+        } else {
+            $post_type_filter = "'" . implode("','", get_post_types(['public' => true])) . "'";
+        }
         
         // Get posts that have been modified since last indexing
         $posts = $wpdb->get_results($wpdb->prepare(
@@ -374,7 +434,7 @@ class Indexing {
             FROM {$wpdb->posts} p
             LEFT JOIN {$vectors_table} v ON p.ID = v.post_id
             WHERE p.post_status IN ('publish', 'private')
-            AND p.post_type IN ('" . implode("','", get_post_types(['public' => true])) . "')
+            AND p.post_type IN ({$post_type_filter})
             AND (v.updated_at IS NULL OR p.post_modified > v.updated_at)
             AND p.ID IN (
                 SELECT post_id FROM {$wpdb->postmeta} 

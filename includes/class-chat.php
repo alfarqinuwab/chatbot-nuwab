@@ -204,15 +204,21 @@ class Chat {
             </div>
             
             <!-- Chat Window (Expanded State) -->
+            <div class="wp-gpt-rag-chat-overlay" role="presentation"></div>
             <div class="wp-gpt-rag-chat-window">
                 <div class="wp-gpt-rag-chat-header">
                     <h3 class="wp-gpt-rag-chat-header-title">
                         <img src="<?php echo esc_url( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/avatar_small.png' ); ?>" alt="AI Avatar" class="wp-gpt-rag-chat-header-avatar" />
                         مساعدك الذكي
                     </h3>
-                    <button type="button" class="wp-gpt-rag-chat-toggle" aria-label="إغلاق المحادثة">
-                        <span class="wp-gpt-rag-chat-icon">×</span>
-                    </button>
+                    <div class="wp-gpt-rag-chat-header-actions">
+                        <button type="button" class="wp-gpt-rag-chat-expand" aria-label="تكبير المحادثة" aria-expanded="false">
+                            <i class="fas fa-up-right-and-down-left-from-center"></i>
+                        </button>
+                        <button type="button" class="wp-gpt-rag-chat-toggle" aria-label="إغلاق المحادثة">
+                            <span class="wp-gpt-rag-chat-icon">×</span>
+                        </button>
+                    </div>
                 </div>
             
             <div class="wp-gpt-rag-chat-body">

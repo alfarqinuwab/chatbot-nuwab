@@ -22,6 +22,24 @@
             $(document).on('click', '.wp-gpt-rag-chat-toggle', function() {
                 self.toggleWidget();
             });
+
+            // Expand chat widget to modal view
+            $(document).on('click', '.wp-gpt-rag-chat-expand', function(e) {
+                e.stopPropagation();
+                self.toggleExpand(this);
+            });
+            
+            // Close expanded view when clicking overlay
+            $(document).on('click', '.wp-gpt-rag-chat-overlay', function() {
+                self.setExpanded(false);
+            });
+            
+            // Handle escape key to close expanded view
+            $(document).on('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    self.setExpanded(false);
+                }
+            });
             
             // Send message
             $(document).on('click', '#wp-gpt-rag-chat-send', function() {
@@ -63,14 +81,43 @@
             // Show initial state
             this.updateWidgetState();
             this.startFabMessages();
+            this.isExpanded = false;
         },
         
         toggleWidget: function() {
             this.isOpen = !this.isOpen;
             this.updateWidgetState();
+            if (!this.isOpen) {
+                this.setExpanded(false);
+            }
             
             if (this.isOpen) {
                 $('#wp-gpt-rag-chat-input').focus();
+            }
+        },
+        
+        toggleExpand: function(button) {
+            var isExpanded = this.isExpanded = !this.isExpanded;
+            this.setExpanded(isExpanded);
+            if (button) {
+                $(button).attr('aria-expanded', isExpanded);
+                var $icon = $(button).find('i');
+                if ($icon.length) {
+                    $icon.toggleClass('fa-up-right-and-down-left-from-center', !isExpanded);
+                    $icon.toggleClass('fa-down-left-and-up-right-to-center', isExpanded);
+                }
+            }
+        },
+
+        setExpanded: function(expanded) {
+            var $widget = $('#wp-gpt-rag-chat-widget');
+            this.isExpanded = expanded;
+            $widget.toggleClass('wp-gpt-rag-chat-expanded', expanded);
+            if (!expanded) {
+                $('.wp-gpt-rag-chat-expand').attr('aria-expanded', 'false');
+                $('.wp-gpt-rag-chat-expand i')
+                    .removeClass('fa-down-left-and-up-right-to-center')
+                    .addClass('fa-up-right-and-down-left-from-center');
             }
         },
 

@@ -161,6 +161,35 @@
     border: 3px solid rgba(255,255,255,0.2);
 }
 
+.wp-gpt-rag-chat-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.wp-gpt-rag-chat-expand {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.wp-gpt-rag-chat-expand:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.wp-gpt-rag-chat-expand:focus {
+    outline: none;
+}
+
 .wp-gpt-rag-chat-toggle {
     background: none;
     border: none;
@@ -179,6 +208,32 @@
 
 .wp-gpt-rag-chat-toggle:hover {
     background-color: rgba(255, 255, 255, 0.1);
+}
+
+.wp-gpt-rag-chat-widget.wp-gpt-rag-chat-expanded .wp-gpt-rag-chat-window {
+    width: min(720px, calc(100vw - 40px));
+    height: min(80vh, 720px);
+    max-height: none;
+    border-radius: 20px;
+    transform: translate(-50%, -50%);
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 10001;
+}
+
+.wp-gpt-rag-chat-widget.wp-gpt-rag-chat-expanded .wp-gpt-rag-chat-overlay {
+    display: block;
+}
+
+.wp-gpt-rag-chat-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 10000;
 }
 
 /* Chat Body */

@@ -85,3 +85,4 @@ For issues with PDF text extraction, please check:
 - PHP memory limit (recommended: 256MB or higher)
 - File upload limits
 - PDF file format compatibility
+

@@ -52,6 +52,8 @@ class Plugin {
         add_action('wp_ajax_wp_gpt_rag_chat_cleanup_logs', [$this, 'handle_cleanup_logs']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_indexed_items', [$this, 'handle_get_indexed_items']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_post_count', [$this, 'handle_get_post_count']);
+        add_action('wp_ajax_wp_gpt_rag_chat_remove_from_index', [$this, 'handle_remove_from_index']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_stats', [$this, 'handle_get_stats']);
         add_action('wp_ajax_wp_gpt_rag_chat_import_csv', [$this, 'handle_import_csv']);
         add_action('wp_ajax_wp_gpt_rag_chat_import_pdf', [$this, 'handle_import_pdf']);
         add_action('wp_ajax_wp_gpt_rag_chat_extract_pdf_text', [$this, 'handle_extract_pdf_text']);
@@ -598,11 +600,28 @@ class Plugin {
                 }
             }
             
+            // Get newly indexed items for real-time table updates
+            $newly_indexed = [];
+            if (!empty($result['indexed_post_ids'])) {
+                foreach ($result['indexed_post_ids'] as $post_id) {
+                    $post = get_post($post_id);
+                    if ($post) {
+                        $newly_indexed[] = [
+                            'id' => $post_id,
+                            'title' => $post->post_title,
+                            'type' => $post->post_type,
+                            'edit_url' => get_edit_post_link($post_id)
+                        ];
+                    }
+                }
+            }
+            
             wp_send_json_success([
                 'processed' => $result['processed'],
                 'total' => $total_posts,
                 'completed' => ($action === 'index_single') ? true : (($offset + 10) >= $total_posts),
-                'errors' => $result['errors']
+                'errors' => $result['errors'],
+                'newly_indexed' => $newly_indexed
             ]);
         } catch (\Exception $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
@@ -906,18 +925,22 @@ class Plugin {
         
         global $wpdb;
         
+        // Get all public post types that can be indexed
+        $indexable_post_types = get_post_types(['public' => true], 'names');
+        $post_type_placeholders = implode(',', array_fill(0, count($indexable_post_types), '%s'));
+        
         // Get posts that are in the index queue
-        $indexed_posts = $wpdb->get_results("
+        $indexed_posts = $wpdb->get_results($wpdb->prepare("
             SELECT DISTINCT p.ID, p.post_title, p.post_type, p.post_modified
             FROM {$wpdb->posts} p
             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
             WHERE p.post_status = 'publish'
-            AND p.post_type IN ('post', 'page')
+            AND p.post_type IN ($post_type_placeholders)
             AND pm.meta_key = '_wp_gpt_rag_chat_indexed'
             AND pm.meta_value = '1'
             ORDER BY p.post_modified DESC
             LIMIT 50
-        ");
+        ", $indexable_post_types));
         
         $items = [];
         foreach ($indexed_posts as $post_data) {
@@ -977,6 +1000,63 @@ class Plugin {
         $count = count($posts);
         
         wp_send_json_success(['count' => $count]);
+    }
+    
+    /**
+     * Handle remove from index AJAX request
+     */
+    public function handle_remove_from_index() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $post_id = intval($_POST['post_id'] ?? 0);
+        
+        if (!$post_id) {
+            wp_send_json_error(['message' => __('Invalid post ID.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            $indexing = new Indexing();
+            $deleted_count = $indexing->delete_post_vectors($post_id);
+            
+            // Remove the indexed meta
+            delete_post_meta($post_id, '_wp_gpt_rag_chat_indexed');
+            delete_post_meta($post_id, '_wp_gpt_rag_chat_last_indexed');
+            
+            wp_send_json_success([
+                'message' => sprintf(__('Successfully removed %d vectors from index and Pinecone.', 'wp-gpt-rag-chat'), $deleted_count),
+                'deleted_count' => $deleted_count
+            ]);
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle get stats AJAX request
+     */
+    public function handle_get_stats() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            $stats = Admin::get_indexing_stats();
+            
+            wp_send_json_success([
+                'total_vectors' => $stats['total_vectors'],
+                'total_posts' => $stats['total_posts'],
+                'recent_activity' => $stats['recent_activity'],
+                'by_post_type' => $stats['by_post_type']
+            ]);
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
     }
     
     /**

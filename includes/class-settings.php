@@ -292,7 +292,7 @@ class Settings {
         $sanitized['pinecone_host'] = esc_url_raw($input['pinecone_host'] ?? '');
         $sanitized['pinecone_namespace'] = sanitize_text_field($input['pinecone_namespace'] ?? '');
         $sanitized['pinecone_dimensions'] = intval($input['pinecone_dimensions'] ?? '');
-        $sanitized['embedding_dimensions'] = intval($input['embedding_dimensions'] ?? '');
+        $sanitized['embedding_dimensions'] = sanitize_text_field($input['embedding_dimensions'] ?? '1536');
         $sanitized['pinecone_env_id'] = sanitize_text_field($input['pinecone_env_id'] ?? '');
         $sanitized['pinecone_score_threshold'] = floatval($input['pinecone_score_threshold'] ?? 0.7);
         
@@ -317,7 +317,7 @@ class Settings {
         $sanitized['embedding_model'] = sanitize_text_field($input['embedding_model'] ?? 'text-embedding-3-small');
         
         // Legacy settings (for backward compatibility)
-        $sanitized['embedding_model'] = sanitize_text_field($input['embedding_model'] ?? 'text-embedding-3-large');
+        // Note: embedding_model is set above, don't override it here
         $sanitized['gpt_model'] = sanitize_text_field($input['gpt_model'] ?? 'gpt-4');
         $sanitized['pinecone_index_name'] = sanitize_text_field($input['pinecone_index_name'] ?? '');
         $sanitized['top_k'] = intval($input['top_k'] ?? 5);
@@ -431,7 +431,7 @@ class Settings {
             'pinecone_host' => '',
             'pinecone_namespace' => '',
             'pinecone_dimensions' => '',
-            'embedding_dimensions' => 512,
+            'embedding_dimensions' => '1536',
             'pinecone_env_id' => '',
             'pinecone_score_threshold' => 0.7,
             

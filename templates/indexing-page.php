@@ -18,17 +18,26 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     
     <div class="wp-gpt-rag-chat-stats">
         <div class="stats-grid">
-            <div class="stat-card">
+            <div class="stat-card cornuwb-stat-card">
                 <h3><?php esc_html_e('Total Vectors', 'wp-gpt-rag-chat'); ?></h3>
-                <div class="stat-number"><?php echo esc_html(number_format($stats['total_vectors'])); ?></div>
+                <div class="stat-number" id="cornuwb-stat-vectors"><?php echo esc_html(number_format($stats['total_vectors'])); ?></div>
+                <div class="cornuwb-stat-loading" style="display: none;">
+                    <span class="dashicons dashicons-update cornuwb-rotate"></span>
+                </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card cornuwb-stat-card">
                 <h3><?php esc_html_e('Indexed Posts', 'wp-gpt-rag-chat'); ?></h3>
-                <div class="stat-number"><?php echo esc_html(number_format($stats['total_posts'])); ?></div>
+                <div class="stat-number" id="cornuwb-stat-posts"><?php echo esc_html(number_format($stats['total_posts'])); ?></div>
+                <div class="cornuwb-stat-loading" style="display: none;">
+                    <span class="dashicons dashicons-update cornuwb-rotate"></span>
+                </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card cornuwb-stat-card">
                 <h3><?php esc_html_e('Recent Activity (24h)', 'wp-gpt-rag-chat'); ?></h3>
-                <div class="stat-number"><?php echo esc_html(number_format($stats['recent_activity'])); ?></div>
+                <div class="stat-number" id="cornuwb-stat-activity"><?php echo esc_html(number_format($stats['recent_activity'])); ?></div>
+                <div class="cornuwb-stat-loading" style="display: none;">
+                    <span class="dashicons dashicons-update cornuwb-rotate"></span>
+                </div>
             </div>
         </div>
         
@@ -47,13 +56,29 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         <?php endif; ?>
     </div>
     
+    <!-- Global Progress Bar (full width above all content) -->
+    <div id="global-progress-container" style="display: none; margin-bottom: 20px;">
+        <div class="progress-section">
+            <div class="progress-header">
+                <h3><?php esc_html_e('Indexing Progress', 'wp-gpt-rag-chat'); ?></h3>
+                <button type="button" id="stop-indexing" class="button button-secondary" style="display: none; color: #d63638;">
+                    <?php esc_html_e('Stop', 'wp-gpt-rag-chat'); ?>
+                </button>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+            <div class="progress-text"><?php esc_html_e('Preparing...', 'wp-gpt-rag-chat'); ?></div>
+        </div>
+    </div>
+    
     <div class="indexing-layout">
         <div class="wp-gpt-rag-chat-indexed-items">
         <div class="indexed-items-header">
             <h2><?php esc_html_e('Indexed Items', 'wp-gpt-rag-chat'); ?></h2>
             <div class="header-actions">
                 <button type="button" class="button button-secondary" id="select-all-items">
-                    <?php esc_html_e('Select All', 'wp-gpt-rag-chat'); ?>
+                    <span class="wpgrc-label"><?php esc_html_e('Select All', 'wp-gpt-rag-chat'); ?></span>
                 </button>
                 <button type="button" class="button button-primary" id="bulk-reindex-selected">
                     <?php esc_html_e('Reindex Selected', 'wp-gpt-rag-chat'); ?>
@@ -65,17 +90,21 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         // Get posts that are in the index queue (have been indexed or are being processed)
         global $wpdb;
         
-        $indexed_posts = $wpdb->get_results("
+        // Get all public post types that can be indexed
+        $indexable_post_types = get_post_types(['public' => true], 'names');
+        $post_type_placeholders = implode(',', array_fill(0, count($indexable_post_types), '%s'));
+        
+        $indexed_posts = $wpdb->get_results($wpdb->prepare("
             SELECT DISTINCT p.ID, p.post_title, p.post_type, p.post_modified
             FROM {$wpdb->posts} p
             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
             WHERE p.post_status = 'publish'
-            AND p.post_type IN ('post', 'page')
+            AND p.post_type IN ($post_type_placeholders)
             AND pm.meta_key = '_wp_gpt_rag_chat_indexed'
             AND pm.meta_value = '1'
             ORDER BY p.post_modified DESC
             LIMIT 50
-        ");
+        ", $indexable_post_types));
         
         // Convert to array format for compatibility
         $posts = [];
@@ -179,6 +208,40 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             <p><?php esc_html_e('No items in the index queue. Posts will appear here after they have been indexed.', 'wp-gpt-rag-chat'); ?></p>
         </div>
         <?php endif; ?>
+        
+        <?php if (!empty($posts)): ?>
+        <div class="cornuwb-pagination">
+            <div class="cornuwb-pagination-info">
+                <?php esc_html_e('Showing', 'wp-gpt-rag-chat'); ?> <span id="cornuwb-showing-start">1</span> - <span id="cornuwb-showing-end">10</span> <?php esc_html_e('of', 'wp-gpt-rag-chat'); ?> <span id="cornuwb-total-items">10</span>
+            </div>
+            <div class="cornuwb-pagination-controls">
+                <button type="button" class="button cornuwb-page-btn" id="cornuwb-first-page" disabled>
+                    <span class="dashicons dashicons-controls-skipback"></span>
+                </button>
+                <button type="button" class="button cornuwb-page-btn" id="cornuwb-prev-page" disabled>
+                    <span class="dashicons dashicons-arrow-left-alt2"></span>
+                </button>
+                <span class="cornuwb-page-numbers">
+                    <?php esc_html_e('Page', 'wp-gpt-rag-chat'); ?> <span id="cornuwb-current-page">1</span> <?php esc_html_e('of', 'wp-gpt-rag-chat'); ?> <span id="cornuwb-total-pages">1</span>
+                </span>
+                <button type="button" class="button cornuwb-page-btn" id="cornuwb-next-page" disabled>
+                    <span class="dashicons dashicons-arrow-right-alt2"></span>
+                </button>
+                <button type="button" class="button cornuwb-page-btn" id="cornuwb-last-page" disabled>
+                    <span class="dashicons dashicons-controls-skipforward"></span>
+                </button>
+            </div>
+            <div class="cornuwb-per-page">
+                <label for="cornuwb-items-per-page"><?php esc_html_e('Items per page:', 'wp-gpt-rag-chat'); ?></label>
+                <select id="cornuwb-items-per-page">
+                    <option value="10" selected>10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
     
     <div class="wp-gpt-rag-chat-bulk-actions">
@@ -211,12 +274,6 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                         <?php esc_html_e('Sync Only One Post', 'wp-gpt-rag-chat'); ?>
                     </button>
                 </div>
-            <div id="index-all-progress" style="display: none;">
-                <div class="progress-bar">
-                    <div class="progress-fill"></div>
-                </div>
-                <div class="progress-text"><?php esc_html_e('Preparing...', 'wp-gpt-rag-chat'); ?></div>
-            </div>
         </div>
         
         <div class="bulk-action-section">
@@ -238,6 +295,15 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             <p><?php esc_html_e('Remove all vectors from Pinecone and local database. This will require a full reindex.', 'wp-gpt-rag-chat'); ?></p>
             <button type="button" id="clear-all-vectors" class="button button-secondary" style="color: #d63638;">
                 <?php esc_html_e('Clear All Vectors', 'wp-gpt-rag-chat'); ?>
+            </button>
+        </div>
+        
+        <div class="bulk-action-section cornuwb-danger-section">
+            <h3><?php esc_html_e('Delete All Indexed Items', 'wp-gpt-rag-chat'); ?></h3>
+            <p><?php esc_html_e('Permanently remove ALL indexed items from both the database and Pinecone. This action cannot be undone.', 'wp-gpt-rag-chat'); ?></p>
+            <button type="button" id="delete-all-indexed" class="button button-secondary cornuwb-danger-btn">
+                <span class="dashicons dashicons-trash"></span>
+                <?php esc_html_e('Delete All Indexed Items', 'wp-gpt-rag-chat'); ?>
             </button>
         </div>
             
@@ -306,6 +372,95 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             </div>
         </div>
     </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-confirmation-modal" class="wpgrc-modal" style="display: none;">
+    <div class="wpgrc-modal-content">
+        <div class="wpgrc-modal-header">
+            <h3 class="wpgrc-modal-title"><?php esc_html_e('Confirm Deletion', 'wp-gpt-rag-chat'); ?></h3>
+            <button type="button" class="button button-secondary wpgrc-modal-close" id="close-delete-modal">
+                <span class="dashicons dashicons-no-alt"></span>
+            </button>
+        </div>
+        <div class="wpgrc-modal-body">
+            <p class="wpgrc-modal-text"><?php esc_html_e('Are you sure you want to remove this item from the index?', 'wp-gpt-rag-chat'); ?></p>
+            <p class="wpgrc-modal-description"><?php esc_html_e('This will delete all vectors from both the local database and Pinecone. This action cannot be undone.', 'wp-gpt-rag-chat'); ?></p>
+            <div class="wpgrc-item-preview" id="delete-item-preview">
+                <!-- Item details will be populated here -->
+            </div>
+        </div>
+        <div class="wpgrc-modal-footer">
+            <button type="button" class="button button-secondary wpgrc-cancel-btn" id="cancel-delete">
+                <?php esc_html_e('Cancel', 'wp-gpt-rag-chat'); ?>
+            </button>
+            <button type="button" class="button button-primary wpgrc-delete-btn cornuwb-delete-confirm" id="confirm-delete" data-original-text="<?php esc_attr_e('Delete from Index', 'wp-gpt-rag-chat'); ?>">
+                <span class="cornuwb-btn-text"><?php esc_html_e('Delete from Index', 'wp-gpt-rag-chat'); ?></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete All Indexed Items Modal -->
+<div id="delete-all-modal" class="wpgrc-modal" style="display: none;">
+    <div class="wpgrc-modal-content cornuwb-delete-all-modal">
+        <div class="wpgrc-modal-header">
+            <h3 class="wpgrc-modal-title" style="color: #d63638;">
+                <span class="dashicons dashicons-warning" style="font-size: 24px; margin-right: 8px;"></span>
+                <?php esc_html_e('Delete ALL Indexed Items?', 'wp-gpt-rag-chat'); ?>
+            </h3>
+            <button type="button" class="button button-secondary wpgrc-modal-close" id="close-delete-all-modal">
+                <span class="dashicons dashicons-no-alt"></span>
+            </button>
+        </div>
+        <div class="wpgrc-modal-body">
+            <div class="cornuwb-warning-box">
+                <p class="wpgrc-modal-text" style="font-weight: 600; font-size: 15px; color: #d63638;">
+                    <?php esc_html_e('⚠️ WARNING: This action is PERMANENT and CANNOT be undone!', 'wp-gpt-rag-chat'); ?>
+                </p>
+                <p class="wpgrc-modal-description">
+                    <?php esc_html_e('This will permanently delete:', 'wp-gpt-rag-chat'); ?>
+                </p>
+                <ul class="cornuwb-delete-list">
+                    <li><?php esc_html_e('All vectors from Pinecone', 'wp-gpt-rag-chat'); ?></li>
+                    <li><?php esc_html_e('All indexing metadata from your database', 'wp-gpt-rag-chat'); ?></li>
+                    <li><?php esc_html_e('All indexed items from the table below', 'wp-gpt-rag-chat'); ?></li>
+                </ul>
+                <p class="wpgrc-modal-description" style="margin-top: 15px;">
+                    <strong><?php esc_html_e('Total items to be deleted:', 'wp-gpt-rag-chat'); ?></strong> 
+                    <span id="cornuwb-delete-all-count" style="color: #d63638; font-weight: 600;">0</span>
+                </p>
+            </div>
+            
+            <div class="cornuwb-confirmation-input">
+                <label for="cornuwb-delete-confirmation-text" style="font-weight: 600; margin-bottom: 8px; display: block;">
+                    <?php esc_html_e('Type DELETE to confirm:', 'wp-gpt-rag-chat'); ?>
+                </label>
+                <input 
+                    type="text" 
+                    id="cornuwb-delete-confirmation-text" 
+                    class="cornuwb-delete-input" 
+                    placeholder="<?php esc_attr_e('Type DELETE here', 'wp-gpt-rag-chat'); ?>"
+                    autocomplete="off"
+                />
+                <p class="cornuwb-input-hint"><?php esc_html_e('You must type "DELETE" exactly to enable the delete button.', 'wp-gpt-rag-chat'); ?></p>
+            </div>
+        </div>
+        <div class="wpgrc-modal-footer">
+            <button type="button" class="button button-secondary wpgrc-cancel-btn" id="cancel-delete-all">
+                <?php esc_html_e('Cancel', 'wp-gpt-rag-chat'); ?>
+            </button>
+            <button 
+                type="button" 
+                class="button button-primary cornuwb-delete-all-confirm" 
+                id="confirm-delete-all" 
+                disabled
+                data-original-text="<?php esc_attr_e('Delete All Items', 'wp-gpt-rag-chat'); ?>"
+            >
+                <span class="cornuwb-btn-text"><?php esc_html_e('Delete All Items', 'wp-gpt-rag-chat'); ?></span>
+            </button>
+        </div>
     </div>
 </div>
 
@@ -494,6 +649,14 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         min-width: auto;
         max-width: 100%;
     }
+    
+    .progress-section {
+        padding: 15px;
+    }
+    
+    .progress-header h3 {
+        font-size: 14px;
+    }
 }
 
 @media (max-width: 768px) {
@@ -518,6 +681,24 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     .indexed-items-table th,
     .indexed-items-table td {
         padding: 8px 12px;
+        font-size: 13px;
+    }
+    
+    .progress-section {
+        padding: 12px;
+    }
+    
+    .progress-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .progress-header h3 {
+        font-size: 14px;
+    }
+    
+    .progress-text {
         font-size: 13px;
     }
 }
@@ -864,6 +1045,216 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     width: 90%;
     max-height: 80vh;
     overflow-y: auto;
+}
+
+/* Delete Confirmation Modal Overlay */
+.wpgrc-modal {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0, 0, 0, 0.6) !important;
+    z-index: 999999 !important;
+    display: none !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    box-sizing: border-box !important;
+}
+
+.wpgrc-modal.show {
+    display: flex !important;
+}
+
+/* Delete Modal Content Box */
+.wpgrc-modal-content {
+    background: #fff !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
+    max-width: 560px !important;
+    width: 100% !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+    position: relative !important;
+    z-index: 1000000 !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+}
+
+/* Modal Header */
+.wpgrc-modal-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 20px 24px !important;
+    border-bottom: 1px solid #e1e5e9 !important;
+    background: #fff !important;
+    border-radius: 8px 8px 0 0 !important;
+}
+
+.wpgrc-modal-title {
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #1d2327 !important;
+    font-size: 20px !important;
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+}
+
+.wpgrc-modal-close {
+    min-width: 36px !important;
+    min-height: 36px !important;
+    padding: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Modal Body */
+.wpgrc-modal-body {
+    padding: 24px !important;
+    background: #fff !important;
+}
+
+.wpgrc-modal-text {
+    margin: 0 0 12px 0 !important;
+    padding: 0 !important;
+    color: #1d2327 !important;
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    line-height: 1.6 !important;
+}
+
+.wpgrc-modal-description {
+    margin: 0 0 16px 0 !important;
+    padding: 0 !important;
+    color: #646970 !important;
+    font-size: 13px !important;
+    font-style: italic !important;
+    line-height: 1.5 !important;
+}
+
+/* Modal Footer */
+.wpgrc-modal-footer {
+    padding: 16px 24px !important;
+    border-top: 1px solid #e1e5e9 !important;
+    background: #f9f9f9 !important;
+    display: flex !important;
+    gap: 10px !important;
+    justify-content: flex-end !important;
+    border-radius: 0 0 8px 8px !important;
+}
+
+.wpgrc-cancel-btn {
+    min-width: 100px !important;
+    padding: 8px 16px !important;
+}
+
+.wpgrc-delete-btn {
+    min-width: 140px !important;
+    padding: 8px 16px !important;
+    background-color: #d63638 !important;
+    border-color: #d63638 !important;
+    color: #fff !important;
+}
+
+.wpgrc-delete-btn:hover {
+    background-color: #b32d2e !important;
+    border-color: #b32d2e !important;
+}
+
+/* Button loading state with cornuwb prefix */
+.cornuwb-btn-loading {
+    position: relative !important;
+    pointer-events: none !important;
+    opacity: 0.7 !important;
+}
+
+.cornuwb-btn-loading .cornuwb-btn-text {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.cornuwb-btn-loading::after {
+    content: '' !important;
+    position: absolute !important;
+    width: 16px !important;
+    height: 16px !important;
+    top: 50% !important;
+    right: 12px !important;
+    margin-top: -8px !important;
+    border: 2px solid currentColor !important;
+    border-right-color: transparent !important;
+    border-radius: 50% !important;
+    animation: cornuwb-spin 0.8s linear infinite !important;
+}
+
+@keyframes cornuwb-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* CORNUWB - Real-time indexing visual indicators */
+.cornuwb-newly-indexed {
+    background: #e7f5ff !important;
+    animation: cornuwb-fade-in 0.5s ease-in-out !important;
+    position: relative !important;
+}
+
+.cornuwb-newly-indexed::before {
+    content: 'NEW' !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: -45px !important;
+    transform: translateY(-50%) !important;
+    background: #00a32a !important;
+    color: white !important;
+    padding: 4px 8px !important;
+    border-radius: 3px !important;
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px !important;
+    z-index: 10 !important;
+    animation: cornuwb-slide-in 0.5s ease-out !important;
+}
+
+.cornuwb-flash-update {
+    animation: cornuwb-flash 0.6s ease-in-out !important;
+}
+
+@keyframes cornuwb-fade-in {
+    0% {
+        background: #00a32a;
+        opacity: 0.3;
+    }
+    100% {
+        background: #e7f5ff;
+        opacity: 1;
+    }
+}
+
+@keyframes cornuwb-slide-in {
+    0% {
+        left: -100px;
+        opacity: 0;
+    }
+    100% {
+        left: -45px;
+        opacity: 1;
+    }
+}
+
+@keyframes cornuwb-flash {
+    0%, 100% {
+        background: transparent;
+    }
+    50% {
+        background: #e7f5ff;
+    }
 }
 
 .pdf-modal-content {
@@ -1644,6 +2035,36 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     margin: 0;
 }
 
+/* Global Progress Section */
+#global-progress-container {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.progress-section {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.progress-header h3 {
+    margin: 0;
+    color: #1d2327;
+    font-size: 16px;
+}
+
 .progress-bar {
     width: 100%;
     height: 24px;
@@ -1702,6 +2123,28 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     margin-top: 8px;
 }
 
+/* Generic button busy state (spinner without removing label) */
+.wpgrc-busy {
+    position: relative;
+}
+
+.wpgrc-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-left: 6px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: wpgrc-spin 1s linear infinite;
+    vertical-align: -2px;
+}
+
+@keyframes wpgrc-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 .status-indexed {
     color: #00a32a;
     font-weight: 500;
@@ -1733,6 +2176,38 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 .header-actions {
     display: flex;
     gap: 10px;
+}
+
+#select-all-items {
+    min-width: 120px;
+}
+
+/* Delete Confirmation Modal - Using unique prefixed classes */
+.wpgrc-item-preview {
+    background: #f8f9fa !important;
+    border: 1px solid #e1e5e9 !important;
+    border-radius: 4px !important;
+    padding: 15px !important;
+    margin-top: 15px !important;
+    box-sizing: border-box !important;
+}
+
+.wpgrc-item-preview h4 {
+    margin: 0 0 8px 0 !important;
+    color: #1d2327 !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+}
+
+.wpgrc-item-preview .item-details {
+    font-size: 13px !important;
+    color: #646970 !important;
+    line-height: 1.4 !important;
+}
+
+.wpgrc-item-preview .item-details strong {
+    color: #1d2327 !important;
+    font-weight: 600 !important;
 }
 
 .indexed-items-table-container {
@@ -1803,14 +2278,14 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     background: #f8f9fa;
 }
 
-/* Column widths */
+/* Column widths - consistent with th widths */
 .checkbox-column {
     width: 40px;
     text-align: center;
 }
 
 .status-column {
-    width: 120px;
+    width: 100px;
 }
 
 .title-column {
@@ -1819,11 +2294,11 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 }
 
 .ref-column {
-    width: 150px;
+    width: 120px;
 }
 
 .updated-column {
-    width: 180px;
+    width: 140px;
 }
 
 .actions-column {
@@ -1951,6 +2426,272 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     cursor: pointer;
 }
 
+/* Stats Cards - Real-time Updates */
+.cornuwb-stat-card {
+    position: relative !important;
+}
+
+.cornuwb-stat-loading {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    z-index: 10 !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    padding: 20px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+
+.cornuwb-stat-loading .dashicons {
+    font-size: 32px !important;
+    width: 32px !important;
+    height: 32px !important;
+    color: #0073aa !important;
+}
+
+.cornuwb-rotate {
+    animation: cornuwb-rotate 1s linear infinite !important;
+}
+
+@keyframes cornuwb-rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.cornuwb-stat-updated {
+    animation: cornuwb-stat-pulse 0.5s ease !important;
+}
+
+@keyframes cornuwb-stat-pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+        color: #00a32a;
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Delete All Section & Button */
+.cornuwb-danger-section {
+    border: 2px solid #d63638 !important;
+    background: #fff5f5 !important;
+}
+
+.cornuwb-danger-btn {
+    background: #d63638 !important;
+    color: #fff !important;
+    border-color: #d63638 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+.cornuwb-danger-btn:hover {
+    background: #b32d2e !important;
+    border-color: #b32d2e !important;
+}
+
+.cornuwb-danger-btn .dashicons {
+    font-size: 18px !important;
+    width: 18px !important;
+    height: 18px !important;
+}
+
+/* Delete All Modal */
+.cornuwb-delete-all-modal {
+    max-width: 600px !important;
+}
+
+.cornuwb-warning-box {
+    background: #fff3cd !important;
+    border: 2px solid #ffc107 !important;
+    border-radius: 6px !important;
+    padding: 20px !important;
+    margin-bottom: 20px !important;
+}
+
+.cornuwb-delete-list {
+    margin: 10px 0 !important;
+    padding-left: 25px !important;
+    list-style: disc !important;
+}
+
+.cornuwb-delete-list li {
+    margin: 8px 0 !important;
+    color: #1d2327 !important;
+    font-size: 14px !important;
+}
+
+.cornuwb-confirmation-input {
+    margin-top: 20px !important;
+}
+
+.cornuwb-delete-input {
+    width: 100% !important;
+    padding: 12px !important;
+    font-size: 16px !important;
+    border: 2px solid #ccd0d4 !important;
+    border-radius: 4px !important;
+    font-family: monospace !important;
+    letter-spacing: 2px !important;
+    text-transform: uppercase !important;
+    transition: border-color 0.2s ease !important;
+}
+
+.cornuwb-delete-input:focus {
+    outline: none !important;
+    border-color: #0073aa !important;
+    box-shadow: 0 0 0 1px #0073aa !important;
+}
+
+.cornuwb-delete-input.cornuwb-input-valid {
+    border-color: #00a32a !important;
+    background: #f0f8f0 !important;
+}
+
+.cornuwb-delete-input.cornuwb-input-invalid {
+    border-color: #d63638 !important;
+    background: #fff5f5 !important;
+}
+
+.cornuwb-input-hint {
+    margin-top: 8px !important;
+    font-size: 12px !important;
+    color: #646970 !important;
+    font-style: italic !important;
+}
+
+.cornuwb-delete-all-confirm {
+    background: #d63638 !important;
+    border-color: #d63638 !important;
+    color: #fff !important;
+}
+
+.cornuwb-delete-all-confirm:hover:not(:disabled) {
+    background: #b32d2e !important;
+    border-color: #b32d2e !important;
+}
+
+.cornuwb-delete-all-confirm:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* Pagination */
+.cornuwb-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    margin-top: 20px;
+    border-top: 1px solid #e1e5e9;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.cornuwb-pagination-info {
+    font-size: 14px;
+    color: #646970;
+}
+
+.cornuwb-pagination-info span {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.cornuwb-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cornuwb-page-btn {
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ccd0d4;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.cornuwb-page-btn:hover:not(:disabled) {
+    background: #f0f0f1;
+    border-color: #0073aa;
+    color: #0073aa;
+}
+
+.cornuwb-page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.cornuwb-page-btn .dashicons {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+.cornuwb-page-numbers {
+    padding: 0 12px;
+    font-size: 14px;
+    color: #646970;
+    white-space: nowrap;
+}
+
+.cornuwb-page-numbers span {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.cornuwb-per-page {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #646970;
+}
+
+.cornuwb-per-page label {
+    margin: 0;
+    font-weight: normal;
+}
+
+.cornuwb-per-page select {
+    height: 36px;
+    padding: 4px 8px;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    background: #fff;
+    font-size: 14px;
+}
+
+@media (max-width: 768px) {
+    .cornuwb-pagination {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .cornuwb-pagination-info,
+    .cornuwb-pagination-controls,
+    .cornuwb-per-page {
+        justify-content: center;
+    }
+}
+
 /* No items message */
 .no-items-message {
     padding: 40px 20px;
@@ -1977,28 +2718,85 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 
 <script>
 jQuery(document).ready(function($) {
+    // Global variables for progress tracking
+    var isIndexingInProgress = false;
+    var currentIndexingAction = null;
+    
+    // CORNUWB - Utility functions with cornuwb prefix to avoid WordPress conflicts
+    var CORNUWB = {
+        // Set button loading state without changing text
+        setButtonLoading: function(button, loading) {
+            if (!button || button.length === 0) return;
+            
+            if (loading) {
+                button.prop('disabled', true);
+                button.addClass('cornuwb-btn-loading');
+            } else {
+                button.prop('disabled', false);
+                button.removeClass('cornuwb-btn-loading');
+            }
+        },
+        
+        // Legacy helper for non-cornuwb buttons
+        setButtonBusy: function(button, busy) {
+            if (!button || button.length === 0) return;
+            if (busy) {
+                if (!button.data('original-label')) {
+                    button.data('original-label', $.trim(button.text()));
+                }
+                button.prop('disabled', true).addClass('wpgrc-busy');
+                if (!button.find('.wpgrc-spinner').length) {
+                    button.append('<span class="wpgrc-spinner" aria-hidden="true"></span>');
+                }
+            } else {
+                button.prop('disabled', false).removeClass('wpgrc-busy');
+                button.find('.wpgrc-spinner').remove();
+                if (button.data('original-label')) {
+                    button.text(button.data('original-label'));
+                    button.removeData('original-label');
+                }
+            }
+        }
+    };
+    
+    // Helper: toggle button busy state while preserving label (legacy)
+    function setButtonBusy(button, busy) {
+        CORNUWB.setButtonBusy(button, busy);
+    }
+    
     // Sync all content
     $('#sync-all-content').on('click', function() {
         var button = $(this);
-        var progress = $('#index-all-progress');
         var selectedPostType = $('#index-post-type').val();
         
-        button.prop('disabled', true).find('span').text('...');
-        progress.show();
+        if (isIndexingInProgress) {
+            alert('<?php esc_js(__('Indexing is already in progress. Please wait for it to complete.', 'wp-gpt-rag-chat')); ?>');
+            return;
+        }
         
-        startBulkIndexing('index_all', progress, button, selectedPostType);
+        button.prop('disabled', true).find('span').text('...');
+        showGlobalProgress('index_all', button, selectedPostType);
     });
     
     // Sync single post
     $('#sync-single-post').on('click', function() {
         var button = $(this);
-        var progress = $('#index-all-progress');
         var selectedPostType = $('#index-post-type').val();
         
-        button.prop('disabled', true).text('<?php esc_js(__('Starting...', 'wp-gpt-rag-chat')); ?>');
-        progress.show();
+        if (isIndexingInProgress) {
+            alert('<?php esc_js(__('Indexing is already in progress. Please wait for it to complete.', 'wp-gpt-rag-chat')); ?>');
+            return;
+        }
         
-        startBulkIndexing('index_single', progress, button, selectedPostType);
+        setButtonBusy(button, true);
+        showGlobalProgress('index_single', button, selectedPostType);
+    });
+    
+    // Stop indexing button
+    $('#stop-indexing').on('click', function() {
+        if (confirm('<?php esc_js(__('Are you sure you want to stop the indexing process?', 'wp-gpt-rag-chat')); ?>')) {
+            stopIndexing();
+        }
     });
     
     // Update count when post type changes
@@ -2008,6 +2806,91 @@ jQuery(document).ready(function($) {
     
     // Initial count update
     updateSyncAllCount();
+    
+    // Function to show global progress
+    function showGlobalProgress(action, button, postType) {
+        isIndexingInProgress = true;
+        currentIndexingAction = action;
+        
+        var progressContainer = $('#global-progress-container');
+        var progressFill = progressContainer.find('.progress-fill');
+        var progressText = progressContainer.find('.progress-text');
+        var stopButton = $('#stop-indexing');
+        
+        // Show progress container and stop button
+        progressContainer.show();
+        stopButton.show();
+        
+        // Reset progress
+        progressFill.css('width', '0%');
+        progressText.text('<?php esc_js(__('Preparing...', 'wp-gpt-rag-chat')); ?>');
+        
+        // Start the indexing process
+        startBulkIndexing(action, progressContainer, button, postType);
+    }
+    
+    // Function to stop indexing
+    function stopIndexing() {
+        isIndexingInProgress = false;
+        currentIndexingAction = null;
+        
+        var progressContainer = $('#global-progress-container');
+        var progressText = progressContainer.find('.progress-text');
+        var stopButton = $('#stop-indexing');
+        
+        // Update progress text
+        progressText.html('<strong style="color: #d63638;"><?php esc_js(__('Indexing Stopped', 'wp-gpt-rag-chat')); ?></strong>');
+        
+        // Hide stop button
+        stopButton.hide();
+        
+        // Reset buttons
+        resetIndexingButtons();
+        
+        // Hide progress after delay
+        setTimeout(function() {
+            progressContainer.hide();
+        }, 3000);
+    }
+    
+    // Function to reset indexing buttons
+    function resetIndexingButtons() {
+        $('#sync-all-content').prop('disabled', false).find('span').text('0');
+        setButtonBusy($('#sync-single-post'), false);
+        updateSyncAllCount();
+    }
+    
+    // Function to complete indexing
+    function completeIndexing(button, totalItems, postType) {
+        isIndexingInProgress = false;
+        currentIndexingAction = null;
+        
+        var progressContainer = $('#global-progress-container');
+        var progressFill = progressContainer.find('.progress-fill');
+        var progressText = progressContainer.find('.progress-text');
+        var stopButton = $('#stop-indexing');
+        
+        // Complete progress bar
+        progressFill.css('width', '100%');
+        
+        // Update completion message
+        var postTypeText = (postType && postType !== 'all') ? ' (' + postType + ')' : '';
+        progressText.html(
+            '<strong style="color: #00a32a;"><?php esc_js(__('Indexing Successfully Completed!', 'wp-gpt-rag-chat')); ?></strong><br>' +
+            '<span style="color: #646970;">' + totalItems + ' items successfully indexed' + postTypeText + '</span>'
+        );
+        
+        // Hide stop button
+        stopButton.hide();
+        
+        // Reset buttons
+        resetIndexingButtons();
+        
+        // Hide progress after delay
+        setTimeout(function() {
+            progressContainer.hide();
+        }, 5000);
+    }
     
     // Function to update the sync all count
     function updateSyncAllCount() {
@@ -2899,7 +3782,7 @@ jQuery(document).ready(function($) {
         var button = $(this);
         var progress = $('#reindex-changed-progress');
         
-        button.prop('disabled', true).text('<?php esc_js(__('Starting...', 'wp-gpt-rag-chat')); ?>');
+        setButtonBusy(button, true);
         progress.show();
         
         startBulkIndexing('reindex_changed', progress, button);
@@ -2912,7 +3795,7 @@ jQuery(document).ready(function($) {
         }
         
         var button = $(this);
-        button.prop('disabled', true).text('<?php esc_js(__('Clearing...', 'wp-gpt-rag-chat')); ?>');
+        setButtonBusy(button, true);
         
         $.post(ajaxurl, {
             action: 'wp_gpt_rag_chat_clear_vectors',
@@ -2927,7 +3810,7 @@ jQuery(document).ready(function($) {
         }).fail(function() {
             alert('<?php esc_js(__('Error clearing vectors.', 'wp-gpt-rag-chat')); ?>');
         }).always(function() {
-            button.prop('disabled', false).text('<?php esc_js(__('Clear All Vectors', 'wp-gpt-rag-chat')); ?>');
+            setButtonBusy(button, false);
         });
     });
     
@@ -2947,11 +3830,11 @@ jQuery(document).ready(function($) {
         var checkedItems = $('.item-checkbox:checked').length;
         
         if (checkedItems === 0) {
-            $('#select-all-items').text('<?php esc_js(__('Select All', 'wp-gpt-rag-chat')); ?>');
+            $('#select-all-items .wpgrc-label').text('<?php esc_js(__('Select All', 'wp-gpt-rag-chat')); ?>');
         } else if (checkedItems === totalItems) {
-            $('#select-all-items').text('<?php esc_js(__('Deselect All', 'wp-gpt-rag-chat')); ?>');
+            $('#select-all-items .wpgrc-label').text('<?php esc_js(__('Deselect All', 'wp-gpt-rag-chat')); ?>');
         } else {
-            $('#select-all-items').text('<?php esc_js(__('Select All', 'wp-gpt-rag-chat')); ?>');
+            $('#select-all-items .wpgrc-label').text('<?php esc_js(__('Select All', 'wp-gpt-rag-chat')); ?>');
         }
     }
     
@@ -2982,7 +3865,7 @@ jQuery(document).ready(function($) {
         var button = $(this);
         var postIds = selectedItems.map(function() { return $(this).val(); }).get();
         
-        button.prop('disabled', true).text('<?php esc_js(__('Reindexing...', 'wp-gpt-rag-chat')); ?>');
+        setButtonBusy(button, true);
         
         // Reindex each item
         var completed = 0;
@@ -2990,7 +3873,7 @@ jQuery(document).ready(function($) {
         
         function reindexNext() {
             if (completed >= total) {
-                button.prop('disabled', false).text('<?php esc_js(__('Reindex Selected', 'wp-gpt-rag-chat')); ?>');
+                setButtonBusy(button, false);
                 alert('<?php esc_js(__('Bulk reindexing completed.', 'wp-gpt-rag-chat')); ?>');
                 location.reload();
                 return;
@@ -3061,10 +3944,57 @@ jQuery(document).ready(function($) {
         var postId = button.data('post-id');
         var row = button.closest('tr');
         
-        if (!confirm('<?php esc_js(__('Are you sure you want to remove this item from the index?', 'wp-gpt-rag-chat')); ?>')) {
-            return;
-        }
+        // Get item details for preview
+        var title = row.find('.item-title strong').text();
+        var ref = row.find('.ref-info').text();
+        var status = row.find('.status-text').text();
         
+        // Populate modal with item details
+        $('#delete-item-preview').html(
+            '<h4>' + title + '</h4>' +
+            '<div class="item-details">' +
+                '<strong>Reference:</strong> ' + ref + '<br>' +
+                '<strong>Status:</strong> ' + status + '<br>' +
+                '<strong>Action:</strong> Remove from index and delete all vectors from Pinecone' +
+            '</div>'
+        );
+        
+        // Store current context for deletion
+        window.pendingDelete = {
+            button: button,
+            postId: postId,
+            row: row
+        };
+        
+        // Show modal with proper display
+        $('#delete-confirmation-modal').addClass('show');
+    });
+    
+    // Modal event handlers
+    $('#close-delete-modal, #cancel-delete').on('click', function() {
+        $('#delete-confirmation-modal').removeClass('show');
+        window.pendingDelete = null;
+    });
+    
+    // Close modal when clicking outside
+    $('#delete-confirmation-modal').on('click', function(e) {
+        if (e.target === this) {
+            $(this).removeClass('show');
+            window.pendingDelete = null;
+        }
+    });
+    
+    // Confirm deletion - Using CORNUWB utilities
+    $(document).on('click', '.cornuwb-delete-confirm', function() {
+        if (!window.pendingDelete) return;
+        
+        var button = window.pendingDelete.button;
+        var postId = window.pendingDelete.postId;
+        var row = window.pendingDelete.row;
+        var confirmButton = $(this);
+        
+        // Set loading state using CORNUWB utility (preserves button text)
+        CORNUWB.setButtonLoading(confirmButton, true);
         button.prop('disabled', true);
         row.addClass('processing');
         
@@ -3074,22 +4004,33 @@ jQuery(document).ready(function($) {
             nonce: wpGptRagChatAdmin.nonce
         }, function(response) {
             if (response.success) {
-                // Update status badge
-                var statusBadge = row.find('.status-badge');
-                statusBadge.removeClass('status-ok status-outdated').addClass('status-pending');
-                statusBadge.find('.status-text').text('PENDING');
-                statusBadge.find('.status-icon').text('⚠');
+                // Remove the row with animation
+                row.fadeOut(300, function() {
+                    $(this).remove();
+                    
+                    // Check if table is empty
+                    if ($('.indexed-item-row').length === 0) {
+                        $('.indexed-items-table tbody').append(
+                            '<tr><td colspan="6" class="no-items-message">' +
+                            '<p><?php esc_js(__('No items in the index queue. Posts will appear here after they have been indexed.', 'wp-gpt-rag-chat')); ?></p>' +
+                            '</td></tr>'
+                        );
+                    }
+                });
                 
-                // Remove embedding info
-                row.find('.embedding-info').remove();
+                // Close modal
+                $('#delete-confirmation-modal').removeClass('show');
             } else {
                 alert('<?php esc_js(__('Error:', 'wp-gpt-rag-chat')); ?> ' + response.data.message);
             }
         }).fail(function() {
             alert('<?php esc_js(__('Error removing from index.', 'wp-gpt-rag-chat')); ?>');
         }).always(function() {
+            // Remove loading state using CORNUWB utility
+            CORNUWB.setButtonLoading(confirmButton, false);
             button.prop('disabled', false);
             row.removeClass('processing');
+            window.pendingDelete = null;
         });
     });
     
@@ -3097,6 +4038,9 @@ jQuery(document).ready(function($) {
         var progressFill = progressContainer.find('.progress-fill');
         var progressText = progressContainer.find('.progress-text');
         var isCompleted = false;
+        var currentOffset = 0;
+        var totalProcessed = 0; // Track cumulative processed items
+        var totalItems = 0; // Track total items to process
         
         function updateProgress() {
             if (isCompleted) return;
@@ -3104,6 +4048,7 @@ jQuery(document).ready(function($) {
             var ajaxData = {
                 action: 'wp_gpt_rag_chat_bulk_index',
                 bulk_action: action,
+                offset: currentOffset,
                 nonce: wpGptRagChatAdmin.nonce
             };
             
@@ -3112,10 +4057,22 @@ jQuery(document).ready(function($) {
                 ajaxData.post_type = postType;
             }
             
+            // Debug log
+            console.log('CORNUWB: Sending AJAX request with offset:', currentOffset);
+            
             $.post(wpGptRagChatAdmin.ajaxUrl, ajaxData, function(response) {
+                console.log('CORNUWB: Received response:', response);
+                
                 if (response.success) {
                     var data = response.data;
-                    var percentage = Math.round((data.processed / data.total) * 100);
+                    console.log('CORNUWB: Response data:', data);
+                    
+                    // Update totals
+                    totalProcessed += data.processed;
+                    totalItems = data.total;
+                    
+                    var percentage = Math.round((totalProcessed / totalItems) * 100);
+                    console.log('CORNUWB: Progress: ' + totalProcessed + '/' + totalItems + ' (' + percentage + '%)');
                     
                     // Update progress bar
                     progressFill.css('width', percentage + '%');
@@ -3123,7 +4080,7 @@ jQuery(document).ready(function($) {
                     // Update progress text with detailed information
                     var postTypeText = (postType && postType !== 'all') ? ' (' + postType + ')' : '';
                     progressText.html(
-                        '<strong>' + data.processed + ' / ' + data.total + ' items indexed' + postTypeText + '</strong><br>' +
+                        '<strong>' + totalProcessed + ' / ' + totalItems + ' items indexed' + postTypeText + '</strong><br>' +
                         '<span style="color: #0073aa;">' + percentage + '% completed</span>'
                     );
                     
@@ -3132,70 +4089,75 @@ jQuery(document).ready(function($) {
                         if (button.attr('id') === 'sync-all-content') {
                             button.find('span').text('...');
                         } else {
-                            button.text('<?php esc_js(__('Indexing...', 'wp-gpt-rag-chat')); ?> (' + percentage + '%)');
+                            if (!button.find('.wpgrc-progress').length) {
+                                button.append(' <span class="wpgrc-progress"></span>');
+                            }
+                            button.find('.wpgrc-progress').text('(' + percentage + '%)');
                         }
+                    }
+                    
+                    // Always add newly indexed items to table in real-time, even if completed
+                    if (data.newly_indexed && data.newly_indexed.length > 0) {
+                        console.log('CORNUWB: Adding ' + data.newly_indexed.length + ' new items to table', data.newly_indexed);
+                        addNewItemsToTable(data.newly_indexed);
+                    } else {
+                        console.log('CORNUWB: No newly indexed items in this batch');
                     }
                     
                     if (data.completed) {
                         isCompleted = true;
-                        progressFill.css('width', '100%');
-                        var postTypeText = (postType && postType !== 'all') ? ' (' + postType + ')' : '';
-                        progressText.html(
-                            '<strong style="color: #00a32a;"><?php esc_js(__('Indexing Completed!', 'wp-gpt-rag-chat')); ?></strong><br>' +
-                            '<span style="color: #646970;">' + data.total + ' items successfully indexed' + postTypeText + '</span>'
-                        );
                         
-                        if (button) {
-                            if (button.attr('id') === 'sync-all-content') {
-                                button.prop('disabled', false).css('background', '#00a32a');
-                                updateSyncAllCount(); // Refresh the count
-                    } else {
-                                button.text('<?php esc_js(__('Completed!', 'wp-gpt-rag-chat')); ?>').css('background', '#00a32a');
-                    }
-                        }
-                        
-                        // Update the table with any remaining items
-                        updateIndexedItemsTable();
+                        // Use the new completion function
+                        completeIndexing(button, totalProcessed, postType);
                 } else {
-                        // Update the table with newly indexed items
-                        if (data.newly_indexed && data.newly_indexed.length > 0) {
-                            addNewItemsToTable(data.newly_indexed);
-                        }
+                        
+                        // Increment offset for next batch
+                        currentOffset += 10;
                         
                         // Continue polling every 2 seconds
                         setTimeout(updateProgress, 2000);
                     }
                 } else {
                     isCompleted = true;
+                    isIndexingInProgress = false;
+                    currentIndexingAction = null;
+                    
                     progressText.html(
                         '<strong style="color: #d63638;"><?php esc_js(__('Error:', 'wp-gpt-rag-chat')); ?></strong><br>' +
                         '<span style="color: #d63638;">' + response.data.message + '</span>'
                     );
                     
-                    if (button) {
-                        if (button.attr('id') === 'sync-all-content') {
-                            button.prop('disabled', false).css('background', '');
-                            updateSyncAllCount(); // Refresh the count
-                        } else {
-                            button.prop('disabled', false).text('<?php esc_js(__('Sync Only One Post', 'wp-gpt-rag-chat')); ?>').css('background', '');
-                        }
-                    }
+                    // Hide stop button
+                    $('#stop-indexing').hide();
+                    
+                    // Reset buttons
+                    resetIndexingButtons();
+                    
+                    // Hide progress after delay
+                    setTimeout(function() {
+                        $('#global-progress-container').hide();
+                    }, 5000);
                 }
             }).fail(function() {
                 isCompleted = true;
+                isIndexingInProgress = false;
+                currentIndexingAction = null;
+                
                 progressText.html(
                     '<strong style="color: #d63638;"><?php esc_js(__('Error occurred during indexing.', 'wp-gpt-rag-chat')); ?></strong><br>' +
                     '<span style="color: #d63638;"><?php esc_js(__('Please try again or check your connection.', 'wp-gpt-rag-chat')); ?></span>'
                 );
                 
-                if (button) {
-                    if (button.attr('id') === 'sync-all-content') {
-                        button.prop('disabled', false).css('background', '');
-                        updateSyncAllCount(); // Refresh the count
-                    } else {
-                        button.prop('disabled', false).text('<?php esc_js(__('Sync Only One Post', 'wp-gpt-rag-chat')); ?>').css('background', '');
-                    }
-                }
+                // Hide stop button
+                $('#stop-indexing').hide();
+                
+                // Reset buttons
+                resetIndexingButtons();
+                
+                // Hide progress after delay
+                setTimeout(function() {
+                    $('#global-progress-container').hide();
+                }, 5000);
             });
         }
         
@@ -3203,21 +4165,65 @@ jQuery(document).ready(function($) {
         updateProgress();
     }
     
-    // Function to add newly indexed items to the table
+    // Function to add newly indexed items to the table - CORNUWB real-time updates
     function addNewItemsToTable(newlyIndexedItems) {
-        var tbody = $('.indexed-items-table tbody');
+        console.log('CORNUWB: addNewItemsToTable called with:', newlyIndexedItems);
         
-        newlyIndexedItems.forEach(function(item) {
+        if (!newlyIndexedItems || newlyIndexedItems.length === 0) {
+            console.log('CORNUWB: No items to add, returning');
+            return;
+        }
+        
+        var tbody = $('.indexed-items-table tbody');
+        console.log('CORNUWB: Found tbody:', tbody.length);
+        
+        // Remove "no items" message if it exists
+        var noItemsRow = tbody.find('.no-items-message').closest('tr');
+        if (noItemsRow.length > 0) {
+            console.log('CORNUWB: Removing "no items" message');
+            noItemsRow.remove();
+        }
+        
+        newlyIndexedItems.forEach(function(item, index) {
+            console.log('CORNUWB: Processing item ' + (index + 1) + '/' + newlyIndexedItems.length + ':', item);
+            
             // Check if item already exists in table
-            if ($('tr[data-post-id="' + item.id + '"]').length > 0) {
-                return; // Skip if already exists
+            var existingRow = $('tr[data-post-id="' + item.id + '"]');
+            if (existingRow.length > 0) {
+                console.log('CORNUWB: Item already exists, updating:', item.id);
+                // Update existing row instead
+                existingRow.find('.status-badge').removeClass('status-pending status-outdated').addClass('status-ok');
+                existingRow.find('.status-text').text('OK');
+                existingRow.find('.status-icon').text('✓');
+                
+                // Add flash effect
+                existingRow.addClass('cornuwb-flash-update');
+                setTimeout(function() {
+                    existingRow.removeClass('cornuwb-flash-update');
+                }, 1000);
+                return;
             }
             
-            // Create new table row
+            console.log('CORNUWB: Creating new row for item:', item.id);
+            
+            // Create new table row with "new" indicator
             var row = createIndexedItemRow(item);
+            row.addClass('cornuwb-newly-indexed');
             
             // Add to top of table with animation
             row.hide().prependTo(tbody).fadeIn(500);
+            
+            console.log('CORNUWB: Row added to table');
+            
+            // Remove "new" indicator after animation
+            setTimeout(function() {
+                row.removeClass('cornuwb-newly-indexed');
+            }, 3000);
+        });
+        
+        // Update checkbox handlers
+        $('.item-checkbox').off('change').on('change', function() {
+            updateSelectAllButton();
         });
     }
     
@@ -3341,43 +4347,400 @@ jQuery(document).ready(function($) {
             });
         });
         
-        // Delete button
+        // Delete button - use the same modal approach
         row.find('.delete-btn').on('click', function() {
             var button = $(this);
             var postId = button.data('post-id');
             var row = button.closest('tr');
             
-            if (!confirm('<?php esc_js(__('Are you sure you want to remove this item from the index?', 'wp-gpt-rag-chat')); ?>')) {
+            // Get item details for preview
+            var title = row.find('.item-title strong').text();
+            var ref = row.find('.ref-info').text();
+            var status = row.find('.status-text').text();
+            
+            // Populate modal with item details
+            $('#delete-item-preview').html(
+                '<h4>' + title + '</h4>' +
+                '<div class="item-details">' +
+                    '<strong>Reference:</strong> ' + ref + '<br>' +
+                    '<strong>Status:</strong> ' + status + '<br>' +
+                    '<strong>Action:</strong> Remove from index and delete all vectors from Pinecone' +
+                '</div>'
+            );
+            
+            // Store current context for deletion
+            window.pendingDelete = {
+                button: button,
+                postId: postId,
+                row: row
+            };
+            
+            // Show modal with proper display
+            $('#delete-confirmation-modal').addClass('show');
+        });
+    }
+    
+    // ============================================
+    // PAGINATION FUNCTIONALITY
+    // ============================================
+    
+    var cornuwbPagination = {
+        currentPage: 1,
+        itemsPerPage: 10,
+        totalItems: 0,
+        
+        init: function() {
+            this.updateTotalItems();
+            this.bindEvents();
+            this.updatePagination();
+        },
+        
+        bindEvents: function() {
+            var self = this;
+            
+            $('#cornuwb-first-page').on('click', function() {
+                self.goToPage(1);
+            });
+            
+            $('#cornuwb-prev-page').on('click', function() {
+                if (self.currentPage > 1) {
+                    self.goToPage(self.currentPage - 1);
+                }
+            });
+            
+            $('#cornuwb-next-page').on('click', function() {
+                var totalPages = self.getTotalPages();
+                if (self.currentPage < totalPages) {
+                    self.goToPage(self.currentPage + 1);
+                }
+            });
+            
+            $('#cornuwb-last-page').on('click', function() {
+                self.goToPage(self.getTotalPages());
+            });
+            
+            $('#cornuwb-items-per-page').on('change', function() {
+                self.itemsPerPage = parseInt($(this).val());
+                self.goToPage(1);
+            });
+        },
+        
+        updateTotalItems: function() {
+            this.totalItems = $('.indexed-items-table tbody tr').not('.no-items-message').length;
+            $('#cornuwb-total-items').text(this.totalItems);
+        },
+        
+        getTotalPages: function() {
+            return Math.max(1, Math.ceil(this.totalItems / this.itemsPerPage));
+        },
+        
+        goToPage: function(page) {
+            this.currentPage = page;
+            this.showPage();
+            this.updatePagination();
+        },
+        
+        showPage: function() {
+            var self = this;
+            var start = (this.currentPage - 1) * this.itemsPerPage;
+            var end = start + this.itemsPerPage;
+            
+            $('.indexed-items-table tbody tr').not('.no-items-message').each(function(index) {
+                if (index >= start && index < end) {
+                    $(this).show();
+                } else {
+                    $(this).hide();
+                }
+            });
+            
+            // Update showing info
+            var actualEnd = Math.min(end, this.totalItems);
+            $('#cornuwb-showing-start').text(this.totalItems > 0 ? start + 1 : 0);
+            $('#cornuwb-showing-end').text(actualEnd);
+        },
+        
+        updatePagination: function() {
+            var totalPages = this.getTotalPages();
+            
+            // Update page numbers
+            $('#cornuwb-current-page').text(this.currentPage);
+            $('#cornuwb-total-pages').text(totalPages);
+            $('#cornuwb-total-items').text(this.totalItems);
+            
+            // Enable/disable buttons
+            $('#cornuwb-first-page, #cornuwb-prev-page').prop('disabled', this.currentPage === 1);
+            $('#cornuwb-next-page, #cornuwb-last-page').prop('disabled', this.currentPage === totalPages || totalPages === 1);
+        },
+        
+        refresh: function() {
+            this.updateTotalItems();
+            
+            // Adjust current page if needed
+            var totalPages = this.getTotalPages();
+            if (this.currentPage > totalPages) {
+                this.currentPage = totalPages;
+            }
+            
+            this.showPage();
+            this.updatePagination();
+        }
+    };
+    
+    // Initialize pagination on page load
+    if ($('.cornuwb-pagination').length > 0) {
+        cornuwbPagination.init();
+    }
+    
+    // Refresh pagination after adding new items
+    var originalAddNewItemsToTable = addNewItemsToTable;
+    addNewItemsToTable = function(newlyIndexedItems) {
+        originalAddNewItemsToTable(newlyIndexedItems);
+        if ($('.cornuwb-pagination').length > 0) {
+            cornuwbPagination.refresh();
+        }
+    };
+    
+    // ============================================
+    // STATS CARDS REAL-TIME UPDATE
+    // ============================================
+    
+    var cornuwbStatsUpdater = {
+        isUpdating: false,
+        
+        // Update stats from server
+        updateStats: function() {
+            var self = this;
+            
+            if (self.isUpdating) {
                 return;
             }
             
-            button.prop('disabled', true);
-            row.addClass('processing');
+            self.isUpdating = true;
+            
+            // Show loading indicators
+            $('.cornuwb-stat-loading').fadeIn(200);
+            
+            $.post(wpGptRagChatAdmin.ajaxUrl, {
+                action: 'wp_gpt_rag_chat_get_stats',
+                nonce: wpGptRagChatAdmin.nonce
+            }, function(response) {
+                if (response.success) {
+                    var stats = response.data;
+                    
+                    // Update Total Vectors
+                    self.updateStatValue('#cornuwb-stat-vectors', stats.total_vectors);
+                    
+                    // Update Indexed Posts
+                    self.updateStatValue('#cornuwb-stat-posts', stats.total_posts);
+                    
+                    // Update Recent Activity
+                    self.updateStatValue('#cornuwb-stat-activity', stats.recent_activity);
+                }
+            }).fail(function() {
+                console.error('CORNUWB: Failed to update stats');
+            }).always(function() {
+                // Hide loading indicators
+                $('.cornuwb-stat-loading').fadeOut(200);
+                self.isUpdating = false;
+            });
+        },
+        
+        // Update individual stat with animation
+        updateStatValue: function(selector, newValue) {
+            var $element = $(selector);
+            var currentValue = $element.text().replace(/,/g, '');
+            var formattedValue = Number(newValue).toLocaleString();
+            
+            // Only update if value changed
+            if (currentValue !== newValue.toString()) {
+                $element.addClass('cornuwb-stat-updated');
+                $element.text(formattedValue);
+                
+                // Remove animation class after it completes
+                setTimeout(function() {
+                    $element.removeClass('cornuwb-stat-updated');
+                }, 500);
+            }
+        },
+        
+        // Manually trigger update (for testing or manual refresh)
+        refresh: function() {
+            this.updateStats();
+        }
+    };
+    
+    // Auto-update stats after indexing completes
+    var originalCompleteIndexing = completeIndexing;
+    completeIndexing = function(button, totalCount, postType) {
+        originalCompleteIndexing(button, totalCount, postType);
+        
+        // Update stats after a short delay to ensure database is updated
+        setTimeout(function() {
+            cornuwbStatsUpdater.updateStats();
+        }, 1000);
+    };
+    
+    // Update stats after deleting an item
+    var originalDeleteSuccess = $('#confirm-delete').on('click');
+    $(document).on('ajaxSuccess', function(event, xhr, settings) {
+        // Check if this was a delete request
+        if (settings.data && settings.data.indexOf('wp_gpt_rag_chat_remove_from_index') !== -1) {
+            setTimeout(function() {
+                cornuwbStatsUpdater.updateStats();
+            }, 500);
+        }
+    });
+    
+    // ============================================
+    // DELETE ALL INDEXED ITEMS FUNCTIONALITY
+    // ============================================
+    
+    // Open delete all modal
+    $('#delete-all-indexed').on('click', function() {
+        var totalItems = $('.indexed-items-table tbody tr').not('.no-items-message').length;
+        
+        if (totalItems === 0) {
+            alert('<?php esc_js(__('There are no indexed items to delete.', 'wp-gpt-rag-chat')); ?>');
+            return;
+        }
+        
+        // Update count in modal
+        $('#cornuwb-delete-all-count').text(totalItems);
+        
+        // Clear input and disable button
+        $('#cornuwb-delete-confirmation-text').val('').removeClass('cornuwb-input-valid cornuwb-input-invalid');
+        $('#confirm-delete-all').prop('disabled', true);
+        
+        // Show modal
+        $('#delete-all-modal').addClass('show');
+    });
+    
+    // Close delete all modal
+    $('#close-delete-all-modal, #cancel-delete-all').on('click', function() {
+        $('#delete-all-modal').removeClass('show');
+    });
+    
+    // Click outside modal to close
+    $('#delete-all-modal').on('click', function(e) {
+        if (e.target === this) {
+            $(this).removeClass('show');
+        }
+    });
+    
+    // Validate confirmation input
+    $('#cornuwb-delete-confirmation-text').on('input', function() {
+        var inputValue = $(this).val().trim();
+        var confirmButton = $('#confirm-delete-all');
+        
+        if (inputValue === 'DELETE') {
+            $(this).removeClass('cornuwb-input-invalid').addClass('cornuwb-input-valid');
+            confirmButton.prop('disabled', false);
+        } else {
+            $(this).removeClass('cornuwb-input-valid');
+            if (inputValue.length > 0) {
+                $(this).addClass('cornuwb-input-invalid');
+            }
+            confirmButton.prop('disabled', true);
+        }
+    });
+    
+    // Confirm delete all
+    $('#confirm-delete-all').on('click', function() {
+        var button = $(this);
+        var input = $('#cornuwb-delete-confirmation-text');
+        
+        if (input.val().trim() !== 'DELETE') {
+            return;
+        }
+        
+        // Get all post IDs
+        var postIds = [];
+        $('.indexed-items-table tbody tr').not('.no-items-message').each(function() {
+            var postId = $(this).data('post-id');
+            if (postId) {
+                postIds.push(postId);
+            }
+        });
+        
+        if (postIds.length === 0) {
+            alert('<?php esc_js(__('No items found to delete.', 'wp-gpt-rag-chat')); ?>');
+            return;
+        }
+        
+        // Disable inputs and show loading
+        CORNUWB.setButtonLoading(button, true);
+        input.prop('disabled', true);
+        $('#cancel-delete-all, #close-delete-all-modal').prop('disabled', true);
+        
+        // Track progress
+        var totalItems = postIds.length;
+        var processedItems = 0;
+        var failedItems = 0;
+        
+        // Update button text with progress
+        function updateProgress() {
+            var percentage = Math.round((processedItems / totalItems) * 100);
+            button.find('.cornuwb-btn-text').text('<?php esc_js(__('Deleting...', 'wp-gpt-rag-chat')); ?> ' + percentage + '%');
+        }
+        
+        // Delete items one by one
+        function deleteNextItem() {
+            if (processedItems >= totalItems) {
+                // All done
+                CORNUWB.setButtonLoading(button, false);
+                
+                if (failedItems === 0) {
+                    alert('<?php esc_js(__('Successfully deleted all indexed items!', 'wp-gpt-rag-chat')); ?>');
+                } else {
+                    alert('<?php esc_js(__('Completed with errors. Some items could not be deleted.', 'wp-gpt-rag-chat')); ?> ' + failedItems + ' <?php esc_js(__('failed.', 'wp-gpt-rag-chat')); ?>');
+                }
+                
+                // Close modal and refresh page
+                $('#delete-all-modal').removeClass('show');
+                location.reload();
+                return;
+            }
+            
+            var postId = postIds[processedItems];
             
             $.post(wpGptRagChatAdmin.ajaxUrl, {
                 action: 'wp_gpt_rag_chat_remove_from_index',
                 post_id: postId,
                 nonce: wpGptRagChatAdmin.nonce
             }, function(response) {
-                if (response.success) {
-                    // Update status badge
-                    var statusBadge = row.find('.status-badge');
-                    statusBadge.removeClass('status-ok status-outdated').addClass('status-pending');
-                    statusBadge.find('.status-text').text('PENDING');
-                    statusBadge.find('.status-icon').text('⚠');
-                    
-                    // Remove embedding info
-                    row.find('.embedding-info').remove();
-                } else {
-                    alert('<?php esc_js(__('Error:', 'wp-gpt-rag-chat')); ?> ' + response.data.message);
+                processedItems++;
+                
+                if (!response.success) {
+                    failedItems++;
                 }
+                
+                // Remove row from table
+                $('tr[data-post-id="' + postId + '"]').fadeOut(300, function() {
+                    $(this).remove();
+                    
+                    // Update pagination if needed
+                    if ($('.cornuwb-pagination').length > 0) {
+                        cornuwbPagination.refresh();
+                    }
+                });
+                
+                updateProgress();
+                
+                // Process next item
+                setTimeout(deleteNextItem, 100); // Small delay to prevent overwhelming the server
             }).fail(function() {
-                alert('<?php esc_js(__('Error removing from index.', 'wp-gpt-rag-chat')); ?>');
-            }).always(function() {
-                button.prop('disabled', false);
-                row.removeClass('processing');
+                processedItems++;
+                failedItems++;
+                updateProgress();
+                
+                // Process next item even if this one failed
+                setTimeout(deleteNextItem, 100);
             });
-        });
-    }
+        }
+        
+        // Start deletion process
+        updateProgress();
+        deleteNextItem();
+    });
 });
 </script>

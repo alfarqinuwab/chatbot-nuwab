@@ -68,6 +68,20 @@ class Indexing {
         // Get existing vectors
         $existing_vectors = $this->get_post_vectors($post_id);
         
+        // Quick check: if post hasn't been modified since last indexing and force is false, skip
+        if (!$force && !empty($existing_vectors)) {
+            $last_indexed = get_post_meta($post_id, '_wp_gpt_rag_chat_last_indexed', true);
+            if ($last_indexed && strtotime($last_indexed) >= strtotime($post->post_modified)) {
+                return [
+                    'message' => __('Post content unchanged since last indexing.', 'wp-gpt-rag-chat'),
+                    'added' => 0,
+                    'updated' => 0,
+                    'removed' => 0,
+                    'skipped' => count($existing_vectors)
+                ];
+            }
+        }
+        
         // Chunk the content
         $chunks = $this->chunking->chunk_post($post_id);
         
@@ -138,6 +152,12 @@ class Indexing {
         }
         
         $results['skipped'] = count($chunks) - count($vectors_to_update);
+        
+        // Mark post as indexed if any vectors were processed
+        if ($results['added'] > 0 || $results['updated'] > 0) {
+            update_post_meta($post_id, '_wp_gpt_rag_chat_indexed', '1');
+            update_post_meta($post_id, '_wp_gpt_rag_chat_last_indexed', current_time('mysql'));
+        }
         
         return $results;
     }
@@ -348,13 +368,19 @@ class Indexing {
         $results = [
             'processed' => 0,
             'total' => count($posts),
-            'errors' => []
+            'errors' => [],
+            'indexed_post_ids' => []
         ];
         
         foreach ($posts as $post) {
             try {
-                $this->index_post($post->ID);
+                $index_result = $this->index_post($post->ID);
                 $results['processed']++;
+                
+                // Track successfully indexed posts for real-time updates
+                if (!empty($index_result['added']) || !empty($index_result['updated'])) {
+                    $results['indexed_post_ids'][] = $post->ID;
+                }
             } catch (\Exception $e) {
                 $results['errors'][] = sprintf(
                     __('Post %d (%s): %s', 'wp-gpt-rag-chat'),
@@ -396,17 +422,22 @@ class Indexing {
         $results = [
             'processed' => 0,
             'total' => count($posts),
-            'errors' => []
+            'errors' => [],
+            'indexed_post_ids' => []
         ];
         
         if (!empty($posts)) {
             $post = $posts[0];
-            $success = $this->index_post($post->ID);
-            
-            if ($success) {
+            try {
+                $index_result = $this->index_post($post->ID);
                 $results['processed'] = 1;
-            } else {
-                $results['errors'][] = sprintf(__('Failed to index post: %s', 'wp-gpt-rag-chat'), $post->post_title);
+                
+                // Track successfully indexed post for real-time updates
+                if (!empty($index_result['added']) || !empty($index_result['updated'])) {
+                    $results['indexed_post_ids'][] = $post->ID;
+                }
+            } catch (\Exception $e) {
+                $results['errors'][] = sprintf(__('Failed to index post: %s - %s', 'wp-gpt-rag-chat'), $post->post_title, $e->getMessage());
             }
         }
         

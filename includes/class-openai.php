@@ -100,13 +100,34 @@ class OpenAI {
      * Build system message with context
      */
     private function build_system_message($context) {
-        $base_message = __("You are a helpful AI assistant that answers questions based on the provided context from a WordPress website. Use the context to provide accurate, helpful, and relevant answers. If the context doesn't contain enough information to answer the question, say so clearly. Always be honest about the limitations of your knowledge based on the provided context.", 'wp-gpt-rag-chat');
+        $mode = $this->settings['response_mode'] ?? 'hybrid';
         
-        if (!empty($context)) {
-            $base_message .= "\n\n" . __('Context from the website:', 'wp-gpt-rag-chat') . "\n\n" . $context;
+        if ($mode === 'openai') {
+            $message = __("You are a friendly AI assistant for a WordPress website. Provide clear, helpful answers using your general knowledge. When relevant, mention that visitors can find more details on the site.", 'wp-gpt-rag-chat');
+            $custom_prompt = trim($this->settings['system_prompt'] ?? '');
+            return $custom_prompt !== '' ? $custom_prompt : $message;
         }
         
-        return $base_message;
+        if ($mode === 'knowledge_base') {
+            $message = __("You are a helpful AI assistant that must answer strictly using the provided context from the WordPress knowledge base. If the context doesn't contain enough information to answer the question, say so clearly. Do not invent information that isn't present in the context.", 'wp-gpt-rag-chat');
+            
+            if (!empty($context)) {
+                $message .= "\n\n" . __('Context from the website:', 'wp-gpt-rag-chat') . "\n\n" . $context;
+            }
+            
+            return $message;
+        }
+        
+        // Hybrid mode (default)
+        $default_hybrid = __("You are a helpful AI assistant for a WordPress website. When context is provided, prioritise it for accurate, relevant answers. If the context is missing or insufficient, you may rely on your general knowledge while noting any uncertainties.", 'wp-gpt-rag-chat');
+        $custom_prompt = trim($this->settings['system_prompt'] ?? '');
+        $message = $custom_prompt !== '' ? $custom_prompt : $default_hybrid;
+        
+        if (!empty($context)) {
+            $message .= "\n\n" . __('Context from the website:', 'wp-gpt-rag-chat') . "\n\n" . $context;
+        }
+        
+        return $message;
     }
     
     /**

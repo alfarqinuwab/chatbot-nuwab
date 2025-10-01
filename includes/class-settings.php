@@ -269,6 +269,22 @@ class Settings {
             'wp_gpt_rag_chat_privacy',
             ['field' => 'require_consent']
         );
+
+        add_settings_field(
+            'response_mode',
+            __('Response Source', 'wp-gpt-rag-chat'),
+            [$this, 'select_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_privacy',
+            [
+                'field' => 'response_mode',
+                'options' => [
+                    'openai' => __('OpenAI (Generative AI)', 'wp-gpt-rag-chat'),
+                    'knowledge_base' => __('Knowledge Base Only (Indexed Content)', 'wp-gpt-rag-chat'),
+                    'hybrid' => __('Hybrid (AI with Knowledge Base Context)', 'wp-gpt-rag-chat'),
+                ]
+            ]
+        );
     }
     
     /**
@@ -311,6 +327,7 @@ class Settings {
         $sanitized['enable_history'] = isset($input['enable_history']) ? (bool) $input['enable_history'] : true;
         $sanitized['max_conversation_length'] = intval($input['max_conversation_length'] ?? 10);
         $sanitized['allow_anonymous'] = isset($input['allow_anonymous']) ? (bool) $input['allow_anonymous'] : true;
+        $sanitized['response_mode'] = sanitize_text_field($input['response_mode'] ?? 'hybrid');
         
         // Advanced settings
         $sanitized['debug_mode'] = isset($input['debug_mode']) ? (bool) $input['debug_mode'] : false;
@@ -451,6 +468,7 @@ class Settings {
             'enable_history' => true,
             'max_conversation_length' => 10,
             'allow_anonymous' => true,
+            'response_mode' => 'hybrid',
             
             // Advanced settings
             'debug_mode' => false,

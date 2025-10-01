@@ -52,9 +52,17 @@
             this.isOpen = false;
             this.isLoading = false;
             this.conversationHistory = [];
+            this.fabMessages = [
+                'مرحباً، كيف يمكنني مساعدتك؟',
+                'اسألني عن أي شيء في الموقع!',
+                'هل تحتاج إلى مساعدة معينة؟',
+                'أنا هنا لدعمك في البحث عن المعلومات.',
+                'تفضل بكتابة استفسارك وسأجيب فوراً.'
+            ];
             
             // Show initial state
             this.updateWidgetState();
+            this.startFabMessages();
         },
         
         toggleWidget: function() {
@@ -64,6 +72,38 @@
             if (this.isOpen) {
                 $('#wp-gpt-rag-chat-input').focus();
             }
+        },
+
+        startFabMessages: function() {
+            var self = this;
+            var $bubble = $('.wp-gpt-rag-chat-fab-bubble');
+            if ($bubble.length === 0 || this.fabMessages.length === 0) {
+                return;
+            }
+            
+            var showMessage = function() {
+                if (self.isOpen) {
+                    scheduleNext();
+                    return;
+                }
+                var message = self.getRandomMessage();
+                $bubble.text(message).addClass('show');
+                setTimeout(function() {
+                    $bubble.removeClass('show');
+                    scheduleNext();
+                }, 3500);
+            };
+            
+            var scheduleNext = function() {
+                setTimeout(showMessage, 10000);
+            };
+            
+            scheduleNext();
+        },
+
+        getRandomMessage: function() {
+            var index = Math.floor(Math.random() * this.fabMessages.length);
+            return this.fabMessages[index];
         },
         
         updateWidgetState: function() {

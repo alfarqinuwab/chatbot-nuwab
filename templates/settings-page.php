@@ -426,6 +426,19 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                         </tr>
                         <tr>
                             <th scope="row">
+                                <label for="response_mode"><?php esc_html_e('Response Source', 'wp-gpt-rag-chat'); ?></label>
+                            </th>
+                            <td>
+                                <select id="response_mode" name="wp_gpt_rag_chat_settings[response_mode]">
+                                    <option value="hybrid" <?php selected($settings['response_mode'] ?? 'hybrid', 'hybrid'); ?>><?php esc_html_e('Hybrid (AI + Knowledge Base)', 'wp-gpt-rag-chat'); ?></option>
+                                    <option value="openai" <?php selected($settings['response_mode'] ?? 'hybrid', 'openai'); ?>><?php esc_html_e('OpenAI Only (Generative AI)', 'wp-gpt-rag-chat'); ?></option>
+                                    <option value="knowledge_base" <?php selected($settings['response_mode'] ?? 'hybrid', 'knowledge_base'); ?>><?php esc_html_e('Knowledge Base Only (Indexed Content)', 'wp-gpt-rag-chat'); ?></option>
+                                </select>
+                                <p class="description"><?php esc_html_e('Choose how chat responses are generated: directly from OpenAI, strictly from your indexed content, or a hybrid using AI with knowledge-base context.', 'wp-gpt-rag-chat'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
                                 <label for="widget_placement"><?php esc_html_e('Widget Placement', 'wp-gpt-rag-chat'); ?></label>
                             </th>
                             <td>

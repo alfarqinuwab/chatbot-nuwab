@@ -18,7 +18,9 @@
 
 /* Floating Action Button (Collapsed State) */
 .wp-gpt-rag-chat-fab {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .wp-gpt-rag-chat-widget.wp-gpt-rag-chat-open .wp-gpt-rag-chat-fab {
@@ -57,6 +59,39 @@
     border-radius: 50%;
     object-fit: cover;
     
+}
+
+.wp-gpt-rag-chat-fab-bubble {
+    background: rgba(255, 255, 255, 0.95);
+    color: #8b6f3f;
+    padding: 10px 14px;
+    border-radius: 18px;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 12px 24px rgba(209, 168, 95, 0.25);
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+    max-width: 220px;
+    text-align: center;
+    position: relative;
+}
+
+.wp-gpt-rag-chat-fab-bubble.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.wp-gpt-rag-chat-fab-bubble::after {
+    content: '';
+    position: absolute;
+    left: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-width: 8px;
+    border-style: solid;
+    border-color: transparent rgba(255, 255, 255, 0.95) transparent transparent;
 }
 
 /* Pulse animation for FAB */

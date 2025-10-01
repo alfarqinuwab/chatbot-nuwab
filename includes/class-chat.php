@@ -35,11 +35,26 @@ class Chat {
      * Process a chat query
      */
     public function process_query($query, $conversation_history = []) {
-        // Create embedding for the query
-        $query_embedding = $this->openai->create_embeddings([$query])[0];
+        $response_mode = $this->settings['response_mode'] ?? 'hybrid';
+        $context = '';
+        $query_embedding = null;
         
-        // Retrieve relevant context from Pinecone
-        $context = $this->retrieve_context($query_embedding);
+        try {
+            if ($response_mode !== 'openai') {
+                // Create embedding for the query
+                $query_embedding = $this->openai->create_embeddings([$query])[0];
+                
+                // Retrieve relevant context from Pinecone
+                $context = $this->retrieve_context($query_embedding);
+            }
+        } catch (\Exception $e) {
+            error_log('WP GPT RAG Chat: ' . $e->getMessage());
+            $context = '';
+        }
+        
+        if ($response_mode === 'knowledge_base') {
+            return $this->generate_knowledge_base_response($query, $context);
+        }
         
         // Build conversation messages
         $messages = $this->build_conversation_messages($conversation_history, $query);
@@ -48,6 +63,22 @@ class Chat {
         $response = $this->openai->generate_chat_completion($messages, $context);
         
         return $response;
+    }
+
+    /**
+     * Generate response using knowledge base only
+     */
+    private function generate_knowledge_base_response($query, $context) {
+        if (empty($context)) {
+            return __('عذراً، لم أجد معلومات ذات صلة في قاعدة المعرفة للإجابة على هذا السؤال حالياً.', 'wp-gpt-rag-chat');
+        }
+        
+        return sprintf(
+            "%s\n\n%s\n\n%s",
+            __('سؤال المستخدم:', 'wp-gpt-rag-chat') . ' ' . $query,
+            __('المعلومات ذات الصلة من قاعدة المعرفة:', 'wp-gpt-rag-chat'),
+            $context
+        );
     }
     
     /**
@@ -166,6 +197,7 @@ class Chat {
         <div id="wp-gpt-rag-chat-widget" class="wp-gpt-rag-chat-widget">
             <!-- Floating Button (Collapsed State) -->
             <div class="wp-gpt-rag-chat-fab">
+                <div class="wp-gpt-rag-chat-fab-bubble" aria-live="polite"></div>
                 <button type="button" class="wp-gpt-rag-chat-fab-button" aria-label="فتح المحادثة">
                     <img src="<?php echo esc_url( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/avatar_small.png' ); ?>" alt="فتح المحادثة" class="wp-gpt-rag-chat-fab-avatar" />
                 </button>

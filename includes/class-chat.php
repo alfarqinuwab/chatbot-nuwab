@@ -167,17 +167,17 @@ class Chat {
             <!-- Floating Button (Collapsed State) -->
             <div class="wp-gpt-rag-chat-fab">
                 <button type="button" class="wp-gpt-rag-chat-fab-button" aria-label="فتح المحادثة">
-                    <svg class="wp-gpt-rag-chat-fab-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                    <span class="wp-gpt-rag-chat-fab-text">سناد</span>
+                    <img src="<?php echo esc_url( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/avatar_small.png' ); ?>" alt="فتح المحادثة" class="wp-gpt-rag-chat-fab-avatar" />
                 </button>
             </div>
             
             <!-- Chat Window (Expanded State) -->
             <div class="wp-gpt-rag-chat-window">
                 <div class="wp-gpt-rag-chat-header">
-                    <h3>💬 اسأل سؤالاً</h3>
+                    <h3 class="wp-gpt-rag-chat-header-title">
+                        <img src="<?php echo esc_url( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/avatar_small.png' ); ?>" alt="AI Avatar" class="wp-gpt-rag-chat-header-avatar" />
+                        مساعدك الذكي
+                    </h3>
                     <button type="button" class="wp-gpt-rag-chat-toggle" aria-label="إغلاق المحادثة">
                         <span class="wp-gpt-rag-chat-icon">×</span>
                     </button>

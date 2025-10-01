@@ -34,10 +34,8 @@
     box-shadow: 0 8px 24px rgba(209, 168, 95, 0.4);
     cursor: pointer;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
     transition: all 0.3s ease;
     color: #fff;
     padding: 0;
@@ -53,17 +51,12 @@
     transform: scale(1.05);
 }
 
-.wp-gpt-rag-chat-fab-icon {
-    width: 28px;
-    height: 28px;
-    color: #fff;
-}
-
-.wp-gpt-rag-chat-fab-text {
-    font-size: 11px;
-    font-weight: 700;
-    color: #fff;
-    letter-spacing: 0.3px;
+.wp-gpt-rag-chat-fab-avatar {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    object-fit: cover;
+    
 }
 
 /* Pulse animation for FAB */
@@ -89,7 +82,7 @@
     border-radius: 16px;
     box-shadow: 0 10px 40px rgba(209, 168, 95, 0.25);
     overflow: hidden;
-    height: 500px;
+    height: 633px;
     max-height: 651px;
 }
 
@@ -117,6 +110,20 @@
     font-size: 18px;
     font-weight: 700;
     letter-spacing: 0.3px;
+}
+
+.wp-gpt-rag-chat-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wp-gpt-rag-chat-header-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;    
+    border: 3px solid rgba(255,255,255,0.2);
 }
 
 .wp-gpt-rag-chat-toggle {
@@ -210,8 +217,9 @@
 .wp-gpt-rag-chat-message-user .wp-gpt-rag-chat-message-content {
     background: linear-gradient(135deg, #d1a85f 0%, #c89a4f 100%);
     color: #fff;
-    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
     box-shadow: 0 2px 8px rgba(209, 168, 95, 0.25);
+    font-size:15px;
 }
 
 .wp-gpt-rag-chat-message-user .wp-gpt-rag-chat-message-time {
@@ -227,8 +235,10 @@
     background: #fff;
     color: #333;
     border: 2px solid #f0e6d6;
-    border-bottom-right-radius: 4px;
+    border-bottom-left-radius: 4px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+    font-size:15px;
+    
 }
 
 /* System Messages */
@@ -243,6 +253,7 @@
     border-radius: 18px;
     text-align: center;
     font-style: italic;
+    font-size: 15px;
     max-width: 100%;
 }
 
@@ -346,7 +357,6 @@
     font-family: 'Tajawal', sans-serif;
     outline: none;
     transition: all 0.3s ease;
-    height: 44px;
     direction: rtl;
     text-align: right;
 }
@@ -476,8 +486,8 @@
 
 /* Accessibility */
 .wp-gpt-rag-chat-widget:focus-within {
-    outline: 2px solid #d1a85f;
-    outline-offset: 2px;
+    outline: none;
+    outline-offset: 0;
 }
 
 .wp-gpt-rag-chat-toggle:focus {
@@ -490,8 +500,7 @@
 }
 
 .wp-gpt-rag-chat-send-button:focus {
-    outline: 2px solid #d1a85f;
-    outline-offset: 2px;
+    outline: none;
 }
 
 /* High Contrast Mode */

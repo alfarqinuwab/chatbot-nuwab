@@ -408,6 +408,20 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                                     <input type="checkbox" name="wp_gpt_rag_chat_settings[enable_chatbot]" value="1" <?php checked($settings['enable_chatbot'] ?? 1, 1); ?> />
                                     <?php esc_html_e('Enable chatbot on front-end', 'wp-gpt-rag-chat'); ?>
                                 </label>
+                                <p class="description"><?php esc_html_e('Master switch to enable/disable the chat widget site-wide.', 'wp-gpt-rag-chat'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="chat_visibility"><?php esc_html_e('Chat Visibility', 'wp-gpt-rag-chat'); ?></label>
+                            </th>
+                            <td>
+                                <select id="chat_visibility" name="wp_gpt_rag_chat_settings[chat_visibility]">
+                                    <option value="everyone" <?php selected($settings['chat_visibility'] ?? 'everyone', 'everyone'); ?>><?php esc_html_e('Show to Everyone (Visitors & Logged-in Users)', 'wp-gpt-rag-chat'); ?></option>
+                                    <option value="logged_in_only" <?php selected($settings['chat_visibility'] ?? '', 'logged_in_only'); ?>><?php esc_html_e('Show to Logged-in Users Only', 'wp-gpt-rag-chat'); ?></option>
+                                    <option value="visitors_only" <?php selected($settings['chat_visibility'] ?? '', 'visitors_only'); ?>><?php esc_html_e('Show to Visitors Only (Not Logged-in)', 'wp-gpt-rag-chat'); ?></option>
+                                </select>
+                                <p class="description"><?php esc_html_e('Control who can see and use the chat widget on your website.', 'wp-gpt-rag-chat'); ?></p>
                             </td>
                         </tr>
                         <tr>

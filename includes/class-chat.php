@@ -145,62 +145,113 @@ class Chat {
     public function get_chat_widget_html() {
         $settings = $this->settings;
         
+        // Check if chat is enabled
+        if (empty($settings['enable_chatbot'])) {
+            return '';
+        }
+        
+        // Check visibility settings
+        if (!$this->should_display_chat()) {
+            return '';
+        }
+        
         if (empty($settings['openai_api_key']) || empty($settings['pinecone_api_key'])) {
-            return '<div class="wp-gpt-rag-chat-error">' . 
-                   __('Chat is not available. Please contact the administrator.', 'wp-gpt-rag-chat') . 
+            return '<div class="wp-gpt-rag-chat-error" style="font-family: \'Tajawal\', sans-serif; direction: rtl; text-align: right;">' . 
+                   'المحادثة غير متاحة حالياً. يرجى التواصل مع المسؤول.' . 
                    '</div>';
         }
         
         ob_start();
         ?>
         <div id="wp-gpt-rag-chat-widget" class="wp-gpt-rag-chat-widget">
-            <div class="wp-gpt-rag-chat-header">
-                <h3><?php esc_html_e('Ask a Question', 'wp-gpt-rag-chat'); ?></h3>
-                <button type="button" class="wp-gpt-rag-chat-toggle" aria-label="<?php esc_attr_e('Toggle chat', 'wp-gpt-rag-chat'); ?>">
-                    <span class="wp-gpt-rag-chat-icon">×</span>
+            <!-- Floating Button (Collapsed State) -->
+            <div class="wp-gpt-rag-chat-fab">
+                <button type="button" class="wp-gpt-rag-chat-fab-button" aria-label="فتح المحادثة">
+                    <svg class="wp-gpt-rag-chat-fab-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span class="wp-gpt-rag-chat-fab-text">سناد</span>
                 </button>
             </div>
+            
+            <!-- Chat Window (Expanded State) -->
+            <div class="wp-gpt-rag-chat-window">
+                <div class="wp-gpt-rag-chat-header">
+                    <h3>💬 اسأل سؤالاً</h3>
+                    <button type="button" class="wp-gpt-rag-chat-toggle" aria-label="إغلاق المحادثة">
+                        <span class="wp-gpt-rag-chat-icon">×</span>
+                    </button>
+                </div>
             
             <div class="wp-gpt-rag-chat-body">
                 <div class="wp-gpt-rag-chat-messages" id="wp-gpt-rag-chat-messages">
                     <div class="wp-gpt-rag-chat-message wp-gpt-rag-chat-message-system">
                         <div class="wp-gpt-rag-chat-message-content">
-                            <?php esc_html_e('Hello! I can help you find information from this website. What would you like to know?', 'wp-gpt-rag-chat'); ?>
+                            مرحباً! يمكنني مساعدتك في إيجاد المعلومات من هذا الموقع. كيف يمكنني مساعدتك؟
                         </div>
                     </div>
                 </div>
                 
                 <div class="wp-gpt-rag-chat-input-container">
-                    <?php if ($settings['require_consent']): ?>
-                    <div class="wp-gpt-rag-chat-consent">
-                        <label>
-                            <input type="checkbox" id="wp-gpt-rag-chat-consent" />
-                            <?php esc_html_e('I agree to the privacy policy and understand that my query will be processed.', 'wp-gpt-rag-chat'); ?>
-                        </label>
-                    </div>
-                    <?php endif; ?>
-                    
                     <div class="wp-gpt-rag-chat-input-wrapper">
-                        <textarea 
+                        <input 
+                            type="text"
                             id="wp-gpt-rag-chat-input" 
-                            placeholder="<?php esc_attr_e('Type your question here...', 'wp-gpt-rag-chat'); ?>"
-                            rows="3"
-                        ></textarea>
-                        <button type="button" id="wp-gpt-rag-chat-send" class="wp-gpt-rag-chat-send-button">
-                            <?php esc_html_e('Send', 'wp-gpt-rag-chat'); ?>
+                            placeholder="اكتب سؤالك هنا..."
+                        />
+                        <button type="button" id="wp-gpt-rag-chat-send" class="wp-gpt-rag-chat-send-button" aria-label="إرسال">
+                            <i class="fas fa-paper-plane"></i>
                         </button>
                     </div>
                 </div>
             </div>
             
-            <div class="wp-gpt-rag-chat-footer">
-                <small>
-                    <?php esc_html_e('Powered by AI. Responses are based on website content.', 'wp-gpt-rag-chat'); ?>
-                </small>
+                <div class="wp-gpt-rag-chat-footer">
+                    <small>
+                        مدعوم بالذكاء الاصطناعي. الردود بناءً على محتوى الموقع.
+                    </small>
+                </div>
             </div>
         </div>
         <?php
         return ob_get_clean();
+    }
+    
+    /**
+     * Check if chat should be displayed based on visibility settings
+     */
+    private function should_display_chat() {
+        $settings = $this->settings;
+        $chat_visibility = $settings['chat_visibility'] ?? 'everyone';
+        $is_user_logged_in = is_user_logged_in();
+        
+        switch ($chat_visibility) {
+            case 'logged_in_only':
+                // Show only to logged-in users
+                return $is_user_logged_in;
+                
+            case 'visitors_only':
+                // Show only to non-logged-in users (visitors)
+                return !$is_user_logged_in;
+                
+            case 'everyone':
+            default:
+                // Show to everyone
+                return true;
+        }
+    }
+    
+    /**
+     * Render floating chat widget in footer (appears on all pages)
+     */
+    public function render_floating_chat_widget() {
+        // Don't show in admin area
+        if (is_admin()) {
+            return;
+        }
+        
+        // Output the chat widget
+        echo $this->get_chat_widget_html();
     }
     
     /**

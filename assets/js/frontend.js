@@ -13,7 +13,12 @@
         bindEvents: function() {
             var self = this;
             
-            // Toggle chat widget
+            // Open chat widget (FAB button)
+            $(document).on('click', '.wp-gpt-rag-chat-fab-button', function() {
+                self.toggleWidget();
+            });
+            
+            // Close chat widget (toggle button)
             $(document).on('click', '.wp-gpt-rag-chat-toggle', function() {
                 self.toggleWidget();
             });
@@ -23,17 +28,12 @@
                 self.sendMessage();
             });
             
-            // Send message on Enter (but not Shift+Enter)
+            // Send message on Enter
             $(document).on('keydown', '#wp-gpt-rag-chat-input', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === 'Enter') {
                     e.preventDefault();
                     self.sendMessage();
                 }
-            });
-            
-            // Auto-resize textarea
-            $(document).on('input', '#wp-gpt-rag-chat-input', function() {
-                self.autoResizeTextarea(this);
             });
             
             // Clear chat
@@ -68,17 +68,15 @@
         
         updateWidgetState: function() {
             var $widget = $('#wp-gpt-rag-chat-widget');
-            var $body = $('.wp-gpt-rag-chat-body');
-            var $icon = $('.wp-gpt-rag-chat-icon');
             
             if (this.isOpen) {
                 $widget.addClass('wp-gpt-rag-chat-open');
-                $body.slideDown(300);
-                $icon.text('×');
+                // Focus on input when opened
+                setTimeout(function() {
+                    $('#wp-gpt-rag-chat-input').focus();
+                }, 300);
             } else {
                 $widget.removeClass('wp-gpt-rag-chat-open');
-                $body.slideUp(300);
-                $icon.text('💬');
             }
         },
         
@@ -88,16 +86,9 @@
             }
             
             var $input = $('#wp-gpt-rag-chat-input');
-            var $consent = $('#wp-gpt-rag-chat-consent');
             var message = $input.val().trim();
             
             if (!message) {
-                return;
-            }
-            
-            // Check consent if required
-            if ($consent.length && !$consent.is(':checked')) {
-                this.showError(wpGptRagChat.strings.consentRequired);
                 return;
             }
             
@@ -106,7 +97,6 @@
             
             // Clear input
             $input.val('');
-            this.autoResizeTextarea($input[0]);
             
             // Show loading state
             this.setLoading(true);
@@ -124,7 +114,6 @@
                 data: {
                     action: 'wp_gpt_rag_chat_query',
                     query: message,
-                    consent: $('#wp-gpt-rag-chat-consent').is(':checked'),
                     nonce: wpGptRagChat.nonce
                 },
                 success: function(response) {
@@ -189,7 +178,7 @@
             var $input = $('#wp-gpt-rag-chat-input');
             
             if (loading) {
-                $sendButton.prop('disabled', true).text(wpGptRagChat.strings.loading);
+                $sendButton.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
                 $input.prop('disabled', true);
                 
                 // Add loading message
@@ -204,7 +193,7 @@
                 $('#wp-gpt-rag-chat-messages').append($loading);
                 this.scrollToBottom();
             } else {
-                $sendButton.prop('disabled', false).text('Send');
+                $sendButton.prop('disabled', false).html('<i class="fas fa-paper-plane"></i>');
                 $input.prop('disabled', false);
                 
                 // Remove loading message
@@ -219,16 +208,11 @@
             // Add system message
             $messages.append('<div class="wp-gpt-rag-chat-message wp-gpt-rag-chat-message-system">' +
                 '<div class="wp-gpt-rag-chat-message-content">' +
-                'Hello! I can help you find information from this website. What would you like to know?' +
+                'مرحباً! يمكنني مساعدتك في إيجاد المعلومات من هذا الموقع. كيف يمكنني مساعدتك؟' +
                 '</div>' +
                 '</div>');
             
             this.conversationHistory = [];
-        },
-        
-        autoResizeTextarea: function(textarea) {
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
         },
         
         scrollToBottom: function() {

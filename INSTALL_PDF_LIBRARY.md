@@ -86,3 +86,5 @@ For issues with PDF text extraction, please check:
 - File upload limits
 - PDF file format compatibility
 
+
+

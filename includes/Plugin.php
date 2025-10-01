@@ -126,10 +126,10 @@ class Plugin {
         $chat = new Chat();
         $privacy = new Privacy();
         
-        // Add chat widget to content
-        add_filter('the_content', [$chat, 'add_chat_widget_to_content']);
+        // Add floating chat widget to footer (appears on all pages)
+        add_action('wp_footer', [$chat, 'render_floating_chat_widget']);
         
-        // Register shortcode
+        // Register shortcode (for manual placement if needed)
         $chat->register_shortcode();
         
         // Add privacy policy content
@@ -284,6 +284,14 @@ class Plugin {
             true
         );
         
+        // Enqueue FontAwesome
+        wp_enqueue_style(
+            'fontawesome',
+            'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
+            [],
+            '6.4.0'
+        );
+        
         wp_enqueue_style(
             'wp-gpt-rag-chat-frontend',
             WP_GPT_RAG_CHAT_PLUGIN_URL . 'assets/css/frontend.css',
@@ -364,15 +372,39 @@ class Plugin {
     public function handle_chat_query() {
         check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
         
+        // Check chat visibility settings
+        $settings = Settings::get_settings();
+        $chat_visibility = $settings['chat_visibility'] ?? 'everyone';
+        $is_user_logged_in = is_user_logged_in();
+        
+        // Validate user has permission to use chat based on visibility settings
+        $can_use_chat = false;
+        switch ($chat_visibility) {
+            case 'logged_in_only':
+                $can_use_chat = $is_user_logged_in;
+                break;
+            case 'visitors_only':
+                $can_use_chat = !$is_user_logged_in;
+                break;
+            case 'everyone':
+            default:
+                $can_use_chat = true;
+                break;
+        }
+        
+        if (!$can_use_chat) {
+            wp_send_json_error(['message' => __('You do not have permission to use the chat.', 'wp-gpt-rag-chat')]);
+        }
+        
+        // Check if chatbot is enabled
+        if (empty($settings['enable_chatbot'])) {
+            wp_send_json_error(['message' => __('Chat is currently disabled.', 'wp-gpt-rag-chat')]);
+        }
+        
         $query = sanitize_text_field($_POST['query'] ?? '');
-        $consent = isset($_POST['consent']) ? (bool) $_POST['consent'] : false;
         
         if (empty($query)) {
             wp_send_json_error(['message' => __('Query is required.', 'wp-gpt-rag-chat')]);
-        }
-        
-        if (!$consent) {
-            wp_send_json_error(['message' => __('Privacy consent is required.', 'wp-gpt-rag-chat')]);
         }
         
         try {

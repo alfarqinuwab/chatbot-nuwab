@@ -305,6 +305,7 @@ class Settings {
         
         // Chat settings
         $sanitized['enable_chatbot'] = isset($input['enable_chatbot']) ? (bool) $input['enable_chatbot'] : true;
+        $sanitized['chat_visibility'] = sanitize_text_field($input['chat_visibility'] ?? 'everyone');
         $sanitized['widget_placement'] = sanitize_text_field($input['widget_placement'] ?? 'floating');
         $sanitized['greeting_text'] = sanitize_text_field($input['greeting_text'] ?? 'Hello! How can I help you today?');
         $sanitized['enable_history'] = isset($input['enable_history']) ? (bool) $input['enable_history'] : true;
@@ -444,6 +445,7 @@ class Settings {
             
             // Chat settings
             'enable_chatbot' => true,
+            'chat_visibility' => 'everyone',
             'widget_placement' => 'floating',
             'greeting_text' => 'Hello! How can I help you today?',
             'enable_history' => true,

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>معاينة تصميم الشات - Chat Design Preview</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+            padding: 40px 20px;
+            direction: rtl;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 40px;
+            font-size: 32px;
+        }
+        
+        .preview-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .color-palette {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .color-card {
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .color-box {
+            width: 100%;
+            height: 100px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .color-info {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .color-code {
+            font-family: monospace;
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-top: 8px;
+        }
+        
+        .chat-preview {
+            background: #f5f5f5;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .chat-widget {
+            width: 380px;
+            max-width: 100%;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(209, 168, 95, 0.25);
+            overflow: hidden;
+        }
+        
+        .chat-header {
+            background: linear-gradient(135deg, #d1a85f 0%, #c89a4f 100%);
+            color: white;
+            padding: 18px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(209, 168, 95, 0.3);
+        }
+        
+        .chat-header h3 {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        
+        .chat-messages {
+            padding: 20px;
+            background: #faf9f7;
+            min-height: 300px;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .message-user {
+            align-items: flex-start;
+        }
+        
+        .message-assistant {
+            align-items: flex-end;
+        }
+        
+        .message-content {
+            padding: 14px 18px;
+            border-radius: 18px;
+            max-width: 85%;
+        }
+        
+        .message-user .message-content {
+            background: linear-gradient(135deg, #d1a85f 0%, #c89a4f 100%);
+            color: white;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 8px rgba(209, 168, 95, 0.25);
+        }
+        
+        .message-assistant .message-content {
+            background: white;
+            color: #333;
+            border: 2px solid #f0e6d6;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message-time {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+            padding: 0 8px;
+        }
+        
+        .chat-input-area {
+            padding: 16px;
+            background: white;
+            border-top: 2px solid #f0e6d6;
+        }
+        
+        .input-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        .chat-input {
+            flex: 1;
+            border: 2px solid #f0e6d6;
+            border-radius: 24px;
+            padding: 14px 20px;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 15px;
+            direction: rtl;
+            resize: none;
+        }
+        
+        .chat-input:focus {
+            outline: none;
+            border-color: #d1a85f;
+            box-shadow: 0 0 0 3px rgba(209, 168, 95, 0.1);
+        }
+        
+        .send-button {
+            background: linear-gradient(135deg, #d1a85f 0%, #c89a4f 100%);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(209, 168, 95, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .send-button:hover {
+            background: linear-gradient(135deg, #c89a4f 0%, #b88a3f 100%);
+            transform: scale(1.08);
+            box-shadow: 0 6px 16px rgba(209, 168, 95, 0.4);
+        }
+        
+        .chat-footer {
+            padding: 10px 20px;
+            background: #fef9f0;
+            border-top: 2px solid #f0e6d6;
+            text-align: center;
+        }
+        
+        .chat-footer small {
+            color: #8b6f3f;
+            font-size: 12px;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .feature-card {
+            background: #fef9f0;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #f0e6d6;
+        }
+        
+        .feature-card h3 {
+            color: #d1a85f;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .feature-card p {
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .typing-indicator {
+            display: flex;
+            gap: 5px;
+            padding: 10px;
+        }
+        
+        .typing-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #d1a85f;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌟 معاينة تصميم الشات - Chat Design Preview</h1>
+        
+        <!-- Color Palette Section -->
+        <div class="preview-section">
+            <h2>🎨 لوحة الألوان - Color Palette</h2>
+            <div class="color-palette">
+                <div class="color-card">
+                    <div class="color-box" style="background: #d1a85f;"></div>
+                    <div class="color-info">اللون الذهبي الرئيسي</div>
+                    <div class="color-code">#d1a85f</div>
+                </div>
+                <div class="color-card">
+                    <div class="color-box" style="background: linear-gradient(135deg, #d1a85f 0%, #c89a4f 100%);"></div>
+                    <div class="color-info">التدرج الذهبي</div>
+                    <div class="color-code">Gradient</div>
+                </div>
+                <div class="color-card">
+                    <div class="color-box" style="background: #f0e6d6;"></div>
+                    <div class="color-info">ذهبي فاتح للحدود</div>
+                    <div class="color-code">#f0e6d6</div>
+                </div>
+                <div class="color-card">
+                    <div class="color-box" style="background: #fef9f0;"></div>
+                    <div class="color-info">بيج فاتح</div>
+                    <div class="color-code">#fef9f0</div>
+                </div>
+                <div class="color-card">
+                    <div class="color-box" style="background: #faf9f7;"></div>
+                    <div class="color-info">رمادي دافئ</div>
+                    <div class="color-code">#faf9f7</div>
+                </div>
+                <div class="color-card">
+                    <div class="color-box" style="background: #8b6f3f; color: white; display: flex; align-items: center; justify-content: center;">نص</div>
+                    <div class="color-info">بني للنصوص</div>
+                    <div class="color-code">#8b6f3f</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chat Widget Preview -->
+        <div class="preview-section">
+            <h2>💬 معاينة الشات - Chat Preview</h2>
+            <div class="chat-preview">
+                <div class="chat-widget">
+                    <div class="chat-header">
+                        <h3>💬 اسأل سؤالاً</h3>
+                        <button style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">×</button>
+                    </div>
+                    
+                    <div class="chat-messages">
+                        <div class="message message-user">
+                            <div class="message-content">
+                                مرحباً، ما هي أوقات العمل؟
+                            </div>
+                            <div class="message-time">3:45 م</div>
+                        </div>
+                        
+                        <div class="message message-assistant">
+                            <div class="message-content">
+                                أهلاً بك! أوقات العمل من الأحد إلى الخميس من 9 صباحاً حتى 6 مساءً.
+                            </div>
+                            <div class="message-time">3:45 م</div>
+                        </div>
+                        
+                        <div class="message message-user">
+                            <div class="message-content">
+                                شكراً لك!
+                            </div>
+                            <div class="message-time">3:46 م</div>
+                        </div>
+                        
+                        <div class="message message-assistant">
+                            <div class="message-content">
+                                <div class="typing-indicator">
+                                    <div class="typing-dot"></div>
+                                    <div class="typing-dot"></div>
+                                    <div class="typing-dot"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-input-area">
+                        <div class="input-wrapper">
+                            <textarea class="chat-input" rows="1" placeholder="اكتب سؤالك هنا..."></textarea>
+                            <button class="send-button">إرسال</button>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-footer">
+                        <small>مدعوم بالذكاء الاصطناعي. الردود بناءً على محتوى الموقع.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Features Section -->
+        <div class="preview-section">
+            <h2>✨ المميزات - Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>🎨 تصميم ذهبي</h3>
+                    <p>استخدام اللون الذهبي #d1a85f في جميع عناصر الواجهة مع تدرجات جميلة</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h3>📝 خط تجول</h3>
+                    <p>خط عربي احترافي من Google Fonts بأوزان متعددة</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h3>↔️ دعم RTL</h3>
+                    <p>دعم كامل للغة العربية مع اتجاه من اليمين لليسار</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h3>📱 متجاوب</h3>
+                    <p>يعمل بشكل مثالي على جميع الأجهزة والشاشات</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h3>✨ تأثيرات سلسة</h3>
+                    <p>انيميشن وتأثيرات hover جميلة وسلسة</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h3>🔒 آمن</h3>
+                    <p>موافقة على سياسة الخصوصية وحماية البيانات</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Typography Section -->
+        <div class="preview-section">
+            <h2>🔤 الطباعة - Typography</h2>
+            <div style="margin-top: 20px;">
+                <p style="font-size: 24px; font-weight: 700; color: #d1a85f; margin-bottom: 10px;">
+                    Tajawal Bold - عريض
+                </p>
+                <p style="font-size: 20px; font-weight: 500; color: #8b6f3f; margin-bottom: 10px;">
+                    Tajawal Medium - متوسط
+                </p>
+                <p style="font-size: 16px; font-weight: 400; color: #333; margin-bottom: 10px;">
+                    Tajawal Regular - عادي
+                </p>
+                <p style="font-size: 14px; color: #666;">
+                    النص العربي يظهر بشكل جميل وواضح في جميع الأحجام والأوزان
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
+

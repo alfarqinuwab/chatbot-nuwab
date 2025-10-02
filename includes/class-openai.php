@@ -72,8 +72,11 @@ class OpenAI {
             throw new \Exception(__('OpenAI API key is not configured.', 'wp-gpt-rag-chat'));
         }
         
-        // Prepare system message with context
-        $system_message = $this->build_system_message($context);
+        // Detect language from the last user message
+        $user_language = $this->detect_language($messages);
+        
+        // Prepare system message with context and language instruction
+        $system_message = $this->build_system_message($context, $user_language);
         
         // Add system message to the beginning
         array_unshift($messages, [
@@ -97,19 +100,27 @@ class OpenAI {
     }
     
     /**
-     * Build system message with context
+     * Build system message with context and language instruction
      */
-    private function build_system_message($context) {
+    private function build_system_message($context, $language = 'en') {
         $mode = $this->settings['response_mode'] ?? 'hybrid';
+        
+        // Language instruction
+        $language_instruction = $this->get_language_instruction($language);
         
         if ($mode === 'openai') {
             $message = __("You are a friendly AI assistant for a WordPress website. Provide clear, helpful answers using your general knowledge. When relevant, mention that visitors can find more details on the site.", 'wp-gpt-rag-chat');
             $custom_prompt = trim($this->settings['system_prompt'] ?? '');
-            return $custom_prompt !== '' ? $custom_prompt : $message;
+            $base_message = $custom_prompt !== '' ? $custom_prompt : $message;
+            return $base_message . "\n\n" . $language_instruction;
         }
         
         if ($mode === 'knowledge_base') {
             $message = __("You are a helpful AI assistant that must answer strictly using the provided context from the WordPress knowledge base. If the context doesn't contain enough information to answer the question, say so clearly. Do not invent information that isn't present in the context.", 'wp-gpt-rag-chat');
+            
+            $message .= "\n\n" . __('IMPORTANT: When you see links in format 🔗 [Title](URL) in the context, preserve them at the end of your response exactly as they appear. Keep the separator lines (━━━━) if multiple sources are provided.', 'wp-gpt-rag-chat');
+            
+            $message .= "\n\n" . $language_instruction;
             
             if (!empty($context)) {
                 $message .= "\n\n" . __('Context from the website:', 'wp-gpt-rag-chat') . "\n\n" . $context;
@@ -123,11 +134,51 @@ class OpenAI {
         $custom_prompt = trim($this->settings['system_prompt'] ?? '');
         $message = $custom_prompt !== '' ? $custom_prompt : $default_hybrid;
         
+        $message .= "\n\n" . __('IMPORTANT: When you see links in format 🔗 [Title](URL) in the context, preserve them at the end of your response exactly as they appear. Keep the separator lines (━━━━) if multiple sources are provided.', 'wp-gpt-rag-chat');
+        
+        $message .= "\n\n" . $language_instruction;
+        
         if (!empty($context)) {
             $message .= "\n\n" . __('Context from the website:', 'wp-gpt-rag-chat') . "\n\n" . $context;
         }
         
         return $message;
+    }
+    
+    /**
+     * Detect language from messages
+     */
+    private function detect_language($messages) {
+        // Get the last user message
+        $last_user_message = '';
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            if ($messages[$i]['role'] === 'user') {
+                $last_user_message = $messages[$i]['content'];
+                break;
+            }
+        }
+        
+        if (empty($last_user_message)) {
+            return 'en';
+        }
+        
+        // Simple Arabic detection: check for Arabic characters
+        if (preg_match('/[\x{0600}-\x{06FF}\x{0750}-\x{077F}\x{08A0}-\x{08FF}\x{FB50}-\x{FDFF}\x{FE70}-\x{FEFF}]/u', $last_user_message)) {
+            return 'ar';
+        }
+        
+        return 'en';
+    }
+    
+    /**
+     * Get language-specific instruction
+     */
+    private function get_language_instruction($language) {
+        if ($language === 'ar') {
+            return "IMPORTANT: The user is asking in Arabic. You MUST respond ONLY in Arabic language. Write your entire response in clear, professional Arabic.";
+        } else {
+            return "IMPORTANT: The user is asking in English. You MUST respond ONLY in English language. Write your entire response in clear, professional English.";
+        }
     }
     
     /**

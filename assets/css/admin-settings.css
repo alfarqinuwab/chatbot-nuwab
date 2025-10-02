@@ -1,17 +1,17 @@
 /**
  * Enhanced Settings Page Design
- * Applies card-based layout to WordPress core settings pages
+ * Scoped to plugin admin pages only with cornuwab-admin-wrap wrapper
  */
 
 /* Main Settings Container */
-.wrap {
+.cornuwab-admin-wrap.wrap {
     background: #f8f9fa;
     margin: 20px 0 0 -20px;
     padding: 0;
     min-height: 100vh;
 }
 
-.wrap h1 {
+.cornuwab-admin-wrap.wrap h1 {
     background: #ffffff;
     padding: 24px 40px;
     margin: 0;
@@ -25,7 +25,7 @@
 }
 
 /* Form Table Styling */
-.form-table {
+.cornuwab-admin-wrap .form-table {
     background: #ffffff;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -36,7 +36,7 @@
     border-spacing: 0;
 }
 
-.form-table th {
+.cornuwab-admin-wrap .form-table th {
     background: #f8f9fa;
     padding: 20px 24px;
     border-bottom: 1px solid #e1e5e9;
@@ -47,25 +47,25 @@
     vertical-align: top;
 }
 
-.form-table td {
+.cornuwab-admin-wrap .form-table td {
     padding: 20px 24px;
     border-bottom: 1px solid #f0f0f1;
     vertical-align: top;
 }
 
-.form-table tr:last-child th,
-.form-table tr:last-child td {
+.cornuwab-admin-wrap .form-table tr:last-child th,
+.cornuwab-admin-wrap .form-table tr:last-child td {
     border-bottom: none;
 }
 
 /* Form Input Styling */
-.form-table input[type="text"],
-.form-table input[type="email"],
-.form-table input[type="url"],
-.form-table input[type="password"],
-.form-table input[type="number"],
-.form-table select,
-.form-table textarea {
+.cornuwab-admin-wrap .form-table input[type="text"],
+.cornuwab-admin-wrap .form-table input[type="email"],
+.cornuwab-admin-wrap .form-table input[type="url"],
+.cornuwab-admin-wrap .form-table input[type="password"],
+.cornuwab-admin-wrap .form-table input[type="number"],
+.cornuwab-admin-wrap .form-table select,
+.cornuwab-admin-wrap .form-table textarea {
     width: 100%;
     max-width: 400px;
     padding: 12px 16px;
@@ -77,24 +77,24 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.form-table input:focus,
-.form-table select:focus,
-.form-table textarea:focus {
+.cornuwab-admin-wrap .form-table input:focus,
+.cornuwab-admin-wrap .form-table select:focus,
+.cornuwab-admin-wrap .form-table textarea:focus {
     border-color: #0073aa;
     box-shadow: 0 0 0 3px rgba(0, 115, 170, 0.1);
     outline: none;
     transform: translateY(-1px);
 }
 
-.form-table input:hover,
-.form-table select:hover,
-.form-table textarea:hover {
+.cornuwab-admin-wrap .form-table input:hover,
+.cornuwab-admin-wrap .form-table select:hover,
+.cornuwab-admin-wrap .form-table textarea:hover {
     border-color: #0073aa;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 /* Description Text */
-.form-table .description {
+.cornuwab-admin-wrap .form-table .description {
     color: #646970;
     font-size: 13px;
     margin-top: 8px;
@@ -107,14 +107,14 @@
 }
 
 /* Checkbox Styling */
-.form-table input[type="checkbox"] {
+.cornuwab-admin-wrap .form-table input[type="checkbox"] {
     margin-right: 12px;
     transform: scale(1.2);
     accent-color: #0073aa;
 }
 
 /* Fieldset Styling */
-.form-table fieldset {
+.cornuwab-admin-wrap .form-table fieldset {
     border: 1px solid #e1e5e9;
     border-radius: 8px;
     padding: 16px;
@@ -122,7 +122,7 @@
     margin: 8px 0;
 }
 
-.form-table legend {
+.cornuwab-admin-wrap .form-table legend {
     font-weight: 600;
     color: #1d2327;
     padding: 0 8px;
@@ -131,7 +131,7 @@
 }
 
 /* Submit Button Styling */
-.submit {
+.cornuwab-admin-wrap .submit {
     background: #ffffff;
     padding: 24px 40px;
     margin: 0 40px 40px 40px;
@@ -141,7 +141,7 @@
     text-align: center;
 }
 
-.submit .button-primary {
+.cornuwab-admin-wrap .submit .button-primary {
     padding: 16px 40px;
     font-size: 16px;
     height: auto;
@@ -151,13 +151,13 @@
     transition: all 0.3s ease;
 }
 
-.submit .button-primary:hover {
+.cornuwab-admin-wrap .submit .button-primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(0, 115, 170, 0.4);
 }
 
 /* Settings Sections */
-.settings-section {
+.cornuwab-admin-wrap .settings-section {
     background: #ffffff;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -166,7 +166,7 @@
     padding: 32px 40px;
 }
 
-.settings-section h2 {
+.cornuwab-admin-wrap .settings-section h2 {
     font-size: 20px;
     margin: 0 0 20px 0;
     color: #1d2327;
@@ -175,15 +175,15 @@
     border-bottom: 2px solid #f0f0f1;
 }
 
-.settings-section .description {
+.cornuwab-admin-wrap .settings-section .description {
     color: #646970;
     font-size: 14px;
     margin: 0 0 24px 0;
     line-height: 1.5;
 }
 
-/* Admin Notices */
-.wp-admin .notice {
+/* Admin Notices within plugin pages */
+.cornuwab-admin-wrap .notice {
     margin: 20px 40px;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -191,7 +191,7 @@
 }
 
 /* Help Tabs */
-.contextual-help-tabs {
+.cornuwab-admin-wrap .contextual-help-tabs {
     background: #ffffff;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -202,97 +202,96 @@
 
 /* Responsive Design */
 @media (max-width: 1024px) {
-    .form-table {
+    .cornuwab-admin-wrap .form-table {
         margin: 20px;
     }
     
-    .settings-section {
+    .cornuwab-admin-wrap .settings-section {
         margin: 20px;
         padding: 24px 32px;
     }
     
-    .submit {
+    .cornuwab-admin-wrap .submit {
         margin: 0 20px 20px 20px;
         padding: 20px 32px;
     }
     
-    .wrap h1 {
+    .cornuwab-admin-wrap.wrap h1 {
         padding: 20px 32px;
     }
 }
 
 @media (max-width: 768px) {
-    .form-table {
+    .cornuwab-admin-wrap .form-table {
         margin: 16px;
     }
     
-    .form-table th,
-    .form-table td {
+    .cornuwab-admin-wrap .form-table th,
+    .cornuwab-admin-wrap .form-table td {
         padding: 16px 20px;
     }
     
-    .settings-section {
+    .cornuwab-admin-wrap .settings-section {
         margin: 16px;
         padding: 20px 24px;
     }
     
-    .submit {
+    .cornuwab-admin-wrap .submit {
         margin: 0 16px 16px 16px;
         padding: 16px 24px;
     }
     
-    .wrap h1 {
+    .cornuwab-admin-wrap.wrap h1 {
         padding: 16px 24px;
         font-size: 22px;
     }
     
-    .form-table input[type="text"],
-    .form-table input[type="email"],
-    .form-table input[type="url"],
-    .form-table input[type="password"],
-    .form-table input[type="number"],
-    .form-table select,
-    .form-table textarea {
+    .cornuwab-admin-wrap .form-table input[type="text"],
+    .cornuwab-admin-wrap .form-table input[type="email"],
+    .cornuwab-admin-wrap .form-table input[type="url"],
+    .cornuwab-admin-wrap .form-table input[type="password"],
+    .cornuwab-admin-wrap .form-table input[type="number"],
+    .cornuwab-admin-wrap .form-table select,
+    .cornuwab-admin-wrap .form-table textarea {
         max-width: 100%;
     }
 }
 
 @media (max-width: 600px) {
-    .wrap {
+    .cornuwab-admin-wrap.wrap {
         margin: 20px 0 0 0;
     }
     
-    .form-table {
+    .cornuwab-admin-wrap .form-table {
         margin: 12px;
     }
     
-    .form-table th,
-    .form-table td {
+    .cornuwab-admin-wrap .form-table th,
+    .cornuwab-admin-wrap .form-table td {
         padding: 12px 16px;
         display: block;
         width: 100%;
     }
     
-    .form-table th {
+    .cornuwab-admin-wrap .form-table th {
         background: #f8f9fa;
         border-bottom: none;
         font-weight: 600;
         margin-bottom: 8px;
     }
     
-    .settings-section {
+    .cornuwab-admin-wrap .settings-section {
         margin: 12px;
         padding: 16px 20px;
     }
     
-    .submit {
+    .cornuwab-admin-wrap .submit {
         margin: 0 12px 12px 12px;
         padding: 12px 20px;
     }
     
-    .wrap h1 {
+    .cornuwab-admin-wrap.wrap h1 {
         padding: 12px 20px;
         font-size: 20px;
     }
 }
-

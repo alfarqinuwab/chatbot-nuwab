@@ -14,7 +14,7 @@ $daily_stats = $logger->get_daily_usage_stats(7);
 $popular_queries = $logger->get_popular_queries(10);
 ?>
 
-<div class="wrap">
+<div class="wrap cornuwab-admin-wrap">
     <h1><?php esc_html_e('Chat Logs & Analytics', 'wp-gpt-rag-chat'); ?></h1>
     
     <div class="wp-gpt-rag-chat-stats">

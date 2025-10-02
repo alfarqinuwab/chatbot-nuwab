@@ -59,6 +59,22 @@ class Plugin {
         add_action('wp_ajax_wp_gpt_rag_chat_extract_pdf_text', [$this, 'handle_extract_pdf_text']);
         add_action('wp_ajax_wp_gpt_rag_chat_generate_chunk_title', [$this, 'handle_generate_chunk_title']);
         add_action('wp_ajax_wp_gpt_rag_chat_create_chunk_embedding', [$this, 'handle_create_chunk_embedding']);
+        add_action('wp_ajax_wp_gpt_rag_chat_rate_response', [$this, 'handle_rate_response']);
+        add_action('wp_ajax_nopriv_wp_gpt_rag_chat_rate_response', [$this, 'handle_rate_response']);
+        add_action('wp_ajax_wp_gpt_rag_chat_add_tags', [$this, 'handle_add_tags']);
+        add_action('wp_ajax_wp_gpt_rag_chat_link_source', [$this, 'handle_link_source']);
+        add_action('wp_ajax_wp_gpt_rag_chat_search_content', [$this, 'handle_search_content']);
+        add_action('wp_ajax_wp_gpt_rag_chat_resolve_gap', [$this, 'handle_resolve_gap']);
+        add_action('wp_ajax_wp_gpt_rag_chat_index_sitemap', [$this, 'handle_index_sitemap']);
+        add_action('wp_ajax_wp_gpt_rag_chat_index_sitemap_batch', [$this, 'handle_index_sitemap_batch']);
+        add_action('wp_ajax_wp_gpt_rag_chat_clear_sitemap', [$this, 'handle_clear_sitemap']);
+        add_action('wp_ajax_wp_gpt_rag_chat_generate_sitemap', [$this, 'handle_generate_sitemap']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_indexable_content', [$this, 'handle_get_indexable_content']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_user_sessions', [$this, 'handle_get_user_sessions']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_geographic_data', [$this, 'handle_get_geographic_data']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_user_activity', [$this, 'handle_get_user_activity']);
+        add_action('wp_ajax_wp_gpt_rag_emergency_stop', [$this, 'handle_emergency_stop_ajax']);
+        add_action('wp_ajax_wp_gpt_rag_resume_indexing', [$this, 'handle_resume_indexing_ajax']);
         
         // WP-Cron hooks
         add_action('wp_gpt_rag_chat_index_content', [$this, 'cron_index_content']);
@@ -89,7 +105,13 @@ class Plugin {
             'includes/class-indexing.php',
             'includes/class-chat.php',
             'includes/class-privacy.php',
-            'includes/class-logger.php'
+            'includes/class-logger.php',
+            'includes/class-analytics.php',
+            'includes/class-migration.php',
+            'includes/class-sitemap.php',
+            'includes/RAG_Improvements.php',
+            'includes/class-emergency-stop.php',
+            'includes/class-import-protection.php'
         ];
         
         foreach ($files as $file) {
@@ -104,6 +126,11 @@ class Plugin {
      * Initialize plugin
      */
     public function init() {
+        // Run database migrations if needed
+        if (is_admin()) {
+            $this->check_and_run_migrations();
+        }
+        
         // Initialize components
         new Admin();
         new Metabox();
@@ -117,6 +144,21 @@ class Plugin {
         
         // Initialize chat widget
         $this->init_chat_widget();
+    }
+    
+    /**
+     * Check and run database migrations
+     */
+    private function check_and_run_migrations() {
+        $current_version = get_option('wp_gpt_rag_chat_db_version', '1.0.0');
+        $plugin_version = WP_GPT_RAG_CHAT_VERSION;
+        
+        // Only run if versions don't match
+        if (version_compare($current_version, '2.0.0', '<')) {
+            if (class_exists('\WP_GPT_RAG_Chat\Migration')) {
+                Migration::run_migrations();
+            }
+        }
     }
     
     /**
@@ -181,24 +223,34 @@ class Plugin {
             [$this, 'indexing_page']
         );
         
-        // Analytics Overview submenu
+        // Analytics & Logs submenu
         add_submenu_page(
             'wp-gpt-rag-chat-dashboard',
-            __('Analytics Overview', 'wp-gpt-rag-chat'),
-            __('Analytics Overview', 'wp-gpt-rag-chat'),
+            __('Analytics & Logs', 'wp-gpt-rag-chat'),
+            __('Analytics & Logs', 'wp-gpt-rag-chat'),
             'manage_options',
             'wp-gpt-rag-chat-analytics',
             [$this, 'analytics_page']
         );
         
-        // Chat Logs submenu
+        // Diagnostics submenu
         add_submenu_page(
             'wp-gpt-rag-chat-dashboard',
-            __('Chat Logs', 'wp-gpt-rag-chat'),
-            __('Chat Logs', 'wp-gpt-rag-chat'),
+            __('Diagnostics', 'wp-gpt-rag-chat'),
+            __('Diagnostics', 'wp-gpt-rag-chat'),
             'manage_options',
-            'wp-gpt-rag-chat-logs',
-            [$this, 'logs_page']
+            'wp-gpt-rag-chat-diagnostics',
+            [$this, 'diagnostics_page']
+        );
+        
+        // Conversation View (hidden submenu)
+        add_submenu_page(
+            null, // Hidden from menu
+            __('View Conversation', 'wp-gpt-rag-chat'),
+            '',
+            'manage_options',
+            'wp-gpt-rag-chat-conversation',
+            [$this, 'conversation_view_page']
         );
         
         // User Analytics submenu
@@ -248,6 +300,20 @@ class Plugin {
      */
     public function analytics_page() {
         include WP_GPT_RAG_CHAT_PLUGIN_DIR . 'templates/analytics-page.php';
+    }
+    
+    /**
+     * Diagnostics page callback
+     */
+    public function diagnostics_page() {
+        include WP_GPT_RAG_CHAT_PLUGIN_DIR . 'templates/diagnostics-page.php';
+    }
+    
+    /**
+     * Conversation view page callback
+     */
+    public function conversation_view_page() {
+        include WP_GPT_RAG_CHAT_PLUGIN_DIR . 'templates/conversation-view.php';
     }
     
     /**
@@ -357,6 +423,7 @@ class Plugin {
         wp_localize_script('wp-gpt-rag-chat-admin', 'wpGptRagChatAdmin', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('wp_gpt_rag_chat_admin_nonce'),
+            'emergencyStopActive' => Emergency_Stop::is_active(),
             'strings' => [
                 'confirmBulkAction' => __('Are you sure you want to perform this action?', 'wp-gpt-rag-chat'),
                 'processing' => __('Processing...', 'wp-gpt-rag-chat'),
@@ -364,6 +431,43 @@ class Plugin {
                 'error' => __('An error occurred. Please try again.', 'wp-gpt-rag-chat'),
             ]
         ]);
+        
+        // Add inline script for emergency stop functions
+        wp_add_inline_script('wp-gpt-rag-chat-admin', '
+            function wpGptRagEmergencyStop() {
+                if (!confirm("⚠️ EMERGENCY STOP\\n\\nThis will immediately:\\n• Stop all indexing\\n• Clear all queued jobs\\n• Prevent new indexing\\n\\nAre you sure?")) {
+                    return;
+                }
+                jQuery.post(wpGptRagChatAdmin.ajaxUrl, {
+                    action: "wp_gpt_rag_emergency_stop",
+                    nonce: wpGptRagChatAdmin.nonce
+                }, function(response) {
+                    if (response.success) {
+                        alert("✅ Emergency stop activated!\\n\\n" + response.data.message);
+                        location.reload();
+                    } else {
+                        alert("❌ Error: " + (response.data ? response.data.message : "Unknown error"));
+                    }
+                });
+            }
+            
+            function wpGptRagResumeIndexing() {
+                if (!confirm("▶ Resume Indexing\\n\\nThis will re-enable automatic indexing.\\n\\nContinue?")) {
+                    return;
+                }
+                jQuery.post(wpGptRagChatAdmin.ajaxUrl, {
+                    action: "wp_gpt_rag_resume_indexing",
+                    nonce: wpGptRagChatAdmin.nonce
+                }, function(response) {
+                    if (response.success) {
+                        alert("✅ Indexing resumed!\\n\\n" + response.data.message);
+                        location.reload();
+                    } else {
+                        alert("❌ Error: " + (response.data ? response.data.message : "Unknown error"));
+                    }
+                });
+            }
+        ');
     }
     
     /**
@@ -402,23 +506,624 @@ class Plugin {
         }
         
         $query = sanitize_text_field($_POST['query'] ?? '');
+        $chat_id = sanitize_text_field($_POST['chat_id'] ?? '');
+        $turn_number = intval($_POST['turn_number'] ?? 1);
         
         if (empty($query)) {
             wp_send_json_error(['message' => __('Query is required.', 'wp-gpt-rag-chat')]);
         }
         
+        // Generate chat_id if not provided
+        if (empty($chat_id)) {
+            $analytics = new Analytics();
+            $chat_id = $analytics->generate_chat_id();
+        }
+        
         try {
+            $start_time = microtime(true);
+            
             $chat = new Chat();
             $response = $chat->process_query($query);
+            $rag_metadata = $chat->get_last_rag_metadata();
             
-            // Log the interaction
-            $logger = new Logger();
-            $logger->log_interaction($query, $response, get_current_user_id());
+            $latency = round((microtime(true) - $start_time) * 1000); // milliseconds
             
-            wp_send_json_success(['response' => $response]);
+            // Log the interaction with Analytics
+            $analytics = new Analytics();
+            
+            // Log user message with query variations
+            $user_log_data = [
+                'chat_id' => $chat_id,
+                'turn_number' => $turn_number,
+                'role' => 'user',
+                'content' => $query,
+                'user_id' => get_current_user_id()
+            ];
+            
+            // Add RAG metadata to user log
+            if (!empty($rag_metadata)) {
+                $user_log_data['rag_metadata'] = wp_json_encode($rag_metadata);
+            }
+            
+            $user_log_id = $analytics->log_interaction($user_log_data);
+            
+            // Log assistant response
+            $assistant_log_id = $analytics->log_interaction([
+                'chat_id' => $chat_id,
+                'turn_number' => $turn_number,
+                'role' => 'assistant',
+                'content' => $response,
+                'response_latency' => $latency,
+                'model_used' => $settings['gpt_model'] ?? 'gpt-4',
+                'user_id' => get_current_user_id()
+            ]);
+            
+            wp_send_json_success([
+                'response' => $response,
+                'chat_id' => $chat_id,
+                'log_id' => $assistant_log_id,
+                'latency' => $latency
+            ]);
         } catch (\Exception $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
         }
+    }
+    
+    /**
+     * Handle rating response AJAX request
+     */
+    public function handle_rate_response() {
+        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
+        
+        $log_id = intval($_POST['log_id'] ?? 0);
+        $rating = intval($_POST['rating'] ?? 0);
+        
+        if (empty($log_id) || !in_array($rating, [1, -1])) {
+            wp_send_json_error(['message' => __('Invalid parameters.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            $analytics = new Analytics();
+            $result = $analytics->update_rating($log_id, $rating);
+            
+            if ($result) {
+                wp_send_json_success(['message' => __('Rating saved.', 'wp-gpt-rag-chat')]);
+            } else {
+                wp_send_json_error(['message' => __('Failed to save rating.', 'wp-gpt-rag-chat')]);
+            }
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle add tags AJAX request
+     */
+    public function handle_add_tags() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $log_id = intval($_POST['log_id'] ?? 0);
+        $tags = sanitize_text_field($_POST['tags'] ?? '');
+        
+        if (empty($log_id) || empty($tags)) {
+            wp_send_json_error(['message' => __('Invalid parameters.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            $analytics = new Analytics();
+            $result = $analytics->add_tags($log_id, $tags);
+            
+            if ($result) {
+                wp_send_json_success(['message' => __('Tags added.', 'wp-gpt-rag-chat')]);
+            } else {
+                wp_send_json_error(['message' => __('Failed to add tags.', 'wp-gpt-rag-chat')]);
+            }
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle link source AJAX request
+     */
+    public function handle_link_source() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $log_id = intval($_POST['log_id'] ?? 0);
+        $source_type = sanitize_text_field($_POST['source_type'] ?? '');
+        $source_id = intval($_POST['source_id'] ?? 0);
+        $reindex = isset($_POST['reindex']) ? (bool) $_POST['reindex'] : false;
+        
+        if (empty($log_id) || empty($source_type) || empty($source_id)) {
+            wp_send_json_error(['message' => __('Invalid parameters.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            global $wpdb;
+            $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
+            
+            // Get current sources
+            $current_sources_json = $wpdb->get_var($wpdb->prepare(
+                "SELECT rag_sources FROM {$logs_table} WHERE id = %d",
+                $log_id
+            ));
+            
+            $sources = $current_sources_json ? json_decode($current_sources_json, true) : [];
+            
+            // Get source details
+            if ($source_type === 'post') {
+                $post = get_post($source_id);
+                if (!$post) {
+                    wp_send_json_error(['message' => __('Post not found.', 'wp-gpt-rag-chat')]);
+                }
+                
+                $sources[] = [
+                    'type' => 'post',
+                    'id' => $source_id,
+                    'title' => $post->post_title,
+                    'url' => get_permalink($source_id),
+                    'post_type' => $post->post_type,
+                    'manually_linked' => true,
+                    'linked_at' => current_time('mysql')
+                ];
+            } elseif ($source_type === 'attachment') {
+                $attachment = get_post($source_id);
+                if (!$attachment || $attachment->post_type !== 'attachment') {
+                    wp_send_json_error(['message' => __('Attachment not found.', 'wp-gpt-rag-chat')]);
+                }
+                
+                $sources[] = [
+                    'type' => 'attachment',
+                    'id' => $source_id,
+                    'title' => $attachment->post_title,
+                    'url' => wp_get_attachment_url($source_id),
+                    'mime_type' => get_post_mime_type($source_id),
+                    'manually_linked' => true,
+                    'linked_at' => current_time('mysql')
+                ];
+            }
+            
+            // Update log entry
+            $result = $wpdb->update(
+                $logs_table,
+                [
+                    'rag_sources' => wp_json_encode($sources),
+                    'sources_count' => count($sources)
+                ],
+                ['id' => $log_id],
+                ['%s', '%d'],
+                ['%d']
+            );
+            
+            // Re-index if requested and not already indexed
+            if ($reindex && !$this->is_post_indexed($source_id)) {
+                $indexing = new Indexing();
+                
+                if ($source_type === 'post') {
+                    $indexing->index_post($source_id);
+                } elseif ($source_type === 'attachment') {
+                    // For attachments (PDFs), use index_post as well
+                    $indexing->index_post($source_id);
+                }
+                
+                wp_send_json_success([
+                    'message' => __('Source linked and content indexed successfully.', 'wp-gpt-rag-chat'),
+                    'reindexed' => true
+                ]);
+            }
+            
+            if ($result !== false) {
+                $message = __('Source linked successfully.', 'wp-gpt-rag-chat');
+                if ($reindex && $this->is_post_indexed($source_id)) {
+                    $message .= ' ' . __('(Content was already indexed)', 'wp-gpt-rag-chat');
+                }
+                wp_send_json_success([
+                    'message' => $message
+                ]);
+            } else {
+                wp_send_json_error(['message' => __('Failed to link source.', 'wp-gpt-rag-chat')]);
+            }
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle search content AJAX request
+     */
+    public function handle_search_content() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $search = sanitize_text_field($_POST['search'] ?? '');
+        $post_type = sanitize_text_field($_POST['post_type'] ?? 'any');
+        
+        if (empty($search)) {
+            wp_send_json_error(['message' => __('Search query is required.', 'wp-gpt-rag-chat')]);
+        }
+        
+        // Search posts
+        $args = [
+            's' => $search,
+            'post_type' => $post_type === 'any' ? ['post', 'page'] : $post_type,
+            'post_status' => 'publish',
+            'posts_per_page' => 20,
+            'orderby' => 'relevance'
+        ];
+        
+        $posts = get_posts($args);
+        
+        $results = [];
+        foreach ($posts as $post) {
+            $results[] = [
+                'id' => $post->ID,
+                'title' => $post->post_title,
+                'type' => $post->post_type,
+                'url' => get_permalink($post->ID),
+                'excerpt' => wp_trim_words($post->post_content, 20),
+                'is_indexed' => $this->is_post_indexed($post->ID)
+            ];
+        }
+        
+        // Search attachments (PDFs)
+        $attachment_args = [
+            's' => $search,
+            'post_type' => 'attachment',
+            'post_status' => 'inherit',
+            'post_mime_type' => 'application/pdf',
+            'posts_per_page' => 10
+        ];
+        
+        $attachments = get_posts($attachment_args);
+        
+        foreach ($attachments as $attachment) {
+            $results[] = [
+                'id' => $attachment->ID,
+                'title' => $attachment->post_title,
+                'type' => 'pdf',
+                'url' => wp_get_attachment_url($attachment->ID),
+                'excerpt' => __('PDF Document', 'wp-gpt-rag-chat'),
+                'is_indexed' => $this->is_post_indexed($attachment->ID)
+            ];
+        }
+        
+        wp_send_json_success(['results' => $results]);
+    }
+    
+    /**
+     * Handle resolve content gap AJAX request
+     */
+    public function handle_resolve_gap() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $gap_id = intval($_POST['gap_id'] ?? 0);
+        
+        if (empty($gap_id)) {
+            wp_send_json_error(['message' => __('Invalid gap ID.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            $rag_improvements = new RAG_Improvements();
+            $result = $rag_improvements->resolve_content_gap($gap_id);
+            
+            if ($result) {
+                wp_send_json_success([
+                    'message' => __('Content gap marked as resolved.', 'wp-gpt-rag-chat')
+                ]);
+            } else {
+                wp_send_json_error(['message' => __('Failed to resolve content gap.', 'wp-gpt-rag-chat')]);
+            }
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle sitemap indexing AJAX request
+     */
+    public function handle_index_sitemap() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $sitemap_url = sanitize_text_field($_POST['sitemap_url'] ?? '');
+        
+        if (empty($sitemap_url)) {
+            $settings = Settings::get_settings();
+            $sitemap_url = $settings['sitemap_url'] ?? 'sitemap.xml';
+        }
+        
+        try {
+            $sitemap = new Sitemap();
+            $result = $sitemap->index_sitemap($sitemap_url);
+            
+            if ($result['success']) {
+                wp_send_json_success([
+                    'message' => sprintf(
+                        __('Successfully indexed %d URLs (%d failed).', 'wp-gpt-rag-chat'),
+                        $result['indexed'],
+                        $result['failed']
+                    ),
+                    'indexed' => $result['indexed'],
+                    'failed' => $result['failed'],
+                    'total' => $result['total']
+                ]);
+            } else {
+                wp_send_json_error(['message' => $result['error'] ?? __('Failed to index sitemap.', 'wp-gpt-rag-chat')]);
+            }
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle batch sitemap indexing AJAX request
+     */
+    public function handle_index_sitemap_batch() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        // CHECK FOR EMERGENCY STOP FLAG
+        if (get_transient('wp_gpt_rag_emergency_stop')) {
+            wp_send_json_error([
+                'message' => __('⛔ INDEXING BLOCKED: Emergency stop is active.', 'wp-gpt-rag-chat'),
+                'emergency_stop' => true
+            ]);
+        }
+        
+        $sitemap_url = sanitize_text_field($_POST['sitemap_url'] ?? '');
+        $offset = intval($_POST['offset'] ?? 0);
+        
+        if (empty($sitemap_url)) {
+            wp_send_json_error(['message' => __('Sitemap URL is required.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            $sitemap = new Sitemap();
+            $result = $sitemap->index_sitemap_batch($sitemap_url, $offset, 5);
+            
+            if ($result['success']) {
+                wp_send_json_success([
+                    'message' => sprintf(
+                        __('Indexed %d of %d URLs', 'wp-gpt-rag-chat'),
+                        $offset + $result['processed'],
+                        $result['total']
+                    ),
+                    'total' => $result['total'],
+                    'processed' => $result['processed'],
+                    'indexed' => $result['indexed'],
+                    'failed' => $result['failed'],
+                    'offset' => $offset,
+                    'has_more' => $result['has_more']
+                ]);
+            } else {
+                wp_send_json_error(['message' => $result['error']]);
+            }
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle clear sitemap index AJAX request
+     */
+    public function handle_clear_sitemap() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            $sitemap = new Sitemap();
+            $result = $sitemap->clear_sitemap_index();
+            
+            wp_send_json_success([
+                'message' => __('Sitemap index cleared successfully.', 'wp-gpt-rag-chat')
+            ]);
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle sitemap generation AJAX request
+     */
+    public function handle_generate_sitemap() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $post_types = $_POST['post_types'] ?? 'all';
+        $download = isset($_POST['download']) && $_POST['download'] === 'true';
+        
+        try {
+            $indexing = new Indexing();
+            
+            // Generate sitemap
+            $result = $indexing->generate_xml_sitemap($post_types);
+            
+            if ($download) {
+                // Save to file and return download URL
+                $file_info = $indexing->save_sitemap_to_file($result['xml']);
+                
+                wp_send_json_success([
+                    'message' => sprintf(__('Sitemap generated with %d URLs.', 'wp-gpt-rag-chat'), $result['count']),
+                    'count' => $result['count'],
+                    'post_types' => $result['post_types'],
+                    'download_url' => $file_info['url'],
+                    'filename' => $file_info['filename']
+                ]);
+            } else {
+                // Return XML content directly
+                wp_send_json_success([
+                    'message' => sprintf(__('Sitemap generated with %d URLs.', 'wp-gpt-rag-chat'), $result['count']),
+                    'count' => $result['count'],
+                    'post_types' => $result['post_types'],
+                    'xml' => $result['xml']
+                ]);
+            }
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle get indexable content AJAX request
+     */
+    public function handle_get_indexable_content() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            $indexing = new Indexing();
+            $content_list = $indexing->get_all_indexable_content();
+            
+            // Count indexed vs unindexed
+            $indexed_count = count(array_filter($content_list, function($item) {
+                return $item['indexed'];
+            }));
+            $unindexed_count = count($content_list) - $indexed_count;
+            
+            wp_send_json_success([
+                'content' => $content_list,
+                'total' => count($content_list),
+                'indexed' => $indexed_count,
+                'unindexed' => $unindexed_count
+            ]);
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle get user sessions AJAX request
+     */
+    public function handle_get_user_sessions() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            $analytics = new Analytics();
+            $sessions = $analytics->get_user_sessions(20);
+            
+            $html = '';
+            if (empty($sessions)) {
+                $html = '<tr><td colspan="5">' . __('No user sessions found.', 'wp-gpt-rag-chat') . '</td></tr>';
+            } else {
+                foreach ($sessions as $session) {
+                    $html .= '<tr>';
+                    $html .= '<td>' . esc_html($session->display_name) . '</td>';
+                    $html .= '<td>' . esc_html($session->user_type) . '</td>';
+                    $html .= '<td>' . esc_html($session->sessions) . '</td>';
+                    $html .= '<td>' . esc_html($session->queries) . '</td>';
+                    $html .= '<td>' . esc_html(date('Y-m-d H:i', strtotime($session->last_activity))) . '</td>';
+                    $html .= '</tr>';
+                }
+            }
+            
+            wp_send_json_success(['html' => $html]);
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle get geographic data AJAX request
+     */
+    public function handle_get_geographic_data() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            $analytics = new Analytics();
+            $distribution = $analytics->get_geographic_distribution();
+            
+            $html = '';
+            if (empty($distribution)) {
+                $html = '<tr><td colspan="3">' . __('No geographic data available.', 'wp-gpt-rag-chat') . '</td></tr>';
+            } else {
+                foreach ($distribution as $item) {
+                    $html .= '<tr>';
+                    $html .= '<td>' . esc_html($item['region']) . '</td>';
+                    $html .= '<td>' . esc_html($item['users']) . '</td>';
+                    $html .= '<td>' . esc_html($item['percentage']) . '%</td>';
+                    $html .= '</tr>';
+                }
+            }
+            
+            wp_send_json_success(['html' => $html]);
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle get user activity AJAX request
+     */
+    public function handle_get_user_activity() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $days = intval($_POST['days'] ?? 7);
+        
+        try {
+            $analytics = new Analytics();
+            $activity = $analytics->get_user_activity($days);
+            
+            wp_send_json_success(['activity' => $activity]);
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Check if post is indexed in Pinecone
+     */
+    private function is_post_indexed($post_id) {
+        global $wpdb;
+        $vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
+        
+        $count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$vectors_table} WHERE post_id = %d",
+            $post_id
+        ));
+        
+        return $count > 0;
     }
     
     /**
@@ -500,6 +1205,11 @@ class Plugin {
      * Handle post save
      */
     public function handle_post_save($post_id, $post) {
+        // ⚠️ EMERGENCY STOP CHECK - MUST BE FIRST!
+        if (get_transient('wp_gpt_rag_emergency_stop')) {
+            return; // Block all indexing when emergency stop is active
+        }
+        
         if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
             return;
         }
@@ -508,16 +1218,33 @@ class Plugin {
             return;
         }
         
+        // Get settings
+        $settings = Settings::get_settings();
+        
+        // Check if auto-indexing is enabled
+        if (!$settings['enable_auto_indexing']) {
+            return;
+        }
+        
+        // Check if this post type should be auto-indexed
+        $auto_index_post_types = $settings['auto_index_post_types'] ?? ['post', 'page'];
+        if (!in_array($post->post_type, $auto_index_post_types)) {
+            return;
+        }
+        
         $include = get_post_meta($post_id, '_wp_gpt_rag_chat_include', true);
-        if ($include === '') {
-            // Default to include for new posts
-            update_post_meta($post_id, '_wp_gpt_rag_chat_include', true);
-            $include = true;
+        // ⚠️ REMOVED AUTO-FLAGGING BUG - Don't auto-set include flag
+        // Only proceed if explicitly set to true
+        if ($include !== '1' && $include !== 1 && $include !== true) {
+            return; // Don't auto-flag posts anymore
         }
         
         if ($include) {
-            // Schedule indexing
-            wp_schedule_single_event(time() + 30, 'wp_gpt_rag_chat_index_content', [$post_id]);
+            // Get indexing delay from settings
+            $delay = $settings['auto_index_delay'] ?? 30;
+            
+            // Schedule indexing with configured delay
+            wp_schedule_single_event(time() + $delay, 'wp_gpt_rag_chat_index_content', [$post_id]);
         }
     }
     
@@ -598,6 +1325,14 @@ class Plugin {
             wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
         }
         
+        // CHECK FOR EMERGENCY STOP FLAG
+        if (get_transient('wp_gpt_rag_emergency_stop')) {
+            wp_send_json_error([
+                'message' => __('⛔ INDEXING BLOCKED: Emergency stop is active. Go to the indexing page to re-enable.', 'wp-gpt-rag-chat'),
+                'emergency_stop' => true
+            ]);
+        }
+        
         $action = sanitize_text_field($_POST['bulk_action'] ?? '');
         $offset = intval($_POST['offset'] ?? 0);
         $post_type = sanitize_text_field($_POST['post_type'] ?? '');
@@ -648,12 +1383,17 @@ class Plugin {
                 }
             }
             
+            // Get updated stats
+            $stats = $indexing->get_indexing_stats();
+            
             wp_send_json_success([
                 'processed' => $result['processed'],
                 'total' => $total_posts,
+                'total_posts' => $total_posts,
                 'completed' => ($action === 'index_single') ? true : (($offset + 10) >= $total_posts),
                 'errors' => $result['errors'],
-                'newly_indexed' => $newly_indexed
+                'newly_indexed' => $newly_indexed,
+                'stats' => $stats
             ]);
         } catch (\Exception $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
@@ -722,9 +1462,52 @@ class Plugin {
     }
     
     /**
+     * Handle emergency stop AJAX
+     */
+    public function handle_emergency_stop_ajax() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Insufficient permissions']);
+        }
+        
+        Emergency_Stop::activate();
+        $cleared = Emergency_Stop::get_cron_count();
+        
+        wp_send_json_success([
+            'message' => 'Emergency stop activated. All indexing stopped.',
+            'cleared' => $cleared
+        ]);
+    }
+    
+    /**
+     * Handle resume indexing AJAX
+     */
+    public function handle_resume_indexing_ajax() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Insufficient permissions']);
+        }
+        
+        Emergency_Stop::deactivate();
+        Import_Protection::deactivate();
+        
+        wp_send_json_success([
+            'message' => 'Indexing resumed. Auto-indexing will work normally now.'
+        ]);
+    }
+    
+    /**
      * Cron job to index content
      */
     public function cron_index_content($post_id) {
+        // ⚠️ EMERGENCY STOP CHECK - Block execution if emergency stop is active
+        if (get_transient('wp_gpt_rag_emergency_stop')) {
+            error_log('WP GPT RAG Chat: Cron indexing blocked for post ' . $post_id . ' - Emergency stop active');
+            return;
+        }
+        
         try {
             $indexing = new Indexing();
             $indexing->index_post($post_id);
@@ -774,6 +1557,11 @@ class Plugin {
             // Create database tables
             self::create_tables();
             
+            // Run database migrations
+            if (class_exists('\WP_GPT_RAG_Chat\Migration')) {
+                Migration::run_migrations();
+            }
+            
             // Schedule cron events
             if (function_exists('wp_next_scheduled') && !wp_next_scheduled('wp_gpt_rag_chat_cleanup_logs')) {
                 wp_schedule_event(time(), 'daily', 'wp_gpt_rag_chat_cleanup_logs');
@@ -796,6 +1584,7 @@ class Plugin {
                 'log_retention_days' => 30,
                 'anonymize_ips' => false,
                 'require_consent' => true,
+                'enable_pii_masking' => true,
             ];
             
             if (function_exists('add_option')) {
@@ -847,6 +1636,8 @@ class Plugin {
             if (isset($wpdb) && method_exists($wpdb, 'query')) {
                 $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}wp_gpt_rag_chat_logs");
                 $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}wp_gpt_rag_chat_vectors");
+                $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}wp_gpt_rag_sitemap_urls");
+                $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}wp_gpt_rag_content_gaps");
                 
                 // Remove post meta
                 $wpdb->query("DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE '_wp_gpt_rag_chat_%'");
@@ -884,14 +1675,27 @@ class Plugin {
         $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
         $logs_sql = "CREATE TABLE $logs_table (
             id bigint(20) NOT NULL AUTO_INCREMENT,
+            chat_id varchar(64) NOT NULL,
+            turn_number int(11) NOT NULL DEFAULT 1,
+            role enum('user','assistant') NOT NULL DEFAULT 'user',
             user_id bigint(20) DEFAULT NULL,
             ip_address varchar(45) DEFAULT NULL,
-            query text NOT NULL,
-            response text NOT NULL,
+            content text NOT NULL,
+            response_latency int(11) DEFAULT NULL COMMENT 'Response time in milliseconds',
+            sources_count int(11) DEFAULT 0,
+            rag_sources longtext DEFAULT NULL COMMENT 'JSON array of sources',
+            rating tinyint(1) DEFAULT NULL COMMENT '1 for thumbs up, -1 for thumbs down',
+            tags varchar(500) DEFAULT NULL COMMENT 'Comma-separated tags',
+            model_used varchar(100) DEFAULT NULL,
+            tokens_used int(11) DEFAULT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
+            KEY chat_id (chat_id),
             KEY user_id (user_id),
-            KEY created_at (created_at)
+            KEY role (role),
+            KEY created_at (created_at),
+            KEY rating (rating),
+            KEY model_used (model_used)
         ) $charset_collate;";
         
         // Vectors table
@@ -910,11 +1714,51 @@ class Plugin {
             KEY content_hash (content_hash)
         ) $charset_collate;";
         
+        // Sitemap URLs table (for fallback suggestions)
+        $sitemap_table = $wpdb->prefix . 'wp_gpt_rag_sitemap_urls';
+        $sitemap_sql = "CREATE TABLE $sitemap_table (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            url varchar(2048) NOT NULL,
+            title varchar(500) DEFAULT NULL,
+            description text DEFAULT NULL,
+            content_snippet text DEFAULT NULL,
+            post_id bigint(20) DEFAULT NULL,
+            priority decimal(2,1) DEFAULT 0.5,
+            changefreq varchar(20) DEFAULT NULL,
+            lastmod datetime DEFAULT NULL,
+            embedding longtext DEFAULT NULL COMMENT 'JSON array of embedding vector',
+            indexed_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY url (url(191)),
+            KEY post_id (post_id),
+            KEY priority (priority),
+            KEY indexed_at (indexed_at)
+        ) $charset_collate;";
+        
+        // Content gaps table
+        $gaps_table = $wpdb->prefix . 'wp_gpt_rag_content_gaps';
+        $gaps_sql = "CREATE TABLE $gaps_table (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            query text NOT NULL,
+            gap_reason enum('no_sources_found','low_similarity','no_answer_response') NOT NULL,
+            frequency int(11) DEFAULT 1,
+            last_seen datetime DEFAULT CURRENT_TIMESTAMP,
+            status enum('open','resolved','ignored') DEFAULT 'open',
+            resolved_at datetime DEFAULT NULL,
+            resolved_by bigint(20) DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY gap_reason (gap_reason),
+            KEY status (status),
+            KEY last_seen (last_seen)
+        ) $charset_collate;";
+        
         if (file_exists(ABSPATH . 'wp-admin/includes/upgrade.php')) {
             require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
             if (function_exists('dbDelta')) {
                 dbDelta($logs_sql);
                 dbDelta($vectors_sql);
+                dbDelta($sitemap_sql);
+                dbDelta($gaps_sql);
             }
         }
     }
@@ -971,7 +1815,6 @@ class Plugin {
             AND pm.meta_key = '_wp_gpt_rag_chat_indexed'
             AND pm.meta_value = '1'
             ORDER BY p.post_modified DESC
-            LIMIT 50
         ", $indexable_post_types));
         
         $items = [];

@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 ?>
 
-<div class="wrap wp-gpt-rag-chat-settings">
+<div class="wrap cornuwab-admin-wrap cornuwab-wp-gpt-rag-chat-settings">
     <?php
     // Check if plugin needs configuration
     $settings = WP_GPT_RAG_Chat\Settings::get_settings();
@@ -317,6 +317,48 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                         </tr>
                     </table>
                     </div>
+                    
+                    <!-- Sitemap Fallback Settings -->
+                    <div class="settings-group" style="border-top: 1px solid #ddd; padding-top: 20px; margin-top: 20px;">
+                        <h3><?php esc_html_e('Sitemap Fallback Suggestions', 'wp-gpt-rag-chat'); ?></h3>
+                        <p class="description"><?php esc_html_e('When RAG finds no relevant answers, suggest related pages from your sitemap.', 'wp-gpt-rag-chat'); ?></p>
+                        <table class="form-table">
+                            <tr>
+                                <th scope="row">
+                                    <label for="enable_sitemap_fallback"><?php esc_html_e('Enable Sitemap Fallback', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" id="enable_sitemap_fallback" name="wp_gpt_rag_chat_settings[enable_sitemap_fallback]" value="1" <?php checked($settings['enable_sitemap_fallback'] ?? true, 1); ?> />
+                                        <?php esc_html_e('Suggest relevant pages when no answer is found', 'wp-gpt-rag-chat'); ?>
+                                    </label>
+                                    <p class="description"><?php esc_html_e('When enabled, the chatbot will search your sitemap and suggest relevant pages to visit.', 'wp-gpt-rag-chat'); ?></p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="sitemap_url"><?php esc_html_e('Sitemap URL', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <input type="text" id="sitemap_url" name="wp_gpt_rag_chat_settings[sitemap_url]" value="<?php echo esc_attr($settings['sitemap_url'] ?? 'sitemap.xml'); ?>" class="regular-text" />
+                                    <p class="description">
+                                        <?php esc_html_e('Enter your sitemap URL (e.g., sitemap.xml or https://yoursite.com/sitemap.xml)', 'wp-gpt-rag-chat'); ?>
+                                        <br>
+                                        <strong><?php esc_html_e('Note:', 'wp-gpt-rag-chat'); ?></strong> <?php esc_html_e('After saving, go to the Diagnostics page to index your sitemap.', 'wp-gpt-rag-chat'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="sitemap_suggestions_count"><?php esc_html_e('Number of Suggestions', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <input type="number" id="sitemap_suggestions_count" name="wp_gpt_rag_chat_settings[sitemap_suggestions_count]" min="1" max="10" value="<?php echo esc_attr($settings['sitemap_suggestions_count'] ?? '5'); ?>" class="small-text" />
+                                    <p class="description"><?php esc_html_e('Maximum number of page suggestions to show (1-10).', 'wp-gpt-rag-chat'); ?></p>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -377,6 +419,75 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                             </td>
                         </tr>
                     </table>
+                </div>
+                
+                <!-- Auto-Indexing Settings Section -->
+                <div class="settings-group">
+                    <h3>
+                        <span class="dashicons dashicons-update-alt" style="color: #2271b1;"></span>
+                        <?php esc_html_e('Automatic Indexing', 'wp-gpt-rag-chat'); ?>
+                    </h3>
+                    <p class="description" style="margin: 10px 0 20px;">
+                        <?php esc_html_e('Control automatic background indexing when content is saved or published.', 'wp-gpt-rag-chat'); ?>
+                    </p>
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row">
+                                <label for="enable_auto_indexing"><?php esc_html_e('Enable Auto-Indexing', 'wp-gpt-rag-chat'); ?></label>
+                            </th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" id="enable_auto_indexing" name="wp_gpt_rag_chat_settings[enable_auto_indexing]" value="1" <?php checked($settings['enable_auto_indexing'] ?? 1, 1); ?> />
+                                    <?php esc_html_e('Enable', 'wp-gpt-rag-chat'); ?>
+                                </label>
+                                <p class="description">
+                                    <?php esc_html_e('Automatically index content to Pinecone when posts are saved or published. This runs in the background via WP-Cron.', 'wp-gpt-rag-chat'); ?>
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label><?php esc_html_e('Auto-Index Post Types', 'wp-gpt-rag-chat'); ?></label>
+                            </th>
+                            <td>
+                                <fieldset>
+                                    <?php
+                                    $post_types = get_post_types(['public' => true], 'objects');
+                                    $selected_auto_index = $settings['auto_index_post_types'] ?? ['post', 'page'];
+                                    foreach ($post_types as $post_type) {
+                                        $checked = in_array($post_type->name, $selected_auto_index) ? 'checked' : '';
+                                        echo '<label style="display: block; margin-bottom: 5px;">';
+                                        echo '<input type="checkbox" name="wp_gpt_rag_chat_settings[auto_index_post_types][]" value="' . esc_attr($post_type->name) . '" ' . $checked . ' />';
+                                        echo ' ' . esc_html($post_type->label) . ' <code>(' . esc_html($post_type->name) . ')</code>';
+                                        echo '</label>';
+                                    }
+                                    ?>
+                                </fieldset>
+                                <p class="description">
+                                    <?php esc_html_e('Select which post types should be automatically indexed when saved. Custom post types will appear here if they are public.', 'wp-gpt-rag-chat'); ?>
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="auto_index_delay"><?php esc_html_e('Indexing Delay', 'wp-gpt-rag-chat'); ?></label>
+                            </th>
+                            <td>
+                                <input type="number" id="auto_index_delay" name="wp_gpt_rag_chat_settings[auto_index_delay]" value="<?php echo esc_attr($settings['auto_index_delay'] ?? 30); ?>" min="10" max="600" step="10" class="small-text" />
+                                <span><?php esc_html_e('seconds', 'wp-gpt-rag-chat'); ?></span>
+                                <p class="description">
+                                    <?php esc_html_e('Time to wait before indexing. Prevents indexing during rapid edits. Minimum: 10 seconds, Maximum: 600 seconds (10 minutes).', 'wp-gpt-rag-chat'); ?>
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+                    <div class="notice notice-info inline" style="margin: 15px 0; padding: 10px 15px;">
+                        <p style="margin: 0;">
+                            <strong><?php esc_html_e('Note:', 'wp-gpt-rag-chat'); ?></strong>
+                            <?php esc_html_e('Auto-indexing uses WordPress Cron (WP-Cron) which runs when someone visits your site. For high-traffic sites, this works reliably. For low-traffic sites, consider setting up a real cron job or trigger manual syncs from the', 'wp-gpt-rag-chat'); ?>
+                            <a href="<?php echo admin_url('admin.php?page=wp-gpt-rag-chat-indexing'); ?>"><?php esc_html_e('Indexing page', 'wp-gpt-rag-chat'); ?></a>.
+                        </p>
+                    </div>
                 </div>
 
                 <!-- Indexing Status Section -->

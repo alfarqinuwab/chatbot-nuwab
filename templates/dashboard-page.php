@@ -13,7 +13,7 @@ $chat_stats = WP_GPT_RAG_Chat\Chat::get_chat_stats();
 $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 ?>
 
-<div class="wrap">
+<div class="wrap cornuwab-admin-wrap">
     <h1><?php esc_html_e('WP GPT RAG Chat Dashboard', 'wp-gpt-rag-chat'); ?></h1>
     
     <div class="wp-gpt-rag-chat-dashboard">

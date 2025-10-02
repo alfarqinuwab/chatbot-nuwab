@@ -8,12 +8,13 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-$stats = WP_GPT_RAG_Chat\Admin::get_indexing_stats();
-$chat_stats = WP_GPT_RAG_Chat\Chat::get_chat_stats();
+$analytics = new WP_GPT_RAG_Chat\Analytics();
+$user_stats = $analytics->get_user_stats(30);
+$user_activity = $analytics->get_user_activity(7);
 $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 ?>
 
-<div class="wrap">
+<div class="wrap cornuwab-admin-wrap">
     <h1>
         <span class="dashicons dashicons-admin-users"></span>
         <?php esc_html_e('User Analytics', 'wp-gpt-rag-chat'); ?>
@@ -25,22 +26,22 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             <div class="overview-grid">
                 <div class="overview-card">
                     <h3><?php esc_html_e('Total Users', 'wp-gpt-rag-chat'); ?></h3>
-                    <div class="overview-number"><?php echo esc_html(number_format($chat_stats['total_users'] ?? 0)); ?></div>
+                    <div class="overview-number"><?php echo esc_html(number_format($user_stats['total_users'])); ?></div>
                 </div>
                 
                 <div class="overview-card">
                     <h3><?php esc_html_e('Logged In Users', 'wp-gpt-rag-chat'); ?></h3>
-                    <div class="overview-number"><?php echo esc_html(number_format($chat_stats['logged_in_users'] ?? 0)); ?></div>
+                    <div class="overview-number"><?php echo esc_html(number_format($user_stats['logged_in_users'])); ?></div>
                 </div>
                 
                 <div class="overview-card">
                     <h3><?php esc_html_e('Anonymous Users', 'wp-gpt-rag-chat'); ?></h3>
-                    <div class="overview-number"><?php echo esc_html(number_format($chat_stats['anonymous_users'] ?? 0)); ?></div>
+                    <div class="overview-number"><?php echo esc_html(number_format($user_stats['anonymous_users'])); ?></div>
                 </div>
                 
                 <div class="overview-card">
                     <h3><?php esc_html_e('Returning Users', 'wp-gpt-rag-chat'); ?></h3>
-                    <div class="overview-number"><?php echo esc_html(number_format($chat_stats['returning_users'] ?? 0)); ?></div>
+                    <div class="overview-number"><?php echo esc_html(number_format($user_stats['returning_users'])); ?></div>
                 </div>
             </div>
         </div>
@@ -84,22 +85,22 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             <div class="engagement-grid">
                 <div class="engagement-card">
                     <h4><?php esc_html_e('Average Queries per User', 'wp-gpt-rag-chat'); ?></h4>
-                    <div class="engagement-number"><?php echo esc_html($chat_stats['avg_queries_per_user'] ?? '0'); ?></div>
+                    <div class="engagement-number"><?php echo esc_html($user_stats['avg_queries_per_user']); ?></div>
                 </div>
                 
                 <div class="engagement-card">
                     <h4><?php esc_html_e('Average Session Duration', 'wp-gpt-rag-chat'); ?></h4>
-                    <div class="engagement-number"><?php echo esc_html($chat_stats['avg_session_duration'] ?? '0'); ?> min</div>
+                    <div class="engagement-number"><?php echo esc_html($user_stats['avg_session_duration']); ?></div>
                 </div>
                 
                 <div class="engagement-card">
                     <h4><?php esc_html_e('Most Active Hour', 'wp-gpt-rag-chat'); ?></h4>
-                    <div class="engagement-number"><?php echo esc_html($chat_stats['most_active_hour'] ?? 'N/A'); ?></div>
+                    <div class="engagement-number"><?php echo esc_html($user_stats['most_active_hour']); ?></div>
                 </div>
                 
                 <div class="engagement-card">
                     <h4><?php esc_html_e('User Retention Rate', 'wp-gpt-rag-chat'); ?></h4>
-                    <div class="engagement-number"><?php echo esc_html($chat_stats['retention_rate'] ?? '0'); ?>%</div>
+                    <div class="engagement-number"><?php echo esc_html($user_stats['retention_rate']); ?>%</div>
                 </div>
             </div>
         </div>
@@ -255,17 +256,28 @@ jQuery(document).ready(function($) {
     
     function initUserActivityChart() {
         const ctx = document.getElementById('userActivityChart').getContext('2d');
+        
+        // Real data from PHP
+        const activityData = <?php echo json_encode($user_activity); ?>;
+        
+        const labels = activityData.map(item => {
+            const date = new Date(item.date);
+            return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        });
+        const loggedInData = activityData.map(item => parseInt(item.logged_in_users) || 0);
+        const anonymousData = activityData.map(item => parseInt(item.anonymous_users) || 0);
+        
         new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                labels: labels,
                 datasets: [{
-                    label: 'Logged In Users',
-                    data: [12, 19, 3, 5, 2, 3, 8],
+                    label: '<?php _e('Logged In Users', 'wp-gpt-rag-chat'); ?>',
+                    data: loggedInData,
                     backgroundColor: '#0073aa'
                 }, {
-                    label: 'Anonymous Users',
-                    data: [8, 15, 2, 3, 1, 2, 5],
+                    label: '<?php _e('Anonymous Users', 'wp-gpt-rag-chat'); ?>',
+                    data: anonymousData,
                     backgroundColor: '#646970'
                 }]
             },
@@ -279,7 +291,10 @@ jQuery(document).ready(function($) {
                 },
                 scales: {
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
                     }
                 }
             }
@@ -290,10 +305,12 @@ jQuery(document).ready(function($) {
         // AJAX call to load user sessions
         $.post(ajaxurl, {
             action: 'wp_gpt_rag_chat_get_user_sessions',
-            nonce: wpGptRagChatAdmin.nonce
+            nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
         }, function(response) {
             if (response.success) {
                 $('#user-sessions-list').html(response.data.html);
+            } else {
+                $('#user-sessions-list').html('<tr><td colspan="5">Error: ' + (response.data.message || 'Unknown error') + '</td></tr>');
             }
         });
     }
@@ -302,10 +319,12 @@ jQuery(document).ready(function($) {
         // AJAX call to load geographic data
         $.post(ajaxurl, {
             action: 'wp_gpt_rag_chat_get_geographic_data',
-            nonce: wpGptRagChatAdmin.nonce
+            nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
         }, function(response) {
             if (response.success) {
                 $('#geo-distribution-list').html(response.data.html);
+            } else {
+                $('#geo-distribution-list').html('<tr><td colspan="3">Error: ' + (response.data.message || 'Unknown error') + '</td></tr>');
             }
         });
     }

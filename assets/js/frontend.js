@@ -14,23 +14,23 @@
             var self = this;
             
             // Open chat widget (FAB button)
-            $(document).on('click', '.wp-gpt-rag-chat-fab-button', function() {
+            $(document).on('click', '.cornuwab-wp-gpt-rag-chat-fab-button', function() {
                 self.toggleWidget();
             });
             
             // Close chat widget (toggle button)
-            $(document).on('click', '.wp-gpt-rag-chat-toggle', function() {
+            $(document).on('click', '.cornuwab-wp-gpt-rag-chat-toggle', function() {
                 self.toggleWidget();
             });
 
             // Expand chat widget to modal view
-            $(document).on('click', '.wp-gpt-rag-chat-expand', function(e) {
+            $(document).on('click', '.cornuwab-wp-gpt-rag-chat-expand', function(e) {
                 e.stopPropagation();
                 self.toggleExpand(this);
             });
             
             // Close expanded view when clicking overlay
-            $(document).on('click', '.wp-gpt-rag-chat-overlay', function() {
+            $(document).on('click', '.cornuwab-wp-gpt-rag-chat-overlay', function() {
                 self.setExpanded(false);
             });
             
@@ -42,34 +42,43 @@
             });
             
             // Send message
-            $(document).on('click', '#wp-gpt-rag-chat-send', function() {
+            $(document).on('click', '#cornuwab-wp-gpt-rag-chat-send', function() {
                 self.sendMessage();
             });
             
             // Send message on Enter
-            $(document).on('keydown', '#wp-gpt-rag-chat-input', function(e) {
+            $(document).on('keydown', '#cornuwab-wp-gpt-rag-chat-input', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     self.sendMessage();
                 }
             });
             
-            // Clear chat
-            $(document).on('click', '.wp-gpt-rag-chat-clear', function() {
-                self.clearChat();
+            // Refresh chat (clear history)
+            $(document).on('click', '.cornuwab-wp-gpt-rag-chat-refresh', function(e) {
+                e.stopPropagation();
+                self.refreshChat();
+            });
+            
+            // Rate response (thumbs up/down)
+            $(document).on('click', '.cornuwab-wp-gpt-rag-chat-rate-btn', function(e) {
+                e.preventDefault();
+                var logId = $(this).data('log-id');
+                var rating = $(this).data('rating');
+                self.rateResponse(logId, rating, $(this));
             });
         },
         
         initializeWidget: function() {
             // Check if widget exists
-            if ($('#wp-gpt-rag-chat-widget').length === 0) {
+            if ($('#cornuwab-wp-gpt-rag-chat-widget').length === 0) {
                 return;
             }
             
             // Initialize widget state
-            this.isOpen = false;
             this.isLoading = false;
-            this.conversationHistory = [];
+            this.chatId = null;
+            this.turnNumber = 1;
             this.fabMessages = [
                 'مرحباً، كيف يمكنني مساعدتك؟',
                 'اسألني عن أي شيء في الموقع!',
@@ -77,22 +86,26 @@
                 'أنا هنا لدعمك في البحث عن المعلومات.',
                 'تفضل بكتابة استفسارك وسأجيب فوراً.'
             ];
+            this.isExpanded = false;
+            
+            // Restore state from localStorage
+            this.restoreState();
             
             // Show initial state
             this.updateWidgetState();
             this.startFabMessages();
-            this.isExpanded = false;
         },
         
         toggleWidget: function() {
             this.isOpen = !this.isOpen;
+            this.saveOpenState();
             this.updateWidgetState();
             if (!this.isOpen) {
                 this.setExpanded(false);
             }
             
             if (this.isOpen) {
-                $('#wp-gpt-rag-chat-input').focus();
+                $('#cornuwab-wp-gpt-rag-chat-input').focus();
             }
         },
         
@@ -110,12 +123,12 @@
         },
 
         setExpanded: function(expanded) {
-            var $widget = $('#wp-gpt-rag-chat-widget');
+            var $widget = $('#cornuwab-wp-gpt-rag-chat-widget');
             this.isExpanded = expanded;
-            $widget.toggleClass('wp-gpt-rag-chat-expanded', expanded);
+            $widget.toggleClass('cornuwab-wp-gpt-rag-chat-expanded', expanded);
             if (!expanded) {
-                $('.wp-gpt-rag-chat-expand').attr('aria-expanded', 'false');
-                $('.wp-gpt-rag-chat-expand i')
+                $('.cornuwab-wp-gpt-rag-chat-expand').attr('aria-expanded', 'false');
+                $('.cornuwab-wp-gpt-rag-chat-expand i')
                     .removeClass('fa-down-left-and-up-right-to-center')
                     .addClass('fa-up-right-and-down-left-from-center');
             }
@@ -123,7 +136,7 @@
 
         startFabMessages: function() {
             var self = this;
-            var $bubble = $('.wp-gpt-rag-chat-fab-bubble');
+            var $bubble = $('.cornuwab-wp-gpt-rag-chat-fab-bubble');
             if ($bubble.length === 0 || this.fabMessages.length === 0) {
                 return;
             }
@@ -154,16 +167,16 @@
         },
         
         updateWidgetState: function() {
-            var $widget = $('#wp-gpt-rag-chat-widget');
+            var $widget = $('#cornuwab-wp-gpt-rag-chat-widget');
             
             if (this.isOpen) {
-                $widget.addClass('wp-gpt-rag-chat-open');
+                $widget.addClass('cornuwab-wp-gpt-rag-chat-open');
                 // Focus on input when opened
                 setTimeout(function() {
-                    $('#wp-gpt-rag-chat-input').focus();
+                    $('#cornuwab-wp-gpt-rag-chat-input').focus();
                 }, 300);
             } else {
-                $widget.removeClass('wp-gpt-rag-chat-open');
+                $widget.removeClass('cornuwab-wp-gpt-rag-chat-open');
             }
         },
         
@@ -172,7 +185,7 @@
                 return;
             }
             
-            var $input = $('#wp-gpt-rag-chat-input');
+            var $input = $('#cornuwab-wp-gpt-rag-chat-input');
             var message = $input.val().trim();
             
             if (!message) {
@@ -201,17 +214,22 @@
                 data: {
                     action: 'wp_gpt_rag_chat_query',
                     query: message,
+                    chat_id: self.chatId,
+                    turn_number: self.turnNumber,
                     nonce: wpGptRagChat.nonce
                 },
                 success: function(response) {
                     self.setLoading(false);
                     
                     if (response.success) {
-                        self.addMessage('assistant', response.data.response);
-                        self.conversationHistory.push(
-                            { role: 'user', content: message },
-                            { role: 'assistant', content: response.data.response }
-                        );
+                        // Store chat_id for session continuity
+                        self.chatId = response.data.chat_id;
+                        
+                        // Add assistant message with rating buttons
+                        self.addMessage('assistant', response.data.response, true, response.data.log_id);
+                        
+                        // Increment turn number
+                        self.turnNumber++;
                     } else {
                         self.showError(response.data.message || wpGptRagChat.strings.error);
                     }
@@ -223,27 +241,45 @@
             });
         },
         
-        addMessage: function(role, content) {
-            var $messages = $('#wp-gpt-rag-chat-messages');
-            var messageClass = role === 'user' ? 'wp-gpt-rag-chat-message-user' : 'wp-gpt-rag-chat-message-assistant';
+        addMessage: function(role, content, saveToHistory = true, logId = null) {
+            var $messages = $('#cornuwab-wp-gpt-rag-chat-messages');
+            var messageClass = role === 'user' ? 'cornuwab-wp-gpt-rag-chat-message-user' : 'cornuwab-wp-gpt-rag-chat-message-assistant';
+            var timestamp = this.getCurrentTime();
             
-            var $message = $('<div class="wp-gpt-rag-chat-message ' + messageClass + '">' +
-                '<div class="wp-gpt-rag-chat-message-content">' +
-                this.escapeHtml(content) +
-                '</div>' +
-                '<div class="wp-gpt-rag-chat-message-time">' +
-                this.getCurrentTime() +
-                '</div>' +
-                '</div>');
+            // Format content with links and line breaks
+            var formattedContent = this.formatMessage(content);
             
+            var messageHtml = '<div class="cornuwab-wp-gpt-rag-chat-message ' + messageClass + '">' +
+                '<div class="cornuwab-wp-gpt-rag-chat-message-content">' +
+                formattedContent +
+                '</div>';
+            
+            // Add rating buttons for assistant messages
+            if (role === 'assistant' && logId) {
+                messageHtml += '<div class="cornuwab-wp-gpt-rag-chat-message-rating">' +
+                    '<button class="cornuwab-wp-gpt-rag-chat-rate-btn" data-log-id="' + logId + '" data-rating="1" aria-label="Thumbs Up" title="مفيد"><i class="fa-regular fa-thumbs-up"></i></button>' +
+                    '<button class="cornuwab-wp-gpt-rag-chat-rate-btn" data-log-id="' + logId + '" data-rating="-1" aria-label="Thumbs Down" title="غير مفيد"><i class="fa-regular fa-thumbs-down"></i></button>' +
+                    '</div>';
+            }
+            
+            messageHtml += '<div class="cornuwab-wp-gpt-rag-chat-message-time">' +
+                timestamp +
+                '</div></div>';
+            
+            var $message = $(messageHtml);
             $messages.append($message);
             this.scrollToBottom();
+            
+            // Save to localStorage
+            if (saveToHistory) {
+                this.saveMessageToHistory(role, content, timestamp, logId);
+            }
         },
         
         showError: function(message) {
-            var $messages = $('#wp-gpt-rag-chat-messages');
-            var $error = $('<div class="wp-gpt-rag-chat-message wp-gpt-rag-chat-message-error">' +
-                '<div class="wp-gpt-rag-chat-message-content">' +
+            var $messages = $('#cornuwab-wp-gpt-rag-chat-messages');
+            var $error = $('<div class="cornuwab-wp-gpt-rag-chat-message cornuwab-wp-gpt-rag-chat-message-error">' +
+                '<div class="cornuwab-wp-gpt-rag-chat-message-content">' +
                 this.escapeHtml(message) +
                 '</div>' +
                 '</div>');
@@ -261,49 +297,199 @@
         
         setLoading: function(loading) {
             this.isLoading = loading;
-            var $sendButton = $('#wp-gpt-rag-chat-send');
-            var $input = $('#wp-gpt-rag-chat-input');
+            var $sendButton = $('#cornuwab-wp-gpt-rag-chat-send');
+            var $input = $('#cornuwab-wp-gpt-rag-chat-input');
             
             if (loading) {
                 $sendButton.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
                 $input.prop('disabled', true);
                 
                 // Add loading message
-                var $loading = $('<div class="wp-gpt-rag-chat-message wp-gpt-rag-chat-message-assistant wp-gpt-rag-chat-message-loading">' +
-                    '<div class="wp-gpt-rag-chat-message-content">' +
-                    '<div class="wp-gpt-rag-chat-typing-indicator">' +
+                var $loading = $('<div class="cornuwab-wp-gpt-rag-chat-message cornuwab-wp-gpt-rag-chat-message-assistant cornuwab-wp-gpt-rag-chat-message-loading">' +
+                    '<div class="cornuwab-wp-gpt-rag-chat-message-content">' +
+                    '<div class="cornuwab-wp-gpt-rag-chat-typing-indicator">' +
                     '<span></span><span></span><span></span>' +
                     '</div>' +
                     '</div>' +
                     '</div>');
                 
-                $('#wp-gpt-rag-chat-messages').append($loading);
+                $('#cornuwab-wp-gpt-rag-chat-messages').append($loading);
                 this.scrollToBottom();
             } else {
                 $sendButton.prop('disabled', false).html('<i class="fas fa-paper-plane"></i>');
                 $input.prop('disabled', false);
                 
                 // Remove loading message
-                $('.wp-gpt-rag-chat-message-loading').remove();
+                $('.cornuwab-wp-gpt-rag-chat-message-loading').remove();
             }
         },
         
-        clearChat: function() {
-            var $messages = $('#wp-gpt-rag-chat-messages');
+        refreshChat: function() {
+            var self = this;
+            
+            // Add confirmation with animation
+            var $messages = $('#cornuwab-wp-gpt-rag-chat-messages');
+            var $confirm = $('<div class="cornuwab-wp-gpt-rag-chat-message cornuwab-wp-gpt-rag-chat-message-system">' +
+                '<div class="cornuwab-wp-gpt-rag-chat-message-content">' +
+                'جاري مسح المحادثة...' +
+                '</div>' +
+                '</div>');
+            
+            $messages.append($confirm);
+            this.scrollToBottom();
+            
+            setTimeout(function() {
+                self.clearChatHistory();
+            }, 500);
+        },
+        
+        clearChatHistory: function() {
+            var $messages = $('#cornuwab-wp-gpt-rag-chat-messages');
             $messages.empty();
             
             // Add system message
-            $messages.append('<div class="wp-gpt-rag-chat-message wp-gpt-rag-chat-message-system">' +
-                '<div class="wp-gpt-rag-chat-message-content">' +
+            $messages.append('<div class="cornuwab-wp-gpt-rag-chat-message cornuwab-wp-gpt-rag-chat-message-system">' +
+                '<div class="cornuwab-wp-gpt-rag-chat-message-content">' +
                 'مرحباً! يمكنني مساعدتك في إيجاد المعلومات من هذا الموقع. كيف يمكنني مساعدتك؟' +
                 '</div>' +
                 '</div>');
             
             this.conversationHistory = [];
+            this.chatId = null; // Reset chat session
+            this.turnNumber = 1; // Reset turn counter
+            this.saveChatHistory();
+        },
+        
+        saveChatHistory: function() {
+            try {
+                localStorage.setItem('wp_gpt_rag_chat_history', JSON.stringify(this.conversationHistory));
+            } catch (e) {
+                console.error('Failed to save chat history:', e);
+            }
+        },
+        
+        saveMessageToHistory: function(role, content, timestamp, logId) {
+            if (!this.conversationHistory) {
+                this.conversationHistory = [];
+            }
+            
+            this.conversationHistory.push({
+                role: role,
+                content: content,
+                timestamp: timestamp,
+                logId: logId || null
+            });
+            
+            this.saveChatHistory();
+        },
+        
+        rateResponse: function(logId, rating, $button) {
+            var self = this;
+            
+            // Visual feedback
+            $button.addClass('rating-selected');
+            // Switch icon from outline to solid
+            $button.find('i').removeClass('fa-regular').addClass('fa-solid');
+            
+            // Reset siblings
+            var $siblings = $button.siblings('.cornuwab-wp-gpt-rag-chat-rate-btn');
+            $siblings.removeClass('rating-selected');
+            $siblings.find('i').removeClass('fa-solid').addClass('fa-regular');
+            
+            $.ajax({
+                url: wpGptRagChat.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'wp_gpt_rag_chat_rate_response',
+                    log_id: logId,
+                    rating: rating,
+                    nonce: wpGptRagChat.nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Show brief confirmation
+                        $button.addClass('rating-saved');
+                        setTimeout(function() {
+                            $button.removeClass('rating-saved');
+                        }, 1000);
+                    }
+                },
+                error: function() {
+                    // Revert visual feedback on error
+                    $button.removeClass('rating-selected');
+                }
+            });
+        },
+        
+        restoreChatHistory: function() {
+            try {
+                var saved = localStorage.getItem('wp_gpt_rag_chat_history');
+                if (saved) {
+                    this.conversationHistory = JSON.parse(saved);
+                    
+                    // Restore messages to UI
+                    var $messages = $('#cornuwab-wp-gpt-rag-chat-messages');
+                    $messages.empty();
+                    
+                    if (this.conversationHistory.length === 0) {
+                        // Add default welcome message
+                        $messages.append('<div class="cornuwab-wp-gpt-rag-chat-message cornuwab-wp-gpt-rag-chat-message-system">' +
+                            '<div class="cornuwab-wp-gpt-rag-chat-message-content">' +
+                            'مرحباً! يمكنني مساعدتك في إيجاد المعلومات من هذا الموقع. كيف يمكنني مساعدتك؟' +
+                            '</div>' +
+                            '</div>');
+                    } else {
+                        // Restore chat messages
+                        for (var i = 0; i < this.conversationHistory.length; i++) {
+                            var msg = this.conversationHistory[i];
+                            var messageClass = msg.role === 'user' ? 'cornuwab-wp-gpt-rag-chat-message-user' : 'cornuwab-wp-gpt-rag-chat-message-assistant';
+                            
+                            $messages.append('<div class="cornuwab-wp-gpt-rag-chat-message ' + messageClass + '">' +
+                                '<div class="cornuwab-wp-gpt-rag-chat-message-content">' +
+                                this.formatMessage(msg.content) +
+                                '</div>' +
+                                '<div class="cornuwab-wp-gpt-rag-chat-message-time">' +
+                                msg.timestamp +
+                                '</div>' +
+                                '</div>');
+                        }
+                    }
+                    
+                    this.scrollToBottom();
+                } else {
+                    this.conversationHistory = [];
+                }
+            } catch (e) {
+                console.error('Failed to restore chat history:', e);
+                this.conversationHistory = [];
+            }
+        },
+        
+        saveOpenState: function() {
+            try {
+                localStorage.setItem('wp_gpt_rag_chat_open', this.isOpen ? '1' : '0');
+            } catch (e) {
+                console.error('Failed to save open state:', e);
+            }
+        },
+        
+        restoreOpenState: function() {
+            try {
+                var saved = localStorage.getItem('wp_gpt_rag_chat_open');
+                this.isOpen = saved === '1';
+            } catch (e) {
+                console.error('Failed to restore open state:', e);
+                this.isOpen = false;
+            }
+        },
+        
+        restoreState: function() {
+            this.restoreOpenState();
+            this.restoreChatHistory();
         },
         
         scrollToBottom: function() {
-            var $messages = $('#wp-gpt-rag-chat-messages');
+            var $messages = $('#cornuwab-wp-gpt-rag-chat-messages');
             $messages.scrollTop($messages[0].scrollHeight);
         },
         
@@ -324,6 +510,27 @@
             return text.replace(/[&<>"']/g, function(m) {
                 return map[m];
             });
+        },
+        
+        formatMessage: function(text) {
+            // First escape HTML to prevent XSS
+            var escaped = this.escapeHtml(text);
+            
+            // Convert markdown-style links [text](url) to HTML links (without icon)
+            escaped = escaped.replace(/🔗\s*\[([^\]]+)\]\(([^)]+)\)/g, function(match, linkText, url) {
+                return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="source-link">' + linkText + '</a>';
+            });
+            
+            // Convert line breaks to <br> tags
+            escaped = escaped.replace(/\n/g, '<br>');
+            
+            // Remove multiple <br> tags before source links (max 1 <br> before link)
+            escaped = escaped.replace(/(<br>\s*){2,}(<a[^>]*class="source-link")/g, '<br>$2');
+            
+            // Convert separator lines to styled dividers
+            escaped = escaped.replace(/━━━━━━━━━━━━━━━━/g, '<div class="content-separator"></div>');
+            
+            return escaped;
         }
     };
     

@@ -176,6 +176,11 @@ class Metabox {
      * Save metabox data
      */
     public function save_metabox($post_id, $post) {
+        // ⚠️ EMERGENCY STOP CHECK - MUST BE FIRST!
+        if (get_transient('wp_gpt_rag_emergency_stop')) {
+            return; // Block all indexing when emergency stop is active
+        }
+        
         // Check nonce
         if (!isset($_POST['wp_gpt_rag_chat_metabox_nonce']) || 
             !wp_verify_nonce($_POST['wp_gpt_rag_chat_metabox_nonce'], 'wp_gpt_rag_chat_metabox')) {

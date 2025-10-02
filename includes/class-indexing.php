@@ -545,4 +545,128 @@ class Indexing {
             'recent_activity' => intval($stats->recent_activity ?? 0)
         ];
     }
+    
+    /**
+     * Generate XML Sitemap for all indexable content
+     */
+    public function generate_xml_sitemap($post_types = ['post', 'page']) {
+        if ($post_types === 'all' || empty($post_types)) {
+            $post_types = get_post_types(['public' => true]);
+            unset($post_types['attachment']); // Exclude attachments
+        }
+        
+        $query_args = [
+            'numberposts' => -1,
+            'post_type' => $post_types,
+            'post_status' => ['publish', 'private'],
+            'orderby' => 'modified',
+            'order' => 'DESC'
+        ];
+        
+        $posts = get_posts($query_args);
+        
+        // Generate XML
+        $xml = new \SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
+        
+        foreach ($posts as $post) {
+            $url = $xml->addChild('url');
+            $url->addChild('loc', htmlspecialchars(get_permalink($post->ID)));
+            $url->addChild('lastmod', get_the_modified_date('c', $post->ID));
+            
+            // Determine priority based on post type
+            $priority = $post->post_type === 'page' ? '0.8' : '0.6';
+            if ($post->ID === get_option('page_on_front')) {
+                $priority = '1.0'; // Homepage gets highest priority
+            }
+            $url->addChild('priority', $priority);
+            
+            // Change frequency based on post type
+            $changefreq = $post->post_type === 'post' ? 'weekly' : 'monthly';
+            $url->addChild('changefreq', $changefreq);
+        }
+        
+        return [
+            'xml' => $xml->asXML(),
+            'count' => count($posts),
+            'post_types' => array_values($post_types)
+        ];
+    }
+    
+    /**
+     * Save sitemap to file
+     */
+    public function save_sitemap_to_file($xml_content) {
+        $upload_dir = wp_upload_dir();
+        $sitemap_dir = $upload_dir['basedir'] . '/wp-gpt-rag-chat-sitemaps';
+        
+        // Create directory if it doesn't exist
+        if (!file_exists($sitemap_dir)) {
+            wp_mkdir_p($sitemap_dir);
+        }
+        
+        $filename = 'sitemap-' . date('Y-m-d-His') . '.xml';
+        $filepath = $sitemap_dir . '/' . $filename;
+        
+        $result = file_put_contents($filepath, $xml_content);
+        
+        if ($result === false) {
+            throw new \Exception(__('Failed to write sitemap file.', 'wp-gpt-rag-chat'));
+        }
+        
+        return [
+            'filepath' => $filepath,
+            'url' => $upload_dir['baseurl'] . '/wp-gpt-rag-chat-sitemaps/' . $filename,
+            'filename' => $filename
+        ];
+    }
+    
+    /**
+     * Get all content URLs from sitemap structure
+     */
+    public function get_all_indexable_content() {
+        $post_types = get_post_types(['public' => true]);
+        unset($post_types['attachment']);
+        
+        $query_args = [
+            'numberposts' => -1,
+            'post_type' => $post_types,
+            'post_status' => ['publish', 'private'],
+            'fields' => 'ids'
+        ];
+        
+        $post_ids = get_posts($query_args);
+        
+        $content_list = [];
+        foreach ($post_ids as $post_id) {
+            $post = get_post($post_id);
+            $is_indexed = $this->is_post_indexed($post_id);
+            
+            $content_list[] = [
+                'id' => $post_id,
+                'title' => get_the_title($post_id),
+                'url' => get_permalink($post_id),
+                'type' => $post->post_type,
+                'modified' => get_the_modified_date('Y-m-d H:i:s', $post_id),
+                'indexed' => $is_indexed,
+                'status' => $post->post_status
+            ];
+        }
+        
+        return $content_list;
+    }
+    
+    /**
+     * Check if a post is indexed
+     */
+    private function is_post_indexed($post_id) {
+        global $wpdb;
+        $vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
+        
+        $count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$vectors_table} WHERE post_id = %d",
+            $post_id
+        ));
+        
+        return $count > 0;
+    }
 }

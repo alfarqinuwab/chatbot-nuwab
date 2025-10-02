@@ -13,7 +13,7 @@ $chat_stats = WP_GPT_RAG_Chat\Chat::get_chat_stats();
 $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 ?>
 
-<div class="wrap">
+<div class="wrap cornuwab-admin-wrap">
     <h1>
         <span class="dashicons dashicons-download"></span>
         <?php esc_html_e('Export Data', 'wp-gpt-rag-chat'); ?>
@@ -402,6 +402,8 @@ jQuery(document).ready(function($) {
     }
 });
 </script>
+
+
 
 
 

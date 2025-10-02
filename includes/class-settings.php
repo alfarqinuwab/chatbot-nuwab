@@ -269,6 +269,65 @@ class Settings {
             'wp_gpt_rag_chat_privacy',
             ['field' => 'require_consent']
         );
+        
+        add_settings_field(
+            'enable_pii_masking',
+            __('Enable PII Masking', 'wp-gpt-rag-chat'),
+            [$this, 'checkbox_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_privacy',
+            [
+                'field' => 'enable_pii_masking',
+                'description' => __('Automatically mask emails, phone numbers, and credit cards in logged conversations.', 'wp-gpt-rag-chat')
+            ]
+        );
+        
+        // Auto-Indexing Settings Section
+        add_settings_section(
+            'wp_gpt_rag_chat_auto_indexing',
+            '',
+            [$this, 'empty_section_callback'],
+            'wp_gpt_rag_chat_settings'
+        );
+        
+        add_settings_field(
+            'enable_auto_indexing',
+            __('Enable Auto-Indexing', 'wp-gpt-rag-chat'),
+            [$this, 'checkbox_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_auto_indexing',
+            [
+                'field' => 'enable_auto_indexing',
+                'description' => __('Automatically index posts to Pinecone when they are saved or published.', 'wp-gpt-rag-chat')
+            ]
+        );
+        
+        add_settings_field(
+            'auto_index_post_types',
+            __('Auto-Index Post Types', 'wp-gpt-rag-chat'),
+            [$this, 'multi_checkbox_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_auto_indexing',
+            [
+                'field' => 'auto_index_post_types',
+                'description' => __('Select which post types should be automatically indexed.', 'wp-gpt-rag-chat')
+            ]
+        );
+        
+        add_settings_field(
+            'auto_index_delay',
+            __('Indexing Delay (seconds)', 'wp-gpt-rag-chat'),
+            [$this, 'number_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_auto_indexing',
+            [
+                'field' => 'auto_index_delay',
+                'min' => 10,
+                'max' => 600,
+                'step' => 10,
+                'description' => __('Time to wait before indexing (prevents indexing during rapid edits).', 'wp-gpt-rag-chat')
+            ]
+        );
 
         add_settings_field(
             'response_mode',
@@ -345,6 +404,7 @@ class Settings {
         $sanitized['log_retention_days'] = intval($input['log_retention_days'] ?? 30);
         $sanitized['anonymize_ips'] = isset($input['anonymize_ips']) ? (bool) $input['anonymize_ips'] : false;
         $sanitized['require_consent'] = isset($input['require_consent']) ? (bool) $input['require_consent'] : true;
+        $sanitized['enable_pii_masking'] = isset($input['enable_pii_masking']) ? (bool) $input['enable_pii_masking'] : true;
         
         // Validate ranges
         $sanitized['max_tokens'] = max(1, min(32768, $sanitized['max_tokens']));
@@ -485,6 +545,23 @@ class Settings {
             'log_retention_days' => 30,
             'anonymize_ips' => false,
             'require_consent' => true,
+            'enable_pii_masking' => true,
+            
+            // RAG Improvements settings
+            'enable_query_expansion' => true,
+            'enable_reranking' => true,
+            'enable_few_shot' => true,
+            'few_shot_examples_count' => 5,
+            
+            // Sitemap fallback settings
+            'enable_sitemap_fallback' => true,
+            'sitemap_url' => 'sitemap.xml',
+            'sitemap_suggestions_count' => 5,
+            
+            // Auto-indexing settings
+            'enable_auto_indexing' => true,
+            'auto_index_post_types' => ['post', 'page'],
+            'auto_index_delay' => 30,
         ];
         
         $settings = get_option(self::OPTION_NAME, []);
@@ -574,5 +651,34 @@ class Settings {
         
         echo '<input type="checkbox" id="' . esc_attr($args['field']) . '" name="' . self::OPTION_NAME . '[' . esc_attr($args['field']) . ']" value="1"' . checked($value, true, false) . ' />';
         echo '<label for="' . esc_attr($args['field']) . '">' . esc_html__('Enable', 'wp-gpt-rag-chat') . '</label>';
+        
+        if (!empty($args['description'])) {
+            echo '<p class="description">' . esc_html($args['description']) . '</p>';
+        }
+    }
+    
+    /**
+     * Multi-checkbox field callback
+     */
+    public function multi_checkbox_field_callback($args) {
+        $settings = self::get_settings();
+        $selected = $settings[$args['field']] ?? [];
+        
+        // Get all public post types
+        $post_types = get_post_types(['public' => true], 'objects');
+        
+        echo '<fieldset>';
+        foreach ($post_types as $post_type) {
+            $checked = in_array($post_type->name, $selected) ? 'checked' : '';
+            echo '<label style="display: block; margin-bottom: 5px;">';
+            echo '<input type="checkbox" name="' . self::OPTION_NAME . '[' . esc_attr($args['field']) . '][]" value="' . esc_attr($post_type->name) . '" ' . $checked . ' />';
+            echo ' ' . esc_html($post_type->label) . ' <code>(' . esc_html($post_type->name) . ')</code>';
+            echo '</label>';
+        }
+        echo '</fieldset>';
+        
+        if (!empty($args['description'])) {
+            echo '<p class="description">' . esc_html($args['description']) . '</p>';
+        }
     }
 }

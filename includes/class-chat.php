@@ -23,6 +23,11 @@ class Chat {
     private $settings;
     
     /**
+     * Last RAG metadata
+     */
+    private $last_rag_metadata = [];
+    
+    /**
      * Constructor
      */
     public function __construct() {
@@ -32,28 +37,77 @@ class Chat {
     }
     
     /**
-     * Process a chat query
+     * Process a chat query with RAG improvements
      */
     public function process_query($query, $conversation_history = []) {
         $response_mode = $this->settings['response_mode'] ?? 'hybrid';
         $context = '';
         $query_embedding = null;
+        $rag_sources = [];
+        $query_variations = [$query]; // Default to original query only
+        $rag_metadata = [];
+        
+        // Initialize RAG improvements
+        $rag_improvements = new RAG_Improvements();
         
         try {
             if ($response_mode !== 'openai') {
-                // Create embedding for the query
-                $query_embedding = $this->openai->create_embeddings([$query])[0];
+                // Step 1: Query Expansion
+                $query_variations = $rag_improvements->expand_query($query);
+                $rag_metadata['query_variations'] = $query_variations;
+                $rag_metadata['query_expansion_enabled'] = !empty($this->settings['enable_query_expansion']);
                 
-                // Retrieve relevant context from Pinecone
-                $context = $this->retrieve_context($query_embedding);
+                // Step 2: Create embeddings for all query variations
+                $all_embeddings = $this->openai->create_embeddings($query_variations);
+                
+                // Step 3: Retrieve context using all variations
+                $all_results = [];
+                foreach ($all_embeddings as $embedding) {
+                    $results = $this->pinecone->query_vectors($embedding);
+                    if (!empty($results['matches'])) {
+                        $all_results = array_merge($all_results, $results['matches']);
+                    }
+                }
+                
+                $rag_metadata['total_results_found'] = count($all_results);
+                
+                // Remove duplicates based on post_id + chunk_index
+                $all_results = $this->deduplicate_results($all_results);
+                $rag_metadata['unique_results'] = count($all_results);
+                
+                // Step 4: Re-rank results
+                $reranked_results = $rag_improvements->rerank_results($query, $all_results);
+                $rag_metadata['reranking_enabled'] = !empty($this->settings['enable_reranking']);
+                $rag_metadata['final_results_used'] = count($reranked_results);
+                
+                // Step 5: Build context from top results
+                $context = $this->build_context_from_results($reranked_results);
+                $rag_sources = $this->extract_sources_from_results($reranked_results);
             }
         } catch (\Exception $e) {
             error_log('WP GPT RAG Chat: ' . $e->getMessage());
             $context = '';
+            $rag_metadata['error'] = $e->getMessage();
         }
         
         if ($response_mode === 'knowledge_base') {
-            return $this->generate_knowledge_base_response($query, $context);
+            $response = $this->generate_knowledge_base_response($query, $context);
+            // Detect content gaps
+            $rag_improvements->detect_content_gap($query, $response, $rag_sources);
+            
+            // Store metadata for later retrieval
+            $this->last_rag_metadata = $rag_metadata;
+            
+            return $response;
+        }
+        
+        // Step 6: Add few-shot examples
+        $few_shot_examples = $rag_improvements->get_few_shot_examples();
+        $rag_metadata['few_shot_enabled'] = !empty($this->settings['enable_few_shot']);
+        $rag_metadata['few_shot_examples_count'] = !empty($few_shot_examples) ? $this->settings['few_shot_examples_count'] : 0;
+        
+        if (!empty($few_shot_examples)) {
+            $context = $few_shot_examples . "\n\n" . $context;
         }
         
         // Build conversation messages
@@ -62,7 +116,20 @@ class Chat {
         // Generate response
         $response = $this->openai->generate_chat_completion($messages, $context);
         
+        // Detect content gaps
+        $rag_improvements->detect_content_gap($query, $response, $rag_sources);
+        
+        // Store metadata for later retrieval
+        $this->last_rag_metadata = $rag_metadata;
+        
         return $response;
+    }
+    
+    /**
+     * Get RAG metadata from last query processing
+     */
+    public function get_last_rag_metadata() {
+        return $this->last_rag_metadata ?? [];
     }
 
     /**
@@ -70,15 +137,55 @@ class Chat {
      */
     private function generate_knowledge_base_response($query, $context) {
         if (empty($context)) {
+            return $this->get_fallback_response($query);
+        }
+        
+        // Return formatted context directly without repetitive headers
+        return $context;
+    }
+    
+    /**
+     * Get fallback response with sitemap page suggestions
+     */
+    private function get_fallback_response($query) {
+        // Check if sitemap fallback is enabled
+        if (empty($this->settings['enable_sitemap_fallback'])) {
             return __('عذراً، لم أجد معلومات ذات صلة في قاعدة المعرفة للإجابة على هذا السؤال حالياً.', 'wp-gpt-rag-chat');
         }
         
-        return sprintf(
-            "%s\n\n%s\n\n%s",
-            __('سؤال المستخدم:', 'wp-gpt-rag-chat') . ' ' . $query,
-            __('المعلومات ذات الصلة من قاعدة المعرفة:', 'wp-gpt-rag-chat'),
-            $context
-        );
+        try {
+            $sitemap = new Sitemap();
+            $suggestions = $sitemap->search_relevant_pages(
+                $query, 
+                $this->settings['sitemap_suggestions_count'] ?? 5
+            );
+            
+            if (empty($suggestions)) {
+                return __('عذراً، لم أجد معلومات ذات صلة للإجابة على هذا السؤال حالياً.', 'wp-gpt-rag-chat');
+            }
+            
+            // Format response with suggestions
+            $response = __('عذراً، لم أجد معلومات كافية للإجابة على سؤالك في قاعدة المعرفة. ولكن قد تجد ما تبحث عنه في الصفحات التالية:', 'wp-gpt-rag-chat');
+            $response .= "\n\n";
+            
+            foreach ($suggestions as $i => $suggestion) {
+                $response .= sprintf(
+                    "%d. **%s**\n   %s\n   %s\n\n",
+                    $i + 1,
+                    $suggestion['title'],
+                    !empty($suggestion['description']) ? $suggestion['description'] : '',
+                    $suggestion['url']
+                );
+            }
+            
+            $response .= "\n" . __('يرجى زيارة هذه الصفحات للحصول على مزيد من المعلومات.', 'wp-gpt-rag-chat');
+            
+            return $response;
+            
+        } catch (\Exception $e) {
+            error_log('Sitemap fallback error: ' . $e->getMessage());
+            return __('عذراً، لم أجد معلومات ذات صلة في قاعدة المعرفة للإجابة على هذا السؤال حالياً.', 'wp-gpt-rag-chat');
+        }
     }
     
     /**
@@ -95,16 +202,24 @@ class Chat {
             $context_parts = [];
             foreach ($results['matches'] as $match) {
                 $metadata = $match['metadata'];
-                $context_parts[] = sprintf(
-                    "Source: %s (%s)\nURL: %s\nContent: %s",
-                    $metadata['post_title'],
-                    $metadata['post_type'],
-                    $metadata['post_url'],
-                    $this->get_chunk_content($metadata['post_id'], $metadata['chunk_index'])
-                );
+                $chunk_content = $this->get_chunk_content($metadata['post_id'], $metadata['chunk_index']);
+                
+                // Format: Content first, then link with source title at the end
+                $formatted_part = $chunk_content;
+                
+                // Add clickable link after content if URL exists
+                if (!empty($metadata['post_url']) && !empty($metadata['post_title'])) {
+                    $formatted_part .= sprintf(
+                        " 🔗 [%s](%s)",
+                        $metadata['post_title'],
+                        $metadata['post_url']
+                    );
+                }
+                
+                $context_parts[] = $formatted_part;
             }
             
-            return implode("\n\n---\n\n", $context_parts);
+            return implode("\n\n━━━━━━━━━━━━━━━━\n\n", $context_parts);
         } catch (\Exception $e) {
             error_log('WP GPT RAG Chat: Error retrieving context: ' . $e->getMessage());
             return '';
@@ -148,6 +263,82 @@ class Chat {
     }
     
     /**
+     * Deduplicate results based on post_id and chunk_index
+     */
+    private function deduplicate_results($results) {
+        $seen = [];
+        $unique_results = [];
+        
+        foreach ($results as $result) {
+            $metadata = $result['metadata'] ?? [];
+            $key = ($metadata['post_id'] ?? '') . '_' . ($metadata['chunk_index'] ?? '');
+            
+            if (!isset($seen[$key])) {
+                $seen[$key] = true;
+                $unique_results[] = $result;
+            }
+        }
+        
+        return $unique_results;
+    }
+    
+    /**
+     * Build context string from results
+     */
+    private function build_context_from_results($results) {
+        if (empty($results)) {
+            return '';
+        }
+        
+        $context_parts = [];
+        foreach ($results as $match) {
+            $metadata = $match['metadata'];
+            $content = $this->get_chunk_content($metadata['post_id'], $metadata['chunk_index']);
+            
+            if (!empty($content)) {
+                // Format: Content first, then link with source title at the end
+                $formatted_part = $content;
+                
+                // Add clickable link after content if URL exists
+                if (!empty($metadata['post_url']) && !empty($metadata['post_title'])) {
+                    $formatted_part .= sprintf(
+                        " 🔗 [%s](%s)",
+                        $metadata['post_title'],
+                        $metadata['post_url']
+                    );
+                }
+                
+                $context_parts[] = $formatted_part;
+            }
+        }
+        
+        return implode("\n\n━━━━━━━━━━━━━━━━\n\n", $context_parts);
+    }
+    
+    /**
+     * Extract sources metadata from results
+     */
+    private function extract_sources_from_results($results) {
+        if (empty($results)) {
+            return [];
+        }
+        
+        $sources = [];
+        foreach ($results as $match) {
+            $metadata = $match['metadata'];
+            $sources[] = [
+                'post_id' => $metadata['post_id'],
+                'post_title' => $metadata['post_title'],
+                'post_url' => $metadata['post_url'],
+                'post_type' => $metadata['post_type'],
+                'score' => $match['score'] ?? 0
+            ];
+        }
+        
+        return $sources;
+    }
+    
+    /**
      * Build conversation messages
      */
     private function build_conversation_messages($conversation_history, $current_query) {
@@ -187,64 +378,67 @@ class Chat {
         }
         
         if (empty($settings['openai_api_key']) || empty($settings['pinecone_api_key'])) {
-            return '<div class="wp-gpt-rag-chat-error" style="font-family: \'Tajawal\', sans-serif; direction: rtl; text-align: right;">' . 
+            return '<div class="cornuwab-wp-gpt-rag-chat-error" style="font-family: \'Tajawal\', sans-serif; direction: rtl; text-align: right;">' . 
                    'المحادثة غير متاحة حالياً. يرجى التواصل مع المسؤول.' . 
                    '</div>';
         }
         
         ob_start();
         ?>
-        <div id="wp-gpt-rag-chat-widget" class="wp-gpt-rag-chat-widget">
+        <div id="cornuwab-wp-gpt-rag-chat-widget" class="cornuwab-wp-gpt-rag-chat-widget">
             <!-- Floating Button (Collapsed State) -->
-            <div class="wp-gpt-rag-chat-fab">
-                <div class="wp-gpt-rag-chat-fab-bubble" aria-live="polite"></div>
-                <button type="button" class="wp-gpt-rag-chat-fab-button" aria-label="فتح المحادثة">
-                    <img src="<?php echo esc_url( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/avatar_small.png' ); ?>" alt="فتح المحادثة" class="wp-gpt-rag-chat-fab-avatar" />
+            <div class="cornuwab-wp-gpt-rag-chat-fab">
+                <div class="cornuwab-wp-gpt-rag-chat-fab-bubble" aria-live="polite"></div>
+                <button type="button" class="cornuwab-wp-gpt-rag-chat-fab-button" aria-label="فتح المحادثة">
+                    <img src="<?php echo esc_url( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/avatar_small.png' ); ?>" alt="فتح المحادثة" class="cornuwab-wp-gpt-rag-chat-fab-avatar" />
                 </button>
             </div>
             
             <!-- Chat Window (Expanded State) -->
-            <div class="wp-gpt-rag-chat-overlay" role="presentation"></div>
-            <div class="wp-gpt-rag-chat-window">
-                <div class="wp-gpt-rag-chat-header">
-                    <h3 class="wp-gpt-rag-chat-header-title">
-                        <img src="<?php echo esc_url( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/avatar_small.png' ); ?>" alt="AI Avatar" class="wp-gpt-rag-chat-header-avatar" />
+            <div class="cornuwab-wp-gpt-rag-chat-overlay" role="presentation"></div>
+            <div class="cornuwab-wp-gpt-rag-chat-window">
+                <div class="cornuwab-wp-gpt-rag-chat-header">
+                    <h3 class="cornuwab-wp-gpt-rag-chat-header-title">
+                        <img src="<?php echo esc_url( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/avatar_small.png' ); ?>" alt="AI Avatar" class="cornuwab-wp-gpt-rag-chat-header-avatar" />
                         مساعدك الذكي
                     </h3>
-                    <div class="wp-gpt-rag-chat-header-actions">
-                        <button type="button" class="wp-gpt-rag-chat-expand" aria-label="تكبير المحادثة" aria-expanded="false">
+                    <div class="cornuwab-wp-gpt-rag-chat-header-actions">
+                        <button type="button" class="cornuwab-wp-gpt-rag-chat-refresh" aria-label="مسح المحادثة" title="مسح المحادثة">
+                            <i class="fas fa-rotate-right"></i>
+                        </button>
+                        <button type="button" class="cornuwab-wp-gpt-rag-chat-expand" aria-label="تكبير المحادثة" aria-expanded="false">
                             <i class="fas fa-up-right-and-down-left-from-center"></i>
                         </button>
-                        <button type="button" class="wp-gpt-rag-chat-toggle" aria-label="إغلاق المحادثة">
-                            <span class="wp-gpt-rag-chat-icon">×</span>
+                        <button type="button" class="cornuwab-wp-gpt-rag-chat-toggle" aria-label="إغلاق المحادثة">
+                            <span class="cornuwab-wp-gpt-rag-chat-icon">×</span>
                         </button>
                     </div>
                 </div>
             
-            <div class="wp-gpt-rag-chat-body">
-                <div class="wp-gpt-rag-chat-messages" id="wp-gpt-rag-chat-messages">
-                    <div class="wp-gpt-rag-chat-message wp-gpt-rag-chat-message-system">
-                        <div class="wp-gpt-rag-chat-message-content">
+            <div class="cornuwab-wp-gpt-rag-chat-body">
+                <div class="cornuwab-wp-gpt-rag-chat-messages" id="cornuwab-wp-gpt-rag-chat-messages">
+                    <div class="cornuwab-wp-gpt-rag-chat-message cornuwab-wp-gpt-rag-chat-message-system">
+                        <div class="cornuwab-wp-gpt-rag-chat-message-content">
                             مرحباً! يمكنني مساعدتك في إيجاد المعلومات من هذا الموقع. كيف يمكنني مساعدتك؟
                         </div>
                     </div>
                 </div>
                 
-                <div class="wp-gpt-rag-chat-input-container">
-                    <div class="wp-gpt-rag-chat-input-wrapper">
+                <div class="cornuwab-wp-gpt-rag-chat-input-container">
+                    <div class="cornuwab-wp-gpt-rag-chat-input-wrapper">
                         <input 
                             type="text"
-                            id="wp-gpt-rag-chat-input" 
+                            id="cornuwab-wp-gpt-rag-chat-input" 
                             placeholder="اكتب سؤالك هنا..."
                         />
-                        <button type="button" id="wp-gpt-rag-chat-send" class="wp-gpt-rag-chat-send-button" aria-label="إرسال">
+                        <button type="button" id="cornuwab-wp-gpt-rag-chat-send" class="cornuwab-wp-gpt-rag-chat-send-button" aria-label="إرسال">
                             <i class="fas fa-paper-plane"></i>
                         </button>
                     </div>
                 </div>
             </div>
             
-                <div class="wp-gpt-rag-chat-footer">
+                <div class="cornuwab-wp-gpt-rag-chat-footer">
                     <small>
                         مدعوم بالذكاء الاصطناعي. الردود بناءً على محتوى الموقع.
                     </small>

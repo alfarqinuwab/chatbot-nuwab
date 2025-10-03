@@ -15,7 +15,7 @@ $popular_queries = $logger->get_popular_queries(10);
 ?>
 
 <div class="wrap cornuwab-admin-wrap">
-    <h1><?php esc_html_e('Chat Logs & Analytics', 'wp-gpt-rag-chat'); ?></h1>
+    <h1><?php esc_html_e('Nuwab AI Assistant - Logs & Analytics', 'wp-gpt-rag-chat'); ?></h1>
     
     <div class="wp-gpt-rag-chat-stats">
         <div class="stats-grid">

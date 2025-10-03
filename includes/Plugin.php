@@ -75,6 +75,12 @@ class Plugin {
         add_action('wp_ajax_wp_gpt_rag_chat_get_user_activity', [$this, 'handle_get_user_activity']);
         add_action('wp_ajax_wp_gpt_rag_emergency_stop', [$this, 'handle_emergency_stop_ajax']);
         add_action('wp_ajax_wp_gpt_rag_resume_indexing', [$this, 'handle_resume_indexing_ajax']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_error_context', [$this, 'handle_get_error_context']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_usage_context', [$this, 'handle_get_usage_context']);
+        add_action('wp_ajax_wp_gpt_rag_chat_start_export', [$this, 'handle_start_export']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_export_history', [$this, 'handle_get_export_history']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_diagnostics_data', [$this, 'handle_get_diagnostics_data']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_process_status', [$this, 'handle_get_process_status']);
         
         // WP-Cron hooks
         add_action('wp_gpt_rag_chat_index_content', [$this, 'cron_index_content']);
@@ -111,7 +117,9 @@ class Plugin {
             'includes/class-sitemap.php',
             'includes/RAG_Improvements.php',
             'includes/class-emergency-stop.php',
-            'includes/class-import-protection.php'
+            'includes/class-import-protection.php',
+            'includes/class-error-logger.php',
+            'includes/class-api-usage-tracker.php'
         ];
         
         foreach ($files as $file) {
@@ -153,8 +161,8 @@ class Plugin {
         $current_version = get_option('wp_gpt_rag_chat_db_version', '1.0.0');
         $plugin_version = WP_GPT_RAG_CHAT_VERSION;
         
-        // Only run if versions don't match
-        if (version_compare($current_version, '2.0.0', '<')) {
+        // Run migrations if needed
+        if (version_compare($current_version, '2.2.0', '<')) {
             if (class_exists('\WP_GPT_RAG_Chat\Migration')) {
                 Migration::run_migrations();
             }
@@ -182,10 +190,10 @@ class Plugin {
      * Add admin menu
      */
     public function admin_menu() {
-        // Main GPT RAG Chat Menu
+        // Main Nuwab AI Assistant Menu
         add_menu_page(
-            __('GPT RAG Chat Dashboard', 'wp-gpt-rag-chat'),
-            __('GPT RAG Chat', 'wp-gpt-rag-chat'),
+            __('Nuwab AI Assistant Dashboard', 'wp-gpt-rag-chat'),
+            __('Nuwab AI Assistant', 'wp-gpt-rag-chat'),
             'manage_options',
             'wp-gpt-rag-chat-dashboard',
             [$this, 'dashboard_page'],
@@ -1270,25 +1278,60 @@ class Plugin {
             wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
         }
         
+        $connection_type = sanitize_text_field($_POST['connection_type'] ?? '');
+        
         try {
-            $openai = new OpenAI();
-            $pinecone = new Pinecone();
-            
-            $openai_result = $openai->test_connection();
-            $pinecone_result = $pinecone->test_connection();
-            
-            if ($openai_result['success'] && $pinecone_result['success']) {
-                $message = __('Both OpenAI and Pinecone connections are working correctly.', 'wp-gpt-rag-chat');
-                wp_send_json_success(['message' => $message]);
+            if ($connection_type === 'openai') {
+                $openai = new OpenAI();
+                $result = $openai->test_connection();
+                
+                if ($result['success']) {
+                    wp_send_json_success(['message' => __('OpenAI API connection successful', 'wp-gpt-rag-chat')]);
+                } else {
+                    wp_send_json_error(['message' => 'OpenAI: ' . $result['message']]);
+                }
+                
+            } elseif ($connection_type === 'pinecone') {
+                $pinecone = new Pinecone();
+                $result = $pinecone->test_connection();
+                
+                if ($result['success']) {
+                    wp_send_json_success(['message' => __('Pinecone API connection successful', 'wp-gpt-rag-chat')]);
+                } else {
+                    wp_send_json_error(['message' => 'Pinecone: ' . $result['message']]);
+                }
+                
+            } elseif ($connection_type === 'wordpress') {
+                // Simple WordPress functionality test
+                $test_post = get_posts(['numberposts' => 1, 'post_status' => 'publish']);
+                
+                if (!empty($test_post)) {
+                    wp_send_json_success(['message' => __('WordPress database connection successful', 'wp-gpt-rag-chat')]);
+                } else {
+                    wp_send_json_error(['message' => __('WordPress database connection failed', 'wp-gpt-rag-chat')]);
+                }
+                
             } else {
-                $errors = [];
-                if (!$openai_result['success']) {
-                    $errors[] = 'OpenAI: ' . $openai_result['message'];
+                // Default behavior - test both OpenAI and Pinecone
+                $openai = new OpenAI();
+                $pinecone = new Pinecone();
+                
+                $openai_result = $openai->test_connection();
+                $pinecone_result = $pinecone->test_connection();
+                
+                if ($openai_result['success'] && $pinecone_result['success']) {
+                    $message = __('Both OpenAI and Pinecone connections are working correctly.', 'wp-gpt-rag-chat');
+                    wp_send_json_success(['message' => $message]);
+                } else {
+                    $errors = [];
+                    if (!$openai_result['success']) {
+                        $errors[] = 'OpenAI: ' . $openai_result['message'];
+                    }
+                    if (!$pinecone_result['success']) {
+                        $errors[] = 'Pinecone: ' . $pinecone_result['message'];
+                    }
+                    wp_send_json_error(['message' => implode('; ', $errors)]);
                 }
-                if (!$pinecone_result['success']) {
-                    $errors[] = 'Pinecone: ' . $pinecone_result['message'];
-                }
-                wp_send_json_error(['message' => implode('; ', $errors)]);
             }
         } catch (\Exception $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
@@ -1819,7 +1862,7 @@ class Plugin {
         
         $items = [];
         foreach ($indexed_posts as $post_data) {
-            $status = WP_GPT_RAG_Chat\Admin::get_post_indexing_status($post_data->ID);
+            $status = Admin::get_post_indexing_status($post_data->ID);
             $post_modified = get_post_modified_time('Y/m/d H:i:s', false, $post_data);
             $indexed_time = $status['last_updated'] ? date('Y/m/d H:i:s', strtotime($status['last_updated'])) : null;
             
@@ -2795,4 +2838,501 @@ class Plugin {
             ],
         ]);
     }
+    
+    /**
+     * Handle get error context AJAX request
+     */
+    public function handle_get_error_context() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions', 'wp-gpt-rag-chat'));
+        }
+        
+        $error_id = intval($_POST['error_id']);
+        
+        if (!$error_id) {
+            wp_send_json_error(['message' => __('Invalid error ID', 'wp-gpt-rag-chat')]);
+        }
+        
+        global $wpdb;
+        $errors_table = $wpdb->prefix . 'wp_gpt_rag_chat_errors';
+        
+        $error = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$errors_table} WHERE id = %d",
+            $error_id
+        ));
+        
+        if (!$error) {
+            wp_send_json_error(['message' => __('Error not found', 'wp-gpt-rag-chat')]);
+        }
+        
+        $context = $error->context ? json_decode($error->context, true) : [];
+        
+        $formatted_context = "Error ID: {$error->id}\n";
+        $formatted_context .= "Type: {$error->error_type}\n";
+        $formatted_context .= "Service: {$error->api_service}\n";
+        $formatted_context .= "Message: {$error->error_message}\n";
+        $formatted_context .= "Time: {$error->created_at}\n";
+        $formatted_context .= "User ID: " . ($error->user_id ?: 'Guest') . "\n";
+        $formatted_context .= "IP: {$error->ip_address}\n\n";
+        
+        if (!empty($context)) {
+            $formatted_context .= "Additional Context:\n";
+            $formatted_context .= json_encode($context, JSON_PRETTY_PRINT);
+        } else {
+            $formatted_context .= "No additional context available.";
+        }
+        
+        wp_send_json_success(['context' => $formatted_context]);
+    }
+    
+    /**
+     * Handle get usage context AJAX request
+     */
+    public function handle_get_usage_context() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions', 'wp-gpt-rag-chat'));
+        }
+        
+        $usage_id = intval($_POST['usage_id']);
+        
+        if (!$usage_id) {
+            wp_send_json_error(['message' => __('Invalid usage ID', 'wp-gpt-rag-chat')]);
+        }
+        
+        global $wpdb;
+        $usage_table = $wpdb->prefix . 'wp_gpt_rag_chat_api_usage';
+        
+        $usage = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$usage_table} WHERE id = %d",
+            $usage_id
+        ));
+        
+        if (!$usage) {
+            wp_send_json_error(['message' => __('Usage record not found', 'wp-gpt-rag-chat')]);
+        }
+        
+        $context = $usage->context ? json_decode($usage->context, true) : [];
+        
+        $formatted_context = "Usage ID: {$usage->id}\n";
+        $formatted_context .= "Service: {$usage->api_service}\n";
+        $formatted_context .= "Endpoint: {$usage->endpoint}\n";
+        $formatted_context .= "Tokens Used: " . ($usage->tokens_used ?: 'N/A') . "\n";
+        $formatted_context .= "Cost: " . ($usage->cost ? '$' . number_format($usage->cost, 4) : 'N/A') . "\n";
+        $formatted_context .= "Time: {$usage->created_at}\n";
+        $formatted_context .= "User ID: " . ($usage->user_id ?: 'Guest') . "\n";
+        $formatted_context .= "IP: {$usage->ip_address}\n\n";
+        
+        if (!empty($context)) {
+            $formatted_context .= "Additional Context:\n";
+            $formatted_context .= json_encode($context, JSON_PRETTY_PRINT);
+        } else {
+            $formatted_context .= "No additional context available.";
+        }
+        
+        wp_send_json_success(['context' => $formatted_context]);
+    }
+    
+    /**
+     * Handle export start AJAX request
+     */
+    public function handle_start_export() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('You do not have permission to export data.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $export_type = sanitize_text_field($_POST['export_type'] ?? '');
+        $filters = $_POST['filters'] ?? [];
+        
+        try {
+            $analytics = new \WP_GPT_RAG_Chat\Analytics();
+            
+            switch ($export_type) {
+                case 'chat-logs':
+                    $result = $analytics->export_to_csv($filters);
+                    break;
+                    
+                case 'user-analytics':
+                    $result = $this->export_user_analytics($filters);
+                    break;
+                    
+                case 'indexing-data':
+                    $result = $this->export_indexing_data($filters);
+                    break;
+                    
+                case 'settings':
+                    $result = $this->export_settings($filters);
+                    break;
+                    
+                default:
+                    wp_send_json_error(['message' => __('Invalid export type.', 'wp-gpt-rag-chat')]);
+            }
+            
+            if ($result && isset($result['file_url'])) {
+                // Save export record to history
+                $record_count = 0;
+                if (isset($result['record_count'])) {
+                    $record_count = $result['record_count'];
+                }
+                
+                $this->save_export_record(
+                    $export_type,
+                    $result['file_url'],
+                    $result['file_path'] ?? '',
+                    $record_count
+                );
+                
+                wp_send_json_success([
+                    'message' => __('Export completed successfully.', 'wp-gpt-rag-chat'),
+                    'download_url' => $result['file_url']
+                ]);
+            } else {
+                wp_send_json_error(['message' => __('Export failed. Please try again.', 'wp-gpt-rag-chat')]);
+            }
+            
+        } catch (Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle export history AJAX request
+     */
+    public function handle_get_export_history() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('You do not have permission to view export history.', 'wp-gpt-rag-chat')]);
+        }
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'wp_gpt_rag_chat_export_history';
+        
+        // Get export history
+        $exports = $wpdb->get_results(
+            "SELECT * FROM {$table_name} ORDER BY created_at DESC LIMIT 20"
+        );
+        
+        if (empty($exports)) {
+            $html = '<tr><td colspan="6" style="text-align: center; color: #646970;">' . __('No export history available.', 'wp-gpt-rag-chat') . '</td></tr>';
+        } else {
+            $html = '';
+            foreach ($exports as $export) {
+                $file_size = $export->file_size ? size_format($export->file_size) : '-';
+                $download_link = $export->file_url ? '<a href="' . esc_url($export->file_url) . '" class="button button-small">' . __('Download', 'wp-gpt-rag-chat') . '</a>' : '-';
+                
+                $html .= sprintf(
+                    '<tr>
+                        <td>%s</td>
+                        <td>%s</td>
+                        <td>%d</td>
+                        <td>%s</td>
+                        <td><span class="status-completed">%s</span></td>
+                        <td>%s</td>
+                    </tr>',
+                    esc_html($export->export_type),
+                    esc_html(date('Y-m-d H:i:s', strtotime($export->created_at))),
+                    intval($export->record_count),
+                    esc_html($file_size),
+                    __('Completed', 'wp-gpt-rag-chat'),
+                    $download_link
+                );
+            }
+        }
+        
+        wp_send_json_success(['html' => $html]);
+    }
+    
+    /**
+     * Save export record to history
+     */
+    private function save_export_record($export_type, $file_url, $file_path, $record_count = 0) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'wp_gpt_rag_chat_export_history';
+        
+        $file_size = 0;
+        if ($file_path && file_exists($file_path)) {
+            $file_size = filesize($file_path);
+        }
+        
+        $wpdb->insert(
+            $table_name,
+            [
+                'export_type' => $export_type,
+                'file_url' => $file_url,
+                'file_path' => $file_path,
+                'file_size' => $file_size,
+                'record_count' => $record_count,
+                'user_id' => get_current_user_id(),
+                'created_at' => current_time('mysql')
+            ],
+            ['%s', '%s', '%s', '%d', '%d', '%d', '%s']
+        );
+    }
+    
+    /**
+     * Export user analytics data
+     */
+    private function export_user_analytics($filters) {
+        global $wpdb;
+        
+        $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
+        
+        // Build query based on filters
+        $where_conditions = ['1=1'];
+        $query_params = [];
+        
+        if (!empty($filters['date_from'])) {
+            $where_conditions[] = 'created_at >= %s';
+            $query_params[] = $filters['date_from'];
+        }
+        
+        if (!empty($filters['date_to'])) {
+            $where_conditions[] = 'created_at <= %s';
+            $query_params[] = $filters['date_to'] . ' 23:59:59';
+        }
+        
+        $where_clause = implode(' AND ', $where_conditions);
+        
+        $query = "SELECT * FROM {$logs_table} WHERE {$where_clause} ORDER BY created_at DESC";
+        
+        if (!empty($query_params)) {
+            $logs = $wpdb->get_results($wpdb->prepare($query, $query_params));
+        } else {
+            $logs = $wpdb->get_results($query);
+        }
+        
+        // Create CSV content
+        $csv_content = "ID,User ID,IP Address,Chat ID,Role,Content,Created At,Response Latency,Sources Count,Rating,Tags\n";
+        
+        foreach ($logs as $log) {
+            $csv_content .= sprintf(
+                "%d,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                $log->id,
+                $log->user_id ?: '',
+                $log->ip_address ?: '',
+                $log->chat_id ?: '',
+                $log->role ?: '',
+                '"' . str_replace('"', '""', $log->content ?: $log->query ?: $log->response ?: '') . '"',
+                $log->created_at ?: '',
+                $log->response_latency ?: '',
+                $log->sources_count ?: '',
+                $log->rating ?: '',
+                '"' . str_replace('"', '""', $log->tags ?: '') . '"'
+            );
+        }
+        
+        // Save to temporary file
+        $upload_dir = wp_upload_dir();
+        $filename = 'user-analytics-export-' . date('Y-m-d-H-i-s') . '.csv';
+        $file_path = $upload_dir['path'] . '/' . $filename;
+        
+        if (file_put_contents($file_path, $csv_content) === false) {
+            throw new Exception(__('Failed to create export file.', 'wp-gpt-rag-chat'));
+        }
+        
+        return [
+            'file_url' => $upload_dir['url'] . '/' . $filename,
+            'file_path' => $file_path,
+            'record_count' => count($logs)
+        ];
+    }
+    
+    /**
+     * Export indexing data
+     */
+    private function export_indexing_data($filters) {
+        global $wpdb;
+        
+        $posts_table = $wpdb->prefix . 'posts';
+        
+        $query = "SELECT ID, post_title, post_type, post_status, post_modified 
+                  FROM {$posts_table} 
+                  WHERE post_type IN ('post', 'page') 
+                  AND post_status = 'publish'
+                  ORDER BY post_modified DESC";
+        
+        $posts = $wpdb->get_results($query);
+        
+        // Create CSV content
+        $csv_content = "Post ID,Title,Type,Status,Last Modified,Indexed\n";
+        
+        foreach ($posts as $post) {
+            $indexed = get_post_meta($post->ID, '_wp_gpt_rag_chat_indexed', true) ? 'Yes' : 'No';
+            $csv_content .= sprintf(
+                "%d,%s,%s,%s,%s,%s\n",
+                $post->ID,
+                '"' . str_replace('"', '""', $post->post_title) . '"',
+                $post->post_type,
+                $post->post_status,
+                $post->post_modified,
+                $indexed
+            );
+        }
+        
+        // Save to temporary file
+        $upload_dir = wp_upload_dir();
+        $filename = 'indexing-data-export-' . date('Y-m-d-H-i-s') . '.csv';
+        $file_path = $upload_dir['path'] . '/' . $filename;
+        
+        if (file_put_contents($file_path, $csv_content) === false) {
+            throw new Exception(__('Failed to create export file.', 'wp-gpt-rag-chat'));
+        }
+        
+        return [
+            'file_url' => $upload_dir['url'] . '/' . $filename,
+            'file_path' => $file_path,
+            'record_count' => count($indexed_posts)
+        ];
+    }
+    
+    /**
+     * Export settings data
+     */
+    private function export_settings($filters) {
+        $settings = \WP_GPT_RAG_Chat\Settings::get_settings();
+        
+        // Create CSV content
+        $csv_content = "Setting,Value\n";
+        
+        foreach ($settings as $key => $value) {
+            if (is_array($value)) {
+                $value = json_encode($value);
+            }
+            $csv_content .= sprintf(
+                "%s,%s\n",
+                $key,
+                '"' . str_replace('"', '""', $value) . '"'
+            );
+        }
+        
+        // Save to temporary file
+        $upload_dir = wp_upload_dir();
+        $filename = 'settings-export-' . date('Y-m-d-H-i-s') . '.csv';
+        $file_path = $upload_dir['path'] . '/' . $filename;
+        
+        if (file_put_contents($file_path, $csv_content) === false) {
+            throw new Exception(__('Failed to create export file.', 'wp-gpt-rag-chat'));
+        }
+        
+        return [
+            'file_url' => $upload_dir['url'] . '/' . $filename,
+            'file_path' => $file_path,
+            'record_count' => count($settings)
+        ];
+    }
+    
+    /**
+     * Handle diagnostics data AJAX request
+     */
+    public function handle_get_diagnostics_data() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('You do not have permission to access diagnostics data.', 'wp-gpt-rag-chat')]);
+        }
+        
+        global $wpdb;
+        $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
+        $errors_table = $wpdb->prefix . 'wp_gpt_rag_chat_errors';
+        $usage_table = $wpdb->prefix . 'wp_gpt_rag_chat_api_usage';
+        
+        try {
+            // Active chats (last 24 hours)
+            $active_chats = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(DISTINCT chat_id) FROM {$logs_table} WHERE created_at >= DATE_SUB(NOW(), INTERVAL %d HOUR)",
+                24
+            ));
+            
+            // API calls today
+            $api_calls_today = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$usage_table} WHERE DATE(created_at) = CURDATE()"
+            ));
+            
+            // Error rate (last 24 hours)
+            $total_requests = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$logs_table} WHERE created_at >= DATE_SUB(NOW(), INTERVAL %d HOUR)",
+                24
+            ));
+            
+            $error_count = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$errors_table} WHERE created_at >= DATE_SUB(NOW(), INTERVAL %d HOUR)",
+                24
+            ));
+            
+            $error_rate = $total_requests > 0 ? round(($error_count / $total_requests) * 100, 2) : 0;
+            
+            // Average response time (last 24 hours)
+            $avg_response_time = $wpdb->get_var($wpdb->prepare(
+                "SELECT AVG(response_latency) FROM {$logs_table} WHERE created_at >= DATE_SUB(NOW(), INTERVAL %d HOUR) AND response_latency > 0",
+                24
+            ));
+            
+            // Indexed content count
+            $indexed_content = $wpdb->get_var(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}posts WHERE post_status = 'publish' AND post_type IN ('post', 'page')"
+            );
+            
+            wp_send_json_success([
+                'active_chats' => intval($active_chats),
+                'api_calls_today' => intval($api_calls_today),
+                'error_rate' => $error_rate,
+                'avg_response_time' => intval($avg_response_time),
+                'indexed_content' => intval($indexed_content)
+            ]);
+            
+        } catch (Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle process status AJAX request
+     */
+    public function handle_get_process_status() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('You do not have permission to access process status.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            // Check if emergency stop is active
+            $emergency_active = \WP_GPT_RAG_Chat\Emergency_Stop::is_active();
+            
+            // Check if indexing is running (simplified check)
+            $indexing_running = wp_next_scheduled('wp_gpt_rag_chat_index_content');
+            
+            // Check if cleanup is scheduled
+            $cleanup_scheduled = wp_next_scheduled('wp_gpt_rag_chat_cleanup_logs');
+            
+            wp_send_json_success([
+                'indexing' => [
+                    'status' => $indexing_running ? 'running' : 'idle',
+                    'text' => $indexing_running ? __('Running', 'wp-gpt-rag-chat') : __('Idle', 'wp-gpt-rag-chat')
+                ],
+                'cleanup' => [
+                    'status' => $cleanup_scheduled ? 'scheduled' : 'idle',
+                    'text' => $cleanup_scheduled ? __('Scheduled', 'wp-gpt-rag-chat') : __('Idle', 'wp-gpt-rag-chat')
+                ],
+                'emergency' => [
+                    'status' => $emergency_active ? 'stopped' : 'running',
+                    'text' => $emergency_active ? __('Active', 'wp-gpt-rag-chat') : __('Normal', 'wp-gpt-rag-chat')
+                ],
+                'background' => [
+                    'status' => 'running',
+                    'text' => __('Active', 'wp-gpt-rag-chat')
+                ]
+            ]);
+            
+        } catch (Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
 }

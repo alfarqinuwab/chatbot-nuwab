@@ -17,7 +17,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 <div class="wrap cornuwab-admin-wrap">
     <h1>
         <span class="dashicons dashicons-admin-users"></span>
-        <?php esc_html_e('User Analytics', 'wp-gpt-rag-chat'); ?>
+        <?php esc_html_e('Nuwab AI Assistant - User Analytics', 'wp-gpt-rag-chat'); ?>
     </h1>
     
     <div class="wp-gpt-rag-chat-user-analytics">

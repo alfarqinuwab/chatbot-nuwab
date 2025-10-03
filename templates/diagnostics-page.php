@@ -1,6 +1,6 @@
 <?php
 /**
- * Diagnostics Page - Check database and logging status
+ * Enhanced Diagnostics Page - Live monitoring, connection tests, and system status
  */
 
 if (!defined('ABSPATH')) {
@@ -14,10 +14,121 @@ if (!current_user_can('manage_options')) {
 
 global $wpdb;
 $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
+$errors_table = $wpdb->prefix . 'wp_gpt_rag_chat_errors';
+$usage_table = $wpdb->prefix . 'wp_gpt_rag_chat_api_usage';
+$export_history_table = $wpdb->prefix . 'wp_gpt_rag_chat_export_history';
+
+// Get settings
+$settings = \WP_GPT_RAG_Chat\Settings::get_settings();
 
 ?>
 <div class="wrap cornuwab-admin-wrap">
-    <h1><?php _e('Chat System Diagnostics', 'wp-gpt-rag-chat'); ?></h1>
+    <h1><?php _e('Nuwab AI Assistant - System Diagnostics', 'wp-gpt-rag-chat'); ?>
+        <button type="button" id="refresh-all" class="button button-secondary refresh-btn">
+            <span class="dashicons dashicons-update"></span> <?php _e('Refresh All', 'wp-gpt-rag-chat'); ?>
+        </button>
+    </h1>
+    
+    <!-- Live System Monitor -->
+    <div class="diagnostic-section">
+        <h2>📡 Live System Monitor
+            <label class="auto-refresh">
+                <input type="checkbox" id="auto-refresh" checked> <?php _e('Auto-refresh (30s)', 'wp-gpt-rag-chat'); ?>
+            </label>
+        </h2>
+        
+        <div class="live-monitor">
+            <div class="monitor-grid">
+                <div class="monitor-card">
+                    <h4><?php _e('Active Chats', 'wp-gpt-rag-chat'); ?></h4>
+                    <div class="monitor-value" id="active-chats">-</div>
+                    <small><?php _e('Last 24 hours', 'wp-gpt-rag-chat'); ?></small>
+                </div>
+                
+                <div class="monitor-card">
+                    <h4><?php _e('API Calls Today', 'wp-gpt-rag-chat'); ?></h4>
+                    <div class="monitor-value" id="api-calls-today">-</div>
+                    <small><?php _e('OpenAI + Pinecone', 'wp-gpt-rag-chat'); ?></small>
+                </div>
+                
+                <div class="monitor-card">
+                    <h4><?php _e('Error Rate', 'wp-gpt-rag-chat'); ?></h4>
+                    <div class="monitor-value" id="error-rate">-</div>
+                    <small><?php _e('Last 24 hours', 'wp-gpt-rag-chat'); ?></small>
+                </div>
+                
+                <div class="monitor-card">
+                    <h4><?php _e('Avg Response Time', 'wp-gpt-rag-chat'); ?></h4>
+                    <div class="monitor-value" id="avg-response-time">-</div>
+                    <small><?php _e('Milliseconds', 'wp-gpt-rag-chat'); ?></small>
+                </div>
+                
+                <div class="monitor-card">
+                    <h4><?php _e('Indexed Content', 'wp-gpt-rag-chat'); ?></h4>
+                    <div class="monitor-value" id="indexed-content">-</div>
+                    <small><?php _e('Total items', 'wp-gpt-rag-chat'); ?></small>
+                </div>
+                
+                <div class="monitor-card">
+                    <h4><?php _e('System Status', 'wp-gpt-rag-chat'); ?></h4>
+                    <div class="monitor-value" id="system-status">-</div>
+                    <small><?php _e('Overall health', 'wp-gpt-rag-chat'); ?></small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Connection Tests -->
+    <div class="diagnostic-section">
+        <h2>🔗 Connection Tests</h2>
+        
+        <div style="margin: 15px 0;">
+            <button type="button" class="connection-test" id="test-openai">
+                <span class="dashicons dashicons-admin-site"></span> <?php _e('Test OpenAI', 'wp-gpt-rag-chat'); ?>
+            </button>
+            
+            <button type="button" class="connection-test" id="test-pinecone">
+                <span class="dashicons dashicons-database"></span> <?php _e('Test Pinecone', 'wp-gpt-rag-chat'); ?>
+            </button>
+            
+            <button type="button" class="connection-test" id="test-wordpress">
+                <span class="dashicons dashicons-wordpress"></span> <?php _e('Test WordPress', 'wp-gpt-rag-chat'); ?>
+            </button>
+            
+            <button type="button" class="connection-test" id="test-all-connections">
+                <span class="dashicons dashicons-admin-tools"></span> <?php _e('Test All', 'wp-gpt-rag-chat'); ?>
+            </button>
+        </div>
+        
+        <div id="connection-results" style="margin-top: 15px;"></div>
+    </div>
+    
+    <!-- Current Running Processes -->
+    <div class="diagnostic-section">
+        <h2>⚙️ Current Running Processes</h2>
+        
+        <div class="process-status">
+            <div class="process-item">
+                <span class="process-name"><?php _e('Content Indexing', 'wp-gpt-rag-chat'); ?></span>
+                <span class="process-status-badge" id="indexing-status"><?php _e('Checking...', 'wp-gpt-rag-chat'); ?></span>
+            </div>
+            
+            <div class="process-item">
+                <span class="process-name"><?php _e('Log Cleanup', 'wp-gpt-rag-chat'); ?></span>
+                <span class="process-status-badge" id="cleanup-status"><?php _e('Checking...', 'wp-gpt-rag-chat'); ?></span>
+            </div>
+            
+            <div class="process-item">
+                <span class="process-name"><?php _e('Emergency Stop', 'wp-gpt-rag-chat'); ?></span>
+                <span class="process-status-badge" id="emergency-status"><?php _e('Checking...', 'wp-gpt-rag-chat'); ?></span>
+            </div>
+            
+            <div class="process-item">
+                <span class="process-name"><?php _e('Background Tasks', 'wp-gpt-rag-chat'); ?></span>
+                <span class="process-status-badge" id="background-status"><?php _e('Checking...', 'wp-gpt-rag-chat'); ?></span>
+            </div>
+        </div>
+    </div>
     
     <style>
         .diagnostic-section { 
@@ -25,6 +136,8 @@ $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
             padding: 20px; 
             margin: 20px 0; 
             border-left: 4px solid #0073aa; 
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         .diagnostic-table { 
             width: 100%; 
@@ -39,9 +152,140 @@ $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
         .diagnostic-table th { 
             background: #f4f4f4; 
         }
-        .status-ok { color: green; font-weight: bold; }
-        .status-error { color: red; font-weight: bold; }
-        .status-warning { color: orange; font-weight: bold; }
+        .status-ok { color: #00a32a; font-weight: bold; }
+        .status-error { color: #d63638; font-weight: bold; }
+        .status-warning { color: #dba617; font-weight: bold; }
+        .status-info { color: #2271b1; font-weight: bold; }
+        
+        /* Live monitoring styles */
+        .live-monitor {
+            background: #f8f9fa;
+            border: 1px solid #e1e5e9;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .monitor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .monitor-card {
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 4px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .monitor-card h4 {
+            margin: 0 0 10px 0;
+            color: #1d2327;
+            font-size: 14px;
+        }
+        
+        .monitor-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .monitor-value.online { color: #00a32a; }
+        .monitor-value.offline { color: #d63638; }
+        .monitor-value.warning { color: #dba617; }
+        
+        .connection-test {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #2271b1;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            margin: 5px;
+        }
+        
+        .connection-test:hover {
+            background: #135e96;
+            color: white;
+        }
+        
+        .connection-test.testing {
+            background: #dba617;
+            cursor: not-allowed;
+        }
+        
+        .connection-test.success {
+            background: #00a32a;
+        }
+        
+        .connection-test.error {
+            background: #d63638;
+        }
+        
+        .process-status {
+            background: #f0f6fc;
+            border: 1px solid #c3c4c7;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .process-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e1e5e9;
+        }
+        
+        .process-item:last-child {
+            border-bottom: none;
+        }
+        
+        .process-name {
+            font-weight: 500;
+        }
+        
+        .process-status-badge {
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .process-status-badge.running {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .process-status-badge.stopped {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .process-status-badge.idle {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .refresh-btn {
+            float: right;
+            margin-top: -5px;
+        }
+        
+        .auto-refresh {
+            display: inline-block;
+            margin-left: 10px;
+        }
+        
+        .auto-refresh input[type="checkbox"] {
+            margin-right: 5px;
+        }
     </style>
     
     <!-- Database Status -->
@@ -376,6 +620,72 @@ $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
         </script>
     </div>
     
+    <!-- System Information -->
+    <div class="diagnostic-section">
+        <h2>💻 System Information</h2>
+        
+        <table class="diagnostic-table">
+            <tr>
+                <th><?php _e('WordPress Version', 'wp-gpt-rag-chat'); ?></th>
+                <td><?php echo get_bloginfo('version'); ?></td>
+            </tr>
+            <tr>
+                <th><?php _e('PHP Version', 'wp-gpt-rag-chat'); ?></th>
+                <td><?php echo PHP_VERSION; ?></td>
+            </tr>
+            <tr>
+                <th><?php _e('Plugin Version', 'wp-gpt-rag-chat'); ?></th>
+                <td><?php echo defined('WP_GPT_RAG_CHAT_VERSION') ? WP_GPT_RAG_CHAT_VERSION : 'Unknown'; ?></td>
+            </tr>
+            <tr>
+                <th><?php _e('Database Version', 'wp-gpt-rag-chat'); ?></th>
+                <td><?php echo get_option('wp_gpt_rag_chat_db_version', 'Not set'); ?></td>
+            </tr>
+            <tr>
+                <th><?php _e('Memory Limit', 'wp-gpt-rag-chat'); ?></th>
+                <td><?php echo ini_get('memory_limit'); ?></td>
+            </tr>
+            <tr>
+                <th><?php _e('Max Execution Time', 'wp-gpt-rag-chat'); ?></th>
+                <td><?php echo ini_get('max_execution_time'); ?>s</td>
+            </tr>
+            <tr>
+                <th><?php _e('Upload Max Filesize', 'wp-gpt-rag-chat'); ?></th>
+                <td><?php echo ini_get('upload_max_filesize'); ?></td>
+            </tr>
+            <tr>
+                <th><?php _e('OpenAI API Key', 'wp-gpt-rag-chat'); ?></th>
+                <td>
+                    <?php 
+                    $openai_key = $settings['openai_api_key'] ?? '';
+                    if ($openai_key) {
+                        echo '<span class="status-ok">✅ ' . substr($openai_key, 0, 8) . '...' . substr($openai_key, -4) . '</span>';
+                    } else {
+                        echo '<span class="status-error">❌ Not configured</span>';
+                    }
+                    ?>
+                </td>
+            </tr>
+            <tr>
+                <th><?php _e('Pinecone API Key', 'wp-gpt-rag-chat'); ?></th>
+                <td>
+                    <?php 
+                    $pinecone_key = $settings['pinecone_api_key'] ?? '';
+                    if ($pinecone_key) {
+                        echo '<span class="status-ok">✅ ' . substr($pinecone_key, 0, 8) . '...' . substr($pinecone_key, -4) . '</span>';
+                    } else {
+                        echo '<span class="status-error">❌ Not configured</span>';
+                    }
+                    ?>
+                </td>
+            </tr>
+            <tr>
+                <th><?php _e('Pinecone Environment', 'wp-gpt-rag-chat'); ?></th>
+                <td><?php echo esc_html($settings['pinecone_environment'] ?? 'Not set'); ?></td>
+            </tr>
+        </table>
+    </div>
+    
     <!-- Recent Errors -->
     <div class="diagnostic-section">
         <h2>⚠️ Recent Error Log</h2>
@@ -406,6 +716,211 @@ $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
         ?>
     </div>
 </div>
+
+<!-- Live Monitoring JavaScript -->
+<script>
+jQuery(document).ready(function($) {
+    let autoRefreshInterval;
+    let isAutoRefreshEnabled = true;
+    
+    // Initialize
+    loadSystemData();
+    checkProcessStatus();
+    
+    // Auto-refresh toggle
+    $('#auto-refresh').on('change', function() {
+        isAutoRefreshEnabled = $(this).is(':checked');
+        if (isAutoRefreshEnabled) {
+            startAutoRefresh();
+        } else {
+            stopAutoRefresh();
+        }
+    });
+    
+    // Manual refresh
+    $('#refresh-all').on('click', function() {
+        loadSystemData();
+        checkProcessStatus();
+    });
+    
+    // Connection tests
+    $('#test-openai').on('click', function() {
+        testConnection('openai', $(this));
+    });
+    
+    $('#test-pinecone').on('click', function() {
+        testConnection('pinecone', $(this));
+    });
+    
+    $('#test-wordpress').on('click', function() {
+        testConnection('wordpress', $(this));
+    });
+    
+    $('#test-all-connections').on('click', function() {
+        testAllConnections();
+    });
+    
+    function startAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+        }
+        autoRefreshInterval = setInterval(function() {
+            if (isAutoRefreshEnabled) {
+                loadSystemData();
+                checkProcessStatus();
+            }
+        }, 30000); // 30 seconds
+    }
+    
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+    }
+    
+    function loadSystemData() {
+        $.ajax({
+            url: ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'wp_gpt_rag_chat_get_diagnostics_data',
+                nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
+            },
+            success: function(response) {
+                if (response.success) {
+                    const data = response.data;
+                    
+                    // Update monitor cards
+                    $('#active-chats').text(data.active_chats || 0);
+                    $('#api-calls-today').text(data.api_calls_today || 0);
+                    $('#error-rate').text((data.error_rate || 0) + '%');
+                    $('#avg-response-time').text(data.avg_response_time || 0 + 'ms');
+                    $('#indexed-content').text(data.indexed_content || 0);
+                    
+                    // System status
+                    let systemStatus = 'Healthy';
+                    let statusClass = 'online';
+                    
+                    if (data.error_rate > 10) {
+                        systemStatus = 'Warning';
+                        statusClass = 'warning';
+                    } else if (data.error_rate > 25) {
+                        systemStatus = 'Critical';
+                        statusClass = 'offline';
+                    }
+                    
+                    $('#system-status').text(systemStatus).removeClass('online warning offline').addClass(statusClass);
+                }
+            },
+            error: function() {
+                console.log('Failed to load system data');
+            }
+        });
+    }
+    
+    function checkProcessStatus() {
+        $.ajax({
+            url: ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'wp_gpt_rag_chat_get_process_status',
+                nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
+            },
+            success: function(response) {
+                if (response.success) {
+                    const data = response.data;
+                    
+                    updateProcessStatus('indexing-status', data.indexing);
+                    updateProcessStatus('cleanup-status', data.cleanup);
+                    updateProcessStatus('emergency-status', data.emergency);
+                    updateProcessStatus('background-status', data.background);
+                }
+            },
+            error: function() {
+                console.log('Failed to load process status');
+            }
+        });
+    }
+    
+    function updateProcessStatus(elementId, status) {
+        const $element = $('#' + elementId);
+        $element.removeClass('running stopped idle').text(status.text);
+        
+        if (status.status === 'running') {
+            $element.addClass('running');
+        } else if (status.status === 'stopped') {
+            $element.addClass('stopped');
+        } else {
+            $element.addClass('idle');
+        }
+    }
+    
+    function testConnection(type, $button) {
+        $button.addClass('testing').text('Testing...');
+        
+        $.ajax({
+            url: ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'wp_gpt_rag_chat_test_connection',
+                connection_type: type,
+                nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
+            },
+            success: function(response) {
+                if (response.success) {
+                    $button.removeClass('testing').addClass('success').text('✅ Success');
+                    showConnectionResult(type, response.data.message, 'success');
+                } else {
+                    $button.removeClass('testing').addClass('error').text('❌ Failed');
+                    showConnectionResult(type, response.data.message, 'error');
+                }
+                
+                setTimeout(function() {
+                    $button.removeClass('success error testing').text($button.data('original-text') || 'Test ' + type);
+                }, 3000);
+            },
+            error: function() {
+                $button.removeClass('testing').addClass('error').text('❌ Error');
+                showConnectionResult(type, 'Connection test failed', 'error');
+                
+                setTimeout(function() {
+                    $button.removeClass('success error testing').text($button.data('original-text') || 'Test ' + type);
+                }, 3000);
+            }
+        });
+    }
+    
+    function testAllConnections() {
+        const connections = ['openai', 'pinecone', 'wordpress'];
+        connections.forEach(function(type) {
+            const $button = $('#test-' + type);
+            $button.data('original-text', $button.text());
+            testConnection(type, $button);
+        });
+    }
+    
+    function showConnectionResult(type, message, status) {
+        const $results = $('#connection-results');
+        const statusClass = status === 'success' ? 'notice-success' : 'notice-error';
+        const icon = status === 'success' ? '✅' : '❌';
+        
+        $results.append(
+            '<div class="notice ' + statusClass + ' is-dismissible" style="margin: 5px 0;">' +
+            '<p>' + icon + ' <strong>' + type.toUpperCase() + ':</strong> ' + message + '</p>' +
+            '</div>'
+        );
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(function() {
+            $results.find('.notice').last().fadeOut();
+        }, 5000);
+    }
+    
+    // Start auto-refresh
+    startAutoRefresh();
+});
+</script>
 
 <?php
 // Handle migration request

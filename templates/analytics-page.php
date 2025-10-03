@@ -8,8 +8,17 @@ if (!defined('ABSPATH')) {
 }
 
 use WP_GPT_RAG_Chat\Analytics;
+use WP_GPT_RAG_Chat\Error_Logger;
+use WP_GPT_RAG_Chat\API_Usage_Tracker;
+use WP_GPT_RAG_Chat\Migration;
 
 $analytics = new Analytics();
+
+// Ensure database tables exist
+$current_version = get_option('wp_gpt_rag_chat_db_version', '1.0.0');
+if (version_compare($current_version, '2.2.0', '<')) {
+    Migration::run_migrations();
+}
 
 // Handle actions
 if (isset($_POST['action'])) {
@@ -23,6 +32,16 @@ if (isset($_POST['action'])) {
         case 'cleanup_logs':
             $deleted = $analytics->cleanup_old_logs();
             echo '<div class="notice notice-success"><p>' . sprintf(__('Deleted %d old log entries.', 'wp-gpt-rag-chat'), $deleted) . '</p></div>';
+            break;
+            
+        case 'cleanup_error_logs':
+            $deleted = Error_Logger::cleanup_old_errors(30);
+            echo '<div class="notice notice-success"><p>' . sprintf(__('Deleted %d old error log entries.', 'wp-gpt-rag-chat'), $deleted) . '</p></div>';
+            break;
+            
+        case 'cleanup_usage_logs':
+            $deleted = API_Usage_Tracker::cleanup_old_usage(90);
+            echo '<div class="notice notice-success"><p>' . sprintf(__('Deleted %d old usage log entries.', 'wp-gpt-rag-chat'), $deleted) . '</p></div>';
             break;
     }
 }
@@ -62,7 +81,7 @@ $total_pages = ceil($total_logs / $per_page);
 ?>
 
 <div class="wrap cornuwab-admin-wrap cornuwab-wp-gpt-rag-analytics">
-    <h1><?php _e('Chat Analytics & Logs', 'wp-gpt-rag-chat'); ?></h1>
+    <h1><?php _e('Nuwab AI Assistant - Analytics & Logs', 'wp-gpt-rag-chat'); ?></h1>
     
     <div class="nav-tab-wrapper">
         <a href="?page=wp-gpt-rag-chat-analytics&tab=logs" class="nav-tab <?php echo (!isset($_GET['tab']) || $_GET['tab'] === 'logs') ? 'nav-tab-active' : ''; ?>">
@@ -71,14 +90,20 @@ $total_pages = ceil($total_logs / $per_page);
         <a href="?page=wp-gpt-rag-chat-analytics&tab=dashboard" class="nav-tab <?php echo (isset($_GET['tab']) && $_GET['tab'] === 'dashboard') ? 'nav-tab-active' : ''; ?>">
             <?php _e('Dashboard', 'wp-gpt-rag-chat'); ?>
         </a>
-                    </div>
+        <a href="?page=wp-gpt-rag-chat-analytics&tab=error-logs" class="nav-tab <?php echo (isset($_GET['tab']) && $_GET['tab'] === 'error-logs') ? 'nav-tab-active' : ''; ?>">
+            <?php _e('Error Logs', 'wp-gpt-rag-chat'); ?>
+        </a>
+        <a href="?page=wp-gpt-rag-chat-analytics&tab=api-usage" class="nav-tab <?php echo (isset($_GET['tab']) && $_GET['tab'] === 'api-usage') ? 'nav-tab-active' : ''; ?>">
+            <?php _e('API Usage', 'wp-gpt-rag-chat'); ?>
+        </a>
+    </div>
     
     <?php if (!isset($_GET['tab']) || $_GET['tab'] === 'logs'): ?>
         <!-- Logs Tab -->
         <div class="analytics-section">
-            <h2><?php _e('Filter Logs', 'wp-gpt-rag-chat'); ?></h2>
+            <h2><?php _e('Chat Logs', 'wp-gpt-rag-chat'); ?></h2>
             
-            <form method="get" class="analytics-filters">
+            <form method="get" class="analytics-filters" id="analytics-filters" style="display: none;">
                 <input type="hidden" name="page" value="wp-gpt-rag-chat-analytics">
                 <input type="hidden" name="tab" value="logs">
                 
@@ -151,15 +176,13 @@ $total_pages = ceil($total_logs / $per_page);
                             <?php _e('Export to CSV', 'wp-gpt-rag-chat'); ?>
                         </button>
                     </form>
-                    
-                    <form method="post" style="display: inline-block;" onsubmit="return confirm('<?php _e('Are you sure you want to delete old logs?', 'wp-gpt-rag-chat'); ?>');">
-                        <?php wp_nonce_field('wp_gpt_rag_chat_analytics'); ?>
-                        <input type="hidden" name="action" value="cleanup_logs">
-                        <button type="submit" class="button">
-                            <span class="dashicons dashicons-trash" style="vertical-align: middle; margin-top: 4px;"></span>
-                            <?php _e('Cleanup Old Logs', 'wp-gpt-rag-chat'); ?>
-                        </button>
-                    </form>
+                </div>
+                
+                <div class="alignright actions">
+                    <button type="button" class="button filter-toggle-btn" onclick="toggleFilters()">
+                        <span class="dashicons dashicons-filter" style="vertical-align: middle; margin-top: 4px;"></span>
+                        <?php _e('Filter', 'wp-gpt-rag-chat'); ?>
+                    </button>
                 </div>
                 
                 <div class="tablenav-pages">
@@ -232,8 +255,7 @@ $total_pages = ceil($total_logs / $per_page);
                                     }
                                     ?>
                                     <div class="content-preview" title="<?php echo esc_attr($content); ?>">
-                                        <?php echo esc_html(mb_substr($content, 0, 120)); ?>
-                                        <?php if (mb_strlen($content) > 120): ?>...<?php endif; ?>
+                                        <?php echo esc_html($content); ?>
                     </div>
                                 </td>
                                 <td>
@@ -294,29 +316,30 @@ $total_pages = ceil($total_logs / $per_page);
         <div class="analytics-dashboard">
             <h2><?php _e('Dashboard (Last 30 Days)', 'wp-gpt-rag-chat'); ?></h2>
             
-            <div class="kpi-cards">
-                <div class="kpi-card">
+            <div class="stats-grid">
+                <div class="stat-card">
                     <h3><?php _e('Avg Turns/Conversation', 'wp-gpt-rag-chat'); ?></h3>
-                    <div class="kpi-value"><?php echo esc_html($kpis['avg_turns_per_conversation']); ?></div>
+                    <div class="stat-number"><?php echo esc_html($kpis['avg_turns_per_conversation']); ?></div>
+                    <div class="stat-description"><?php _e('Average conversation length', 'wp-gpt-rag-chat'); ?></div>
                 </div>
                 
-                <div class="kpi-card">
+                <div class="stat-card">
                     <h3><?php _e('Avg Latency', 'wp-gpt-rag-chat'); ?></h3>
-                    <div class="kpi-value"><?php echo esc_html($kpis['avg_latency_ms']); ?> ms</div>
-                    </div>
-                
-                <div class="kpi-card">
-                    <h3><?php _e('Satisfaction Rate', 'wp-gpt-rag-chat'); ?></h3>
-                    <div class="kpi-value"><?php echo esc_html($kpis['satisfaction_rate']); ?>%</div>
-                    <div class="kpi-detail">
-                        👍 <?php echo esc_html($kpis['thumbs_up']); ?> / 
-                        👎 <?php echo esc_html($kpis['thumbs_down']); ?>
-                    </div>
+                    <div class="stat-number"><?php echo esc_html($kpis['avg_latency_ms']); ?> ms</div>
+                    <div class="stat-description"><?php _e('Response time', 'wp-gpt-rag-chat'); ?></div>
                 </div>
                 
-                <div class="kpi-card">
+                <div class="stat-card">
+                    <h3><?php _e('Satisfaction Rate', 'wp-gpt-rag-chat'); ?></h3>
+                    <div class="stat-number"><?php echo esc_html($kpis['satisfaction_rate']); ?>%</div>
+                    <div class="stat-description">👍 <?php echo esc_html($kpis['thumbs_up']); ?> / 👎 <?php echo esc_html($kpis['thumbs_down']); ?></div>
+                </div>
+                
+                <div class="stat-card">
                     <h3><?php _e('Total Rated', 'wp-gpt-rag-chat'); ?></h3>
-                    <div class="kpi-value"><?php echo esc_html($kpis['total_rated']); ?></div>
+                    <div class="stat-number"><?php echo esc_html($kpis['total_rated']); ?></div>
+                    <div class="stat-description"><?php _e('Rated interactions', 'wp-gpt-rag-chat'); ?></div>
+                </div>
             </div>
         </div>
         
@@ -475,6 +498,484 @@ $total_pages = ceil($total_logs / $per_page);
             });
         });
         </script>
+        
+    <?php elseif ($_GET['tab'] === 'error-logs'): ?>
+        <!-- Error Logs Tab -->
+        <?php
+        // Get error logs filters
+        $error_date_from = $_GET['error_date_from'] ?? '';
+        $error_date_to = $_GET['error_date_to'] ?? '';
+        $error_type = $_GET['error_type'] ?? '';
+        $api_service = $_GET['api_service'] ?? '';
+        
+        // Pagination
+        $error_per_page = 50;
+        $error_paged = isset($_GET['error_paged']) ? max(1, (int) $_GET['error_paged']) : 1;
+        $error_offset = ($error_paged - 1) * $error_per_page;
+        
+        // Build filter args
+        $error_filter_args = array_filter([
+            'date_from' => $error_date_from,
+            'date_to' => $error_date_to,
+            'error_type' => $error_type,
+            'api_service' => $api_service,
+            'limit' => $error_per_page,
+            'offset' => $error_offset
+        ]);
+        
+        // Get error logs
+        $error_logs = Error_Logger::get_error_logs($error_filter_args);
+        $total_error_logs = Error_Logger::get_error_logs_count($error_filter_args);
+        $total_error_pages = ceil($total_error_logs / $error_per_page);
+        
+        // Get error stats
+        $error_stats = Error_Logger::get_error_stats(30);
+        ?>
+        
+        <div class="analytics-section">
+            <h2><?php _e('Error Logs', 'wp-gpt-rag-chat'); ?></h2>
+            
+            <!-- Error Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3><?php _e('Total Errors (30 days)', 'wp-gpt-rag-chat'); ?></h3>
+                    <div class="stat-number"><?php echo esc_html($error_stats['total_errors']); ?></div>
+                    <div class="stat-description"><?php _e('Error occurrences', 'wp-gpt-rag-chat'); ?></div>
+                </div>
+                
+                <div class="stat-card">
+                    <h3><?php _e('Recent Errors (24h)', 'wp-gpt-rag-chat'); ?></h3>
+                    <div class="stat-number"><?php echo esc_html($error_stats['recent_errors']); ?></div>
+                    <div class="stat-description"><?php _e('Last 24 hours', 'wp-gpt-rag-chat'); ?></div>
+                </div>
+                
+                <div class="stat-card">
+                    <h3><?php _e('Most Common Type', 'wp-gpt-rag-chat'); ?></h3>
+                    <div class="stat-number">
+                        <?php 
+                        if (!empty($error_stats['errors_by_type'])) {
+                            echo esc_html($error_stats['errors_by_type'][0]->error_type);
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </div>
+                    <div class="stat-description"><?php _e('Error category', 'wp-gpt-rag-chat'); ?></div>
+                </div>
+                
+                <div class="stat-card">
+                    <h3><?php _e('Most Affected Service', 'wp-gpt-rag-chat'); ?></h3>
+                    <div class="stat-number">
+                        <?php 
+                        if (!empty($error_stats['errors_by_service'])) {
+                            echo esc_html($error_stats['errors_by_service'][0]->api_service);
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </div>
+                    <div class="stat-description"><?php _e('API service', 'wp-gpt-rag-chat'); ?></div>
+                </div>
+            </div>
+            
+            <!-- Error Filters -->
+            <form method="get" class="analytics-filters" id="error-filters" style="display: none;">
+                <input type="hidden" name="page" value="wp-gpt-rag-chat-analytics">
+                <input type="hidden" name="tab" value="error-logs">
+                
+                <div class="filter-row">
+                    <label>
+                        <?php _e('Date From:', 'wp-gpt-rag-chat'); ?>
+                        <input type="date" name="error_date_from" value="<?php echo esc_attr($error_date_from); ?>">
+                    </label>
+                    
+                    <label>
+                        <?php _e('Date To:', 'wp-gpt-rag-chat'); ?>
+                        <input type="date" name="error_date_to" value="<?php echo esc_attr($error_date_to); ?>">
+                    </label>
+                    
+                    <label>
+                        <?php _e('Error Type:', 'wp-gpt-rag-chat'); ?>
+                        <select name="error_type">
+                            <option value=""><?php _e('All Types', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="api_failure" <?php selected($error_type, 'api_failure'); ?>><?php _e('API Failure', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="invalid_response" <?php selected($error_type, 'invalid_response'); ?>><?php _e('Invalid Response', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="rate_limit" <?php selected($error_type, 'rate_limit'); ?>><?php _e('Rate Limit', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="authentication" <?php selected($error_type, 'authentication'); ?>><?php _e('Authentication', 'wp-gpt-rag-chat'); ?></option>
+                        </select>
+                    </label>
+                    
+                    <label>
+                        <?php _e('API Service:', 'wp-gpt-rag-chat'); ?>
+                        <select name="api_service">
+                            <option value=""><?php _e('All Services', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="openai" <?php selected($api_service, 'openai'); ?>><?php _e('OpenAI', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="pinecone" <?php selected($api_service, 'pinecone'); ?>><?php _e('Pinecone', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="system" <?php selected($api_service, 'system'); ?>><?php _e('System', 'wp-gpt-rag-chat'); ?></option>
+                        </select>
+                    </label>
+                </div>
+                
+                <div class="filter-actions">
+                    <button type="submit" class="button button-primary">
+                        <span class="dashicons dashicons-filter" style="vertical-align: middle; margin-top: 4px;"></span>
+                        <?php _e('Apply Filters', 'wp-gpt-rag-chat'); ?>
+                    </button>
+                    <a href="?page=wp-gpt-rag-chat-analytics&tab=error-logs" class="button">
+                        <span class="dashicons dashicons-dismiss" style="vertical-align: middle; margin-top: 4px;"></span>
+                        <?php _e('Clear Filters', 'wp-gpt-rag-chat'); ?>
+                    </a>
+                </div>
+            </form>
+            
+            <div class="tablenav top">
+                <div class="alignleft actions">
+                    <form method="post" style="display: inline-block;" onsubmit="return confirm('<?php _e('Are you sure you want to delete old error logs?', 'wp-gpt-rag-chat'); ?>');">
+                        <?php wp_nonce_field('wp_gpt_rag_chat_analytics'); ?>
+                        <input type="hidden" name="action" value="cleanup_error_logs">
+                        <button type="submit" class="button">
+                            <span class="dashicons dashicons-trash" style="vertical-align: middle; margin-top: 4px;"></span>
+                            <?php _e('Cleanup Old Errors', 'wp-gpt-rag-chat'); ?>
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="alignright actions">
+                    <button type="button" class="button filter-toggle-btn" onclick="toggleErrorFilters()">
+                        <span class="dashicons dashicons-filter" style="vertical-align: middle; margin-top: 4px;"></span>
+                        <?php _e('Filter', 'wp-gpt-rag-chat'); ?>
+                    </button>
+                </div>
+                
+                <div class="tablenav-pages">
+                    <span class="displaying-num"><?php printf(_n('%s error', '%s errors', $total_error_logs, 'wp-gpt-rag-chat'), number_format_i18n($total_error_logs)); ?></span>
+                    <?php
+                    echo paginate_links([
+                        'base' => add_query_arg('error_paged', '%#%'),
+                        'format' => '',
+                        'prev_text' => __('&laquo;', 'wp-gpt-rag-chat'),
+                        'next_text' => __('&raquo;', 'wp-gpt-rag-chat'),
+                        'total' => $total_error_pages,
+                        'current' => $error_paged,
+                        'type' => 'plain'
+                    ]);
+                    ?>
+                </div>
+            </div>
+            
+            <div class="table-wrapper">
+                <table class="wp-list-table widefat fixed striped error-logs-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;"><?php _e('ID', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 110px;"><?php _e('Time', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 100px;"><?php _e('Type', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 80px;"><?php _e('Service', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 50%; min-width: 200px;"><?php _e('Error Message', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 100px;"><?php _e('User', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 100px;"><?php _e('Actions', 'wp-gpt-rag-chat'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($error_logs)): ?>
+                            <tr>
+                                <td colspan="7"><?php _e('No error logs found.', 'wp-gpt-rag-chat'); ?></td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($error_logs as $error): ?>
+                                <tr>
+                                    <td><?php echo esc_html($error->id); ?></td>
+                                    <td><?php echo esc_html(date('Y-m-d H:i', strtotime($error->created_at))); ?></td>
+                                    <td>
+                                        <span class="error-type-badge error-type-<?php echo esc_attr($error->error_type); ?>">
+                                            <?php echo esc_html(ucfirst(str_replace('_', ' ', $error->error_type))); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="service-badge service-<?php echo esc_attr($error->api_service); ?>">
+                                            <?php echo esc_html(ucfirst($error->api_service)); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="error-message" title="<?php echo esc_attr($error->error_message); ?>">
+                                            <?php echo esc_html(mb_substr($error->error_message, 0, 120)); ?>
+                                            <?php if (mb_strlen($error->error_message) > 120): ?>...<?php endif; ?>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <?php 
+                                        if ($error->user_id) {
+                                            $user = get_userdata($error->user_id);
+                                            echo esc_html($user ? $user->display_name : 'Unknown');
+                                        } else {
+                                            echo '<em>' . __('Guest', 'wp-gpt-rag-chat') . '</em>';
+                                        }
+                                        ?>
+                                    </td>
+                                    <td>
+                                        <button class="button button-small view-error-context" data-error-id="<?php echo esc_attr($error->id); ?>">
+                                            <?php _e('View Context', 'wp-gpt-rag-chat'); ?>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+    <?php elseif ($_GET['tab'] === 'api-usage'): ?>
+        <!-- API Usage Tab -->
+        <?php
+        // Get API usage filters
+        $usage_date_from = $_GET['usage_date_from'] ?? '';
+        $usage_date_to = $_GET['usage_date_to'] ?? '';
+        $usage_service = $_GET['usage_service'] ?? '';
+        $usage_endpoint = $_GET['usage_endpoint'] ?? '';
+        
+        // Pagination
+        $usage_per_page = 50;
+        $usage_paged = isset($_GET['usage_paged']) ? max(1, (int) $_GET['usage_paged']) : 1;
+        $usage_offset = ($usage_paged - 1) * $usage_per_page;
+        
+        // Build filter args
+        $usage_filter_args = array_filter([
+            'date_from' => $usage_date_from,
+            'date_to' => $usage_date_to,
+            'api_service' => $usage_service,
+            'endpoint' => $usage_endpoint,
+            'limit' => $usage_per_page,
+            'offset' => $usage_offset
+        ]);
+        
+        // Get API usage reports
+        $usage_reports = API_Usage_Tracker::get_usage_reports($usage_filter_args);
+        $total_usage_reports = API_Usage_Tracker::get_usage_reports_count($usage_filter_args);
+        $total_usage_pages = ceil($total_usage_reports / $usage_per_page);
+        
+        // Get usage stats
+        $usage_stats = API_Usage_Tracker::get_usage_stats(30);
+        $limits_status = API_Usage_Tracker::get_limits_status();
+        ?>
+        
+        <div class="analytics-section">
+            <h2><?php _e('API Usage Reports', 'wp-gpt-rag-chat'); ?></h2>
+            
+            <!-- Usage Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3><?php _e('Total API Calls (30 days)', 'wp-gpt-rag-chat'); ?></h3>
+                    <div class="stat-number"><?php echo esc_html(number_format($usage_stats['total_calls'])); ?></div>
+                    <div class="stat-description"><?php _e('API requests made', 'wp-gpt-rag-chat'); ?></div>
+                </div>
+                
+                <div class="stat-card">
+                    <h3><?php _e('Total Tokens Used', 'wp-gpt-rag-chat'); ?></h3>
+                    <div class="stat-number"><?php echo esc_html(number_format($usage_stats['total_tokens'])); ?></div>
+                    <div class="stat-description"><?php _e('Token consumption', 'wp-gpt-rag-chat'); ?></div>
+                </div>
+                
+                <div class="stat-card">
+                    <h3><?php _e('Total Cost', 'wp-gpt-rag-chat'); ?></h3>
+                    <div class="stat-number">$<?php echo esc_html(number_format($usage_stats['total_cost'], 2)); ?></div>
+                    <div class="stat-description"><?php _e('API usage cost', 'wp-gpt-rag-chat'); ?></div>
+                </div>
+                
+                <div class="stat-card">
+                    <h3><?php _e('Rate Limit Warnings', 'wp-gpt-rag-chat'); ?></h3>
+                    <div class="stat-number"><?php echo esc_html($usage_stats['rate_limit_warnings']); ?></div>
+                    <div class="stat-description"><?php _e('Limit warnings', 'wp-gpt-rag-chat'); ?></div>
+                </div>
+            </div>
+            
+            <!-- Limits Status -->
+            <div class="dashboard-section">
+                <h3><?php _e('Current Usage vs Limits', 'wp-gpt-rag-chat'); ?></h3>
+                <div class="limits-status">
+                    <?php foreach ($limits_status as $service => $status): ?>
+                        <div class="service-limits">
+                            <h4><?php echo esc_html(ucfirst($service)); ?></h4>
+                            <div class="limit-meters">
+                                <div class="limit-meter">
+                                    <label><?php _e('Today:', 'wp-gpt-rag-chat'); ?></label>
+                                    <div class="meter">
+                                        <div class="meter-fill" style="width: <?php echo $status['limits']['daily_tokens'] ? min(100, ($status['today']['tokens'] / $status['limits']['daily_tokens']) * 100) : 0; ?>%"></div>
+                                        <span class="meter-text"><?php echo esc_html(number_format($status['today']['tokens'])); ?> / <?php echo esc_html(number_format($status['limits']['daily_tokens'] ?? 0)); ?> tokens</span>
+                                    </div>
+                                </div>
+                                <div class="limit-meter">
+                                    <label><?php _e('This Month:', 'wp-gpt-rag-chat'); ?></label>
+                                    <div class="meter">
+                                        <div class="meter-fill" style="width: <?php echo $status['limits']['monthly_cost'] ? min(100, ($status['month']['cost'] / $status['limits']['monthly_cost']) * 100) : 0; ?>%"></div>
+                                        <span class="meter-text">$<?php echo esc_html(number_format($status['month']['cost'], 2)); ?> / $<?php echo esc_html(number_format($status['limits']['monthly_cost'] ?? 0, 2)); ?></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            
+            <!-- Usage by Service -->
+            <div class="dashboard-section">
+                <h3><?php _e('Usage by Service (30 days)', 'wp-gpt-rag-chat'); ?></h3>
+                <table class="wp-list-table widefat">
+                    <thead>
+                        <tr>
+                            <th><?php _e('Service', 'wp-gpt-rag-chat'); ?></th>
+                            <th><?php _e('API Calls', 'wp-gpt-rag-chat'); ?></th>
+                            <th><?php _e('Total Tokens', 'wp-gpt-rag-chat'); ?></th>
+                            <th><?php _e('Total Cost', 'wp-gpt-rag-chat'); ?></th>
+                            <th><?php _e('Avg Tokens/Call', 'wp-gpt-rag-chat'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($usage_stats['usage_by_service'] as $usage): ?>
+                            <tr>
+                                <td><?php echo esc_html(ucfirst($usage->api_service)); ?></td>
+                                <td><?php echo esc_html(number_format($usage->calls)); ?></td>
+                                <td><?php echo esc_html(number_format($usage->total_tokens)); ?></td>
+                                <td>$<?php echo esc_html(number_format($usage->total_cost, 2)); ?></td>
+                                <td><?php echo esc_html(number_format($usage->avg_tokens_per_call, 0)); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Usage Filters -->
+            <form method="get" class="analytics-filters" id="usage-filters" style="display: none;">
+                <input type="hidden" name="page" value="wp-gpt-rag-chat-analytics">
+                <input type="hidden" name="tab" value="api-usage">
+                
+                <div class="filter-row">
+                    <label>
+                        <?php _e('Date From:', 'wp-gpt-rag-chat'); ?>
+                        <input type="date" name="usage_date_from" value="<?php echo esc_attr($usage_date_from); ?>">
+                    </label>
+                    
+                    <label>
+                        <?php _e('Date To:', 'wp-gpt-rag-chat'); ?>
+                        <input type="date" name="usage_date_to" value="<?php echo esc_attr($usage_date_to); ?>">
+                    </label>
+                    
+                    <label>
+                        <?php _e('API Service:', 'wp-gpt-rag-chat'); ?>
+                        <select name="usage_service">
+                            <option value=""><?php _e('All Services', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="openai" <?php selected($usage_service, 'openai'); ?>><?php _e('OpenAI', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="pinecone" <?php selected($usage_service, 'pinecone'); ?>><?php _e('Pinecone', 'wp-gpt-rag-chat'); ?></option>
+                        </select>
+                    </label>
+                    
+                    <label>
+                        <?php _e('Endpoint:', 'wp-gpt-rag-chat'); ?>
+                        <input type="text" name="usage_endpoint" value="<?php echo esc_attr($usage_endpoint); ?>" placeholder="<?php _e('e.g., chat/completions', 'wp-gpt-rag-chat'); ?>">
+                    </label>
+                </div>
+                
+                <div class="filter-actions">
+                    <button type="submit" class="button button-primary">
+                        <span class="dashicons dashicons-filter" style="vertical-align: middle; margin-top: 4px;"></span>
+                        <?php _e('Apply Filters', 'wp-gpt-rag-chat'); ?>
+                    </button>
+                    <a href="?page=wp-gpt-rag-chat-analytics&tab=api-usage" class="button">
+                        <span class="dashicons dashicons-dismiss" style="vertical-align: middle; margin-top: 4px;"></span>
+                        <?php _e('Clear Filters', 'wp-gpt-rag-chat'); ?>
+                    </a>
+                </div>
+            </form>
+            
+            <div class="tablenav top">
+                <div class="alignleft actions">
+                    <form method="post" style="display: inline-block;" onsubmit="return confirm('<?php _e('Are you sure you want to delete old usage logs?', 'wp-gpt-rag-chat'); ?>');">
+                        <?php wp_nonce_field('wp_gpt_rag_chat_analytics'); ?>
+                        <input type="hidden" name="action" value="cleanup_usage_logs">
+                        <button type="submit" class="button">
+                            <span class="dashicons dashicons-trash" style="vertical-align: middle; margin-top: 4px;"></span>
+                            <?php _e('Cleanup Old Usage', 'wp-gpt-rag-chat'); ?>
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="alignright actions">
+                    <button type="button" class="button filter-toggle-btn" onclick="toggleUsageFilters()">
+                        <span class="dashicons dashicons-filter" style="vertical-align: middle; margin-top: 4px;"></span>
+                        <?php _e('Filter', 'wp-gpt-rag-chat'); ?>
+                    </button>
+                </div>
+                
+                <div class="tablenav-pages">
+                    <span class="displaying-num"><?php printf(_n('%s usage record', '%s usage records', $total_usage_reports, 'wp-gpt-rag-chat'), number_format_i18n($total_usage_reports)); ?></span>
+                    <?php
+                    echo paginate_links([
+                        'base' => add_query_arg('usage_paged', '%#%'),
+                        'format' => '',
+                        'prev_text' => __('&laquo;', 'wp-gpt-rag-chat'),
+                        'next_text' => __('&raquo;', 'wp-gpt-rag-chat'),
+                        'total' => $total_usage_pages,
+                        'current' => $usage_paged,
+                        'type' => 'plain'
+                    ]);
+                    ?>
+                </div>
+            </div>
+            
+            <div class="table-wrapper">
+                <table class="wp-list-table widefat fixed striped api-usage-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;"><?php _e('ID', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 110px;"><?php _e('Time', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 80px;"><?php _e('Service', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 150px;"><?php _e('Endpoint', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 100px;"><?php _e('Tokens', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 80px;"><?php _e('Cost', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 100px;"><?php _e('User', 'wp-gpt-rag-chat'); ?></th>
+                            <th style="width: 100px;"><?php _e('Actions', 'wp-gpt-rag-chat'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($usage_reports)): ?>
+                            <tr>
+                                <td colspan="8"><?php _e('No usage records found.', 'wp-gpt-rag-chat'); ?></td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($usage_reports as $usage): ?>
+                                <tr>
+                                    <td><?php echo esc_html($usage->id); ?></td>
+                                    <td><?php echo esc_html(date('Y-m-d H:i', strtotime($usage->created_at))); ?></td>
+                                    <td>
+                                        <span class="service-badge service-<?php echo esc_attr($usage->api_service); ?>">
+                                            <?php echo esc_html(ucfirst($usage->api_service)); ?>
+                                        </span>
+                                    </td>
+                                    <td><?php echo esc_html($usage->endpoint); ?></td>
+                                    <td><?php echo esc_html($usage->tokens_used ? number_format($usage->tokens_used) : '-'); ?></td>
+                                    <td><?php echo $usage->cost ? '$' . esc_html(number_format($usage->cost, 4)) : '-'; ?></td>
+                                    <td>
+                                        <?php 
+                                        if ($usage->user_id) {
+                                            $user = get_userdata($usage->user_id);
+                                            echo esc_html($user ? $user->display_name : 'Unknown');
+                                        } else {
+                                            echo '<em>' . __('Guest', 'wp-gpt-rag-chat') . '</em>';
+                                        }
+                                        ?>
+                                    </td>
+                                    <td>
+                                        <button class="button button-small view-usage-context" data-usage-id="<?php echo esc_attr($usage->id); ?>">
+                                            <?php _e('View Context', 'wp-gpt-rag-chat'); ?>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     <?php endif; ?>
     
     <!-- Source Link Modal -->
@@ -624,6 +1125,25 @@ $total_pages = ceil($total_logs / $per_page);
             <div class="tag-modal-footer">
                 <button type="button" class="button button-secondary tag-modal-cancel"><?php _e('Cancel', 'wp-gpt-rag-chat'); ?></button>
                 <button type="button" class="button button-primary tag-modal-save"><?php _e('Add Tags', 'wp-gpt-rag-chat'); ?></button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Context Modal -->
+    <div id="context-modal" class="tag-modal context-modal" style="display: none;">
+        <div class="tag-modal-overlay"></div>
+        <div class="tag-modal-content">
+            <div class="tag-modal-header">
+                <h2><?php _e('Context Details', 'wp-gpt-rag-chat'); ?></h2>
+                <button type="button" class="tag-modal-close context-modal-close">&times;</button>
+            </div>
+            <div class="tag-modal-body">
+                <div class="context-content">
+                    <p class="context-content empty">Loading context...</p>
+                </div>
+            </div>
+            <div class="tag-modal-footer">
+                <button type="button" class="button button-secondary context-modal-cancel"><?php _e('Close', 'wp-gpt-rag-chat'); ?></button>
             </div>
         </div>
     </div>
@@ -936,209 +1456,517 @@ $total_pages = ceil($total_logs / $per_page);
                 }
             });
         });
+        
+        // ===== Error Context Modal =====
+        
+        $('.view-error-context').on('click', function(e) {
+            e.preventDefault();
+            var errorId = $(this).data('error-id');
+            
+            // Show loading modal
+            $('#context-modal').fadeIn(200);
+            $('#context-modal .context-content').html('<p class="context-content empty">Loading context...</p>');
+            $('body').addClass('modal-open');
+            
+            // Fetch error context via AJAX
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'wp_gpt_rag_chat_get_error_context',
+                    error_id: errorId,
+                    nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        var context = response.data.context || 'No context available';
+                        $('#context-modal .context-content').html(context);
+                    } else {
+                        $('#context-modal .context-content').html('<p class="context-content empty">Error loading context: ' + (response.data.message || 'Unknown error') + '</p>');
+                    }
+                },
+                error: function() {
+                    $('#context-modal .context-content').html('<p class="context-content empty">Failed to load context</p>');
+                }
+            });
+        });
+        
+        // ===== Usage Context Modal =====
+        
+        $('.view-usage-context').on('click', function(e) {
+            e.preventDefault();
+            var usageId = $(this).data('usage-id');
+            
+            // Show loading modal
+            $('#context-modal').fadeIn(200);
+            $('#context-modal .context-content').html('<p class="context-content empty">Loading context...</p>');
+            $('body').addClass('modal-open');
+            
+            // Fetch usage context via AJAX
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'wp_gpt_rag_chat_get_usage_context',
+                    usage_id: usageId,
+                    nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        var context = response.data.context || 'No context available';
+                        $('#context-modal .context-content').html(context);
+                    } else {
+                        $('#context-modal .context-content').html('<p class="context-content empty">Error loading context: ' + (response.data.message || 'Unknown error') + '</p>');
+                    }
+                },
+                error: function() {
+                    $('#context-modal .context-content').html('<p class="context-content empty">Failed to load context</p>');
+                }
+            });
+        });
+        
+        // Close context modal
+        $('.context-modal-close, .context-modal-cancel, .context-modal-overlay').on('click', function(e) {
+            e.preventDefault();
+            $('#context-modal').fadeOut(200);
+            $('body').removeClass('modal-open');
+        });
     });
+
+    // Filter toggle functions
+    function toggleFilters() {
+        const filters = document.getElementById('analytics-filters');
+        const btn = document.querySelector('.filter-toggle-btn');
+        
+        if (filters.style.display === 'none') {
+            filters.style.display = 'block';
+            btn.classList.add('expanded');
+        } else {
+            filters.style.display = 'none';
+            btn.classList.remove('expanded');
+        }
+    }
+
+    function toggleErrorFilters() {
+        const filters = document.getElementById('error-filters');
+        const btn = document.querySelector('#error-filters').previousElementSibling.querySelector('.filter-toggle-btn');
+        
+        if (filters.style.display === 'none') {
+            filters.style.display = 'block';
+            btn.classList.add('expanded');
+        } else {
+            filters.style.display = 'none';
+            btn.classList.remove('expanded');
+        }
+    }
+
+    function toggleUsageFilters() {
+        const filters = document.getElementById('usage-filters');
+        const btn = document.querySelector('#usage-filters').previousElementSibling.querySelector('.filter-toggle-btn');
+        
+        if (filters.style.display === 'none') {
+            filters.style.display = 'block';
+            btn.classList.add('expanded');
+        } else {
+            filters.style.display = 'none';
+            btn.classList.remove('expanded');
+        }
+    }
     </script>
 </div>
 
 <style>
-/* Main Analytics Page Wrapper */
+/* Modern Analytics Page Styling */
 .wp-gpt-rag-analytics {
-    margin: 20px 20px 20px 0;
+    margin: 0;
+    background: #f8f9fa;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .wp-gpt-rag-analytics h1 {
-    margin-bottom: 20px;
-    color: #1d2327;
-    font-size: 23px;
-    font-weight: 400;
+    margin: 0 0 30px 0;
+    color: #1a1a1a;
+    font-size: 28px;
+    font-weight: 600;
     padding: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
-/* Navigation Tabs */
+/* Navigation Tabs - Matching Settings Style */
 .wp-gpt-rag-analytics .nav-tab-wrapper {
-    border-bottom: 1px solid #c3c4c7;
-    margin: 0 0 20px;
-    padding: 0;
+    background: #f8f9fa;
+    margin: 0;
+    padding: 0 40px;
+    border-bottom: 1px solid #e1e5e9;
+    display: flex;
+    flex-wrap: wrap;
 }
 
 .wp-gpt-rag-analytics .nav-tab {
-    border: 1px solid transparent;
-    border-bottom: none;
     background: transparent;
-    color: #50575e;
-    padding: 8px 16px;
-    font-size: 14px;
-    line-height: 1.71428571;
-    margin: 0 4px -1px 0;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #646970;
+    padding: 20px 24px;
     text-decoration: none;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border-radius: 0;
+    margin-right: 0;
+    position: relative;
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
 }
 
 .wp-gpt-rag-analytics .nav-tab:hover {
-    background-color: #f6f7f7;
-    color: #1d2327;
+    color: #0073aa;
+    background: rgba(0, 115, 170, 0.08);
 }
 
-.wp-gpt-rag-analytics .nav-tab-active {
-    background: #fff;
-    border: 1px solid #c3c4c7;
-    border-bottom-color: #fff;
-    color: #1d2327;
-    font-weight: 600;
+.wp-gpt-rag-analytics .nav-tab.nav-tab-active {
+    color: #0073aa;
+    border-bottom-color: #0073aa;
+    background: #ffffff;
+    box-shadow: 0 -2px 8px rgba(0, 115, 170, 0.1);
 }
 
-/* Analytics Section */
+.wp-gpt-rag-analytics .nav-tab.nav-tab-active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #ffffff;
+}
+
+/* Modern Analytics Section */
 .analytics-section {
-    background: #fff;
-    padding: 0;
-    margin-top: 20px;
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    margin-top: 0;
+    overflow: visible;
+    border: none;
 }
 
 .analytics-section h2 {
-    background: #f8f8f8;
-    border-bottom: 1px solid #ccd0d4;
-    padding: 15px 20px;
+    background: transparent;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 20px 0;
     margin: 0;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 600;
-    color: #1d2327;
+    color: #1f2937;
+    text-align: left;
 }
 
-/* Filters Section */
+
+/* Filter Toggle Button */
+.filter-toggle-btn {
+    background: transparent;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.filter-toggle-btn:hover {
+    background: #f8fafc;
+    border-color: #d1d5db;
+    color: #374151;
+}
+
+.filter-toggle-btn .dashicons {
+    font-size: 16px;
+}
+
+/* WordPress Standard Filters Section */
 .analytics-filters {
+    background: #f9f9f9;
+    padding: 15px;
+    border: 1px solid #c3c4c7;
+    margin: 20px 0;
+    border-radius: 0;
+}
+
+/* Custom Filter Group Styles - Nuwab AI Assistant Only */
+.cor-nuwab-filter-group {
+    box-sizing: border-box;
+    position: relative;
+    float: left;
+    margin: 0 1% 0 0;
+    padding: 20px 24px 28px;
+    width: 24%;
     background: #fff;
-    padding: 20px;
-    border: 1px solid #ccd0d4;
-    border-top: none;
-    margin: 0;
+    border: 1px solid #dcdcde;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+/* Responsive adjustments for filter groups */
+@media (max-width: 1200px) {
+    .cor-nuwab-filter-group {
+        width: 32%;
+    }
+}
+
+@media (max-width: 900px) {
+    .cor-nuwab-filter-group {
+        width: 48%;
+    }
+}
+
+@media (max-width: 600px) {
+    .cor-nuwab-filter-group {
+        width: 100%;
+        margin: 0 0 20px 0;
+        float: none;
+    }
 }
 
 .filter-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 15px;
-    margin-bottom: 15px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
 }
 
 .filter-row label {
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    font-weight: 600;
-    font-size: 13px;
-    color: #1d2327;
+    gap: 8px;
+    font-weight: 500;
+    font-size: 14px;
+    color: #374151;
 }
 
 .filter-row input,
 .filter-row select {
-    padding: 6px 10px;
+    padding: 6px 8px;
     border: 1px solid #8c8f94;
-    border-radius: 4px;
+    border-radius: 3px;
     font-size: 14px;
+    color: #2c3338;
+    background: #fff;
+    width: 100%;
 }
 
 .filter-row input:focus,
 .filter-row select:focus {
-    border-color: #d1a85f;
-    outline: 2px solid rgba(209, 168, 95, 0.3);
+    border-color: #2271b1;
+    outline: none;
+    box-shadow: 0 0 0 1px #2271b1;
 }
 
-/* Filter Actions */
+/* WordPress Standard Filter Actions */
 .filter-actions {
     display: flex;
-    gap: 10px;
-    padding-top: 10px;
-    border-top: 1px solid #dcdcde;
+    gap: 8px;
+    padding-top: 15px;
+    border-top: 1px solid #c3c4c7;
     margin-top: 15px;
+    flex-wrap: wrap;
 }
 
-/* Table Container */
+.filter-actions .button {
+    padding: 6px 12px;
+    border-radius: 3px;
+    font-weight: normal;
+    font-size: 13px;
+    border: 1px solid #c3c4c7;
+    background: #f6f7f7;
+    color: #2c3338;
+    text-decoration: none;
+    display: inline-block;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.filter-actions .button-primary {
+    background: #2271b1;
+    color: #fff;
+    border-color: #2271b1;
+}
+
+.filter-actions .button-primary:hover {
+    background: #135e96;
+    border-color: #135e96;
+    color: #fff;
+}
+
+.filter-actions .button-secondary {
+    background: #f6f7f7;
+    color: #2c3338;
+    border-color: #c3c4c7;
+}
+
+.filter-actions .button-secondary:hover {
+    background: #f0f0f1;
+    border-color: #8c8f94;
+    color: #2c3338;
+}
+
+/* WordPress Standard Table Container */
 .wp-gpt-rag-analytics .wp-list-table {
     width: 100% !important;
     border: 1px solid #c3c4c7;
     margin-top: 0;
     background: #fff;
+    border-radius: 0;
+    overflow: visible;
+    box-shadow: none;
 }
 
 .wp-gpt-rag-analytics .widefat {
     border-spacing: 0;
     width: 100%;
     clear: both;
+    border-radius: 0;
+    border: 1px solid #c3c4c7;
 }
 
 .wp-gpt-rag-analytics .wp-list-table thead th,
 .wp-gpt-rag-analytics .wp-list-table thead td {
     background: #f6f7f7;
+    border: 1px solid #c3c4c7;
     border-bottom: 1px solid #c3c4c7;
     font-weight: 600;
-    padding: 10px;
+    padding: 8px 10px;
+    color: #2c3338;
+    font-size: 14px;
+    text-transform: none;
+    letter-spacing: normal;
 }
 
 .wp-gpt-rag-analytics .wp-list-table tbody td {
-    padding: 10px;
-    border-top: 1px solid #c3c4c7;
+    padding: 8px 10px;
+    border: 1px solid #c3c4c7;
+    border-bottom: 1px solid #c3c4c7;
     vertical-align: middle;
+    font-size: 14px;
+    color: #2c3338;
 }
 
+.wp-gpt-rag-analytics .wp-list-table tbody tr:hover {
+    background: #f6f7f7;
+}
+
+.wp-gpt-rag-analytics .wp-list-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Role Badges */
 .role-badge {
     display: inline-block;
-    padding: 3px 8px;
+    padding: 4px 8px;
     border-radius: 3px;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border: 1px solid transparent;
 }
 
 .role-badge.role-user {
-    background: #d1a85f;
-    color: #fff;
+    background: #ffd700;
+    color: #000;
+    border-color: #e6c200;
 }
 
 .role-badge.role-assistant {
-    background: #e0e0e0;
-    color: #333;
+    background: #555;
+    color: #fff;
+    border-color: #444;
 }
 
 .content-preview {
     line-height: 1.4;
-    font-size: 13px;
+    font-size: 12px;
+    color: #2c3338;
+    max-width: none;
+    overflow: visible;
+    white-space: normal;
+    word-wrap: break-word;
 }
 
 .tags-cell {
     display: flex;
-    gap: 4px;
+    gap: 6px;
     flex-wrap: wrap;
     align-items: center;
 }
 
 .tag-badge {
     display: inline-block;
-    padding: 2px 8px;
-    background: #f0f0f0;
-    border-radius: 3px;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+    color: #3730a3;
+    border-radius: 12px;
     font-size: 11px;
+    font-weight: 500;
+    border: 1px solid #c7d2fe;
 }
 
 .add-tag-btn {
-    color: #d1a85f;
+    color: #667eea;
     font-weight: bold;
-    font-size: 16px;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 4px;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
-/* Table Navigation */
+.add-tag-btn:hover {
+    background: #f3f4f6;
+    transform: scale(1.1);
+}
+
+/* Modern Table Navigation */
 .wp-gpt-rag-analytics .tablenav {
-    background: #f6f7f7;
-    border: 1px solid #c3c4c7;
-    border-bottom: none;
-    padding: 10px;
+    background: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 20px 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-top: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border: 1px solid #e5e7eb;
 }
 
 .wp-gpt-rag-analytics .tablenav .actions {
     display: flex;
-    gap: 8px;
+    gap: 12px;
+    align-items: center;
+}
+
+.wp-gpt-rag-analytics .tablenav .actions .button {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.wp-gpt-rag-analytics .tablenav .actions .button:hover {
+    transform: translateY(-1px);
 }
 
 .wp-gpt-rag-analytics .tablenav .button {
@@ -1189,13 +2017,13 @@ $total_pages = ceil($total_logs / $per_page);
     border-color: #c3c4c7;
 }
 
-/* Table Wrapper */
+/* WordPress Standard Table Wrapper */
 .wp-gpt-rag-analytics .table-wrapper {
     overflow-x: auto;
     background: #fff;
-    border-left: 1px solid #c3c4c7;
-    border-right: 1px solid #c3c4c7;
-    border-bottom: 1px solid #c3c4c7;
+    border: 1px solid #c3c4c7;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 /* Analytics Logs Table */
@@ -1204,13 +2032,15 @@ $total_pages = ceil($total_logs / $per_page);
     min-width: 1200px;
 }
 
-/* Table Specific Styles */
+/* Table Specific Styles - Borderless */
 .wp-gpt-rag-analytics .striped tbody tr:nth-child(odd) {
-    background-color: #f9f9f9;
+    background-color: #fafbfc;
 }
 
 .wp-gpt-rag-analytics .striped tbody tr:hover {
-    background-color: #f0f6fc;
+    background-color: #f8fafc;
+    transform: scale(1.001);
+    transition: all 0.2s ease;
 }
 
 .wp-gpt-rag-analytics .wp-list-table tbody tr td {
@@ -1227,7 +2057,9 @@ $total_pages = ceil($total_logs / $per_page);
     white-space: normal !important;
     word-wrap: break-word;
     word-break: break-word;
-    line-height: 1.5;
+    line-height: 1.4;
+    font-size: 12px;
+    max-width: none !important;
 }
 
 /* Actions Column - Always visible */
@@ -1264,37 +2096,40 @@ $total_pages = ceil($total_logs / $per_page);
     color: #1d2327;
 }
 
-.kpi-cards {
+/* Simple Stats Grid - Matching Main Dashboard */
+.stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
-    margin: 20px 0;
+    margin: 30px 0;
 }
 
-.kpi-card {
+.stat-card {
     background: #fff;
-    padding: 20px;
     border: 1px solid #ccd0d4;
     border-radius: 4px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
 }
 
-.kpi-card h3 {
-    margin: 0 0 10px;
+.stat-card h3 {
+    margin: 0 0 10px 0;
+    color: #646970;
     font-size: 14px;
-    color: #666;
-    font-weight: 600;
+    font-weight: 500;
 }
 
-.kpi-value {
+.stat-number {
     font-size: 32px;
-    font-weight: 700;
-    color: #d1a85f;
+    font-weight: 600;
+    color: #1d2327;
+    margin-bottom: 5px;
 }
 
-.kpi-detail {
-    margin-top: 8px;
-    font-size: 13px;
-    color: #666;
+.stat-description {
+    font-size: 12px;
+    color: #646970;
 }
 
 .dashboard-section {
@@ -1852,7 +2687,7 @@ body.modal-open {
         padding: 8px 6px;
     }
     
-    .kpi-cards {
+    .stats-grid {
         grid-template-columns: 1fr;
     }
     
@@ -1867,12 +2702,13 @@ body.modal-open {
 
 @media screen and (max-width: 600px) {
     .wp-gpt-rag-analytics .content-preview {
-        max-width: 150px;
+        max-width: none;
+        font-size: 11px;
     }
     
     .wp-gpt-rag-analytics .nav-tab {
         font-size: 13px;
-        padding: 6px 12px;
+        padding: 16px 20px;
     }
     
     .source-modal-large {
@@ -1896,6 +2732,337 @@ body.modal-open {
     .source-result-item {
         padding: 14px;
         gap: 10px;
+    }
+}
+
+/* Modern Error Logs Styles */
+.error-type-badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.error-type-api_failure {
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.error-type-invalid_response {
+    background: linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%);
+    color: #d97706;
+    border: 1px solid #fed7aa;
+}
+
+.error-type-rate_limit {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    color: #059669;
+    border: 1px solid #a7f3d0;
+}
+
+.error-type-authentication {
+    background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+}
+
+.service-badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.service-openai {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
+.service-pinecone {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    color: #059669;
+    border: 1px solid #a7f3d0;
+}
+
+.service-system {
+    background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+}
+
+/* Modern Usage Meters */
+.usage-meter {
+    background: #f3f4f6;
+    border-radius: 10px;
+    height: 8px;
+    overflow: hidden;
+    margin: 8px 0;
+}
+
+.usage-meter-fill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.usage-meter-fill.low {
+    background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+}
+
+.usage-meter-fill.medium {
+    background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
+}
+
+.usage-meter-fill.high {
+    background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+}
+
+/* Modern Context Modal */
+.context-modal .tag-modal-content {
+    max-width: 800px;
+    max-height: 80vh;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.context-modal .tag-modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    border-radius: 16px 16px 0 0;
+    padding: 20px 24px;
+}
+
+.context-modal .tag-modal-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.context-modal .tag-modal-close {
+    color: #fff;
+    font-size: 24px;
+    opacity: 0.8;
+    transition: opacity 0.3s ease;
+}
+
+.context-modal .tag-modal-close:hover {
+    opacity: 1;
+}
+
+.context-modal .tag-modal-body {
+    padding: 24px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.context-content {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.context-content.empty {
+    color: #6b7280;
+    font-style: italic;
+    text-align: center;
+    padding: 40px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .wp-gpt-rag-analytics .nav-tab-wrapper {
+        padding: 0 20px;
+        flex-direction: column;
+    }
+    
+    .wp-gpt-rag-analytics .nav-tab {
+        width: 100%;
+        text-align: center;
+        border-bottom: 1px solid #e1e5e9;
+        border-radius: 0;
+    }
+    
+    .wp-gpt-rag-analytics .nav-tab:last-child {
+        border-bottom: none;
+    }
+    
+    .filter-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .wp-gpt-rag-analytics .tablenav {
+        flex-direction: column;
+        gap: 16px;
+        align-items: stretch;
+    }
+    
+    .context-modal .tag-modal-content {
+        margin: 20px;
+        max-width: calc(100vw - 40px);
+    }
+}
+
+.error-message {
+    line-height: 1.4;
+    font-size: 13px;
+    color: #374151;
+}
+
+/* API Usage Styles */
+.limits-status {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.service-limits {
+    background: #f9f9f9;
+    padding: 20px;
+    border-radius: 6px;
+    border: 1px solid #e1e5e9;
+}
+
+.service-limits h4 {
+    margin: 0 0 15px;
+    font-size: 16px;
+    color: #1d2327;
+}
+
+.limit-meters {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.limit-meter {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.limit-meter label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+}
+
+.meter {
+    position: relative;
+    background: #e5e7eb;
+    border-radius: 4px;
+    height: 24px;
+    overflow: hidden;
+}
+
+.meter-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981 0%, #f59e0b 70%, #ef4444 100%);
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+
+.meter-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 11px;
+    font-weight: 600;
+    color: #374151;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Error Logs Table */
+.error-logs-table {
+    table-layout: fixed;
+    min-width: 1000px;
+}
+
+.error-logs-table .error-message {
+    white-space: normal !important;
+    word-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+/* API Usage Table */
+.api-usage-table {
+    table-layout: fixed;
+    min-width: 1000px;
+}
+
+/* Context Modal Styles */
+.context-modal {
+    max-width: 800px !important;
+}
+
+.context-modal .tag-modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.context-content {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 15px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.context-content.empty {
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    padding: 30px;
+}
+
+/* Responsive adjustments for new tabs */
+@media screen and (max-width: 782px) {
+    .limits-status {
+        grid-template-columns: 1fr;
+    }
+    
+    .service-limits {
+        padding: 15px;
+    }
+    
+    .limit-meters {
+        gap: 10px;
+    }
+    
+    .meter {
+        height: 20px;
+    }
+    
+    .meter-text {
+        font-size: 10px;
     }
 }
 </style>

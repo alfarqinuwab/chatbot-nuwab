@@ -1,11 +1,11 @@
 <?php
 /**
- * Plugin Name: WP GPT RAG Chat
- * Plugin URI: https://example.com/wp-gpt-rag-chat
- * Description: A production-ready WordPress plugin that delivers OpenAI + Pinecone retrieval-augmented chatbot over WordPress content.
+ * Plugin Name: Nuwab AI Assistant
+ * Plugin URI: https://nuwab.com
+ * Description: A production-ready WordPress plugin that delivers OpenAI + Pinecone retrieval-augmented chatbot over WordPress content. Developed by Nuwab.
  * Version: 1.0.0
- * Author: Your Name
- * Author URI: https://example.com
+ * Author: Nuwab
+ * Author URI: https://nuwab.com
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: wp-gpt-rag-chat
@@ -31,13 +31,13 @@ define('WP_GPT_RAG_CHAT_PLUGIN_BASENAME', plugin_basename(__FILE__));
 // Requirement check functions
 function wp_gpt_rag_chat_php_version_notice() {
     echo '<div class="notice notice-error"><p>';
-    echo esc_html__('WP GPT RAG Chat requires PHP 7.4 or higher. Please upgrade your PHP version.', 'wp-gpt-rag-chat');
+    echo esc_html__('Nuwab AI Assistant requires PHP 7.4 or higher. Please upgrade your PHP version.', 'wp-gpt-rag-chat');
     echo '</p></div>';
 }
 
 function wp_gpt_rag_chat_wp_version_notice() {
     echo '<div class="notice notice-error"><p>';
-    echo esc_html__('WP GPT RAG Chat requires WordPress 5.0 or higher. Please upgrade WordPress.', 'wp-gpt-rag-chat');
+    echo esc_html__('Nuwab AI Assistant requires WordPress 5.0 or higher. Please upgrade WordPress.', 'wp-gpt-rag-chat');
     echo '</p></div>';
 }
 

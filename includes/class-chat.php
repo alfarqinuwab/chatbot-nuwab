@@ -150,7 +150,7 @@ class Chat {
     private function get_fallback_response($query) {
         // Check if sitemap fallback is enabled
         if (empty($this->settings['enable_sitemap_fallback'])) {
-            return __('عذراً، لم أجد معلومات ذات صلة في قاعدة المعرفة للإجابة على هذا السؤال حالياً.', 'wp-gpt-rag-chat');
+            return __('Sorry, I don\'t have that information.', 'wp-gpt-rag-chat');
         }
         
         try {
@@ -161,7 +161,7 @@ class Chat {
             );
             
             if (empty($suggestions)) {
-                return __('عذراً، لم أجد معلومات ذات صلة للإجابة على هذا السؤال حالياً.', 'wp-gpt-rag-chat');
+                return __('Sorry, I don\'t have that information.', 'wp-gpt-rag-chat');
             }
             
             // Format response with suggestions
@@ -184,7 +184,7 @@ class Chat {
             
         } catch (\Exception $e) {
             error_log('Sitemap fallback error: ' . $e->getMessage());
-            return __('عذراً، لم أجد معلومات ذات صلة في قاعدة المعرفة للإجابة على هذا السؤال حالياً.', 'wp-gpt-rag-chat');
+            return __('Sorry, I don\'t have that information.', 'wp-gpt-rag-chat');
         }
     }
     
@@ -482,6 +482,15 @@ class Chat {
             return;
         }
         
+        // Check maintenance mode
+        $settings = Settings::get_settings();
+        if (!empty($settings['maintenance_mode'])) {
+            // Only show to logged-in admin users
+            if (!is_user_logged_in() || !current_user_can('manage_options')) {
+                return;
+            }
+        }
+        
         // Output the chat widget
         echo $this->get_chat_widget_html();
     }
@@ -493,6 +502,15 @@ class Chat {
         // Only add to single posts/pages
         if (!is_singular()) {
             return $content;
+        }
+        
+        // Check maintenance mode
+        $settings = Settings::get_settings();
+        if (!empty($settings['maintenance_mode'])) {
+            // Only show to logged-in admin users
+            if (!is_user_logged_in() || !current_user_can('manage_options')) {
+                return $content;
+            }
         }
         
         // Check if chat is enabled for this post type

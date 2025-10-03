@@ -14,11 +14,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 
 <div class="wrap cornuwab-admin-wrap">
     <h1>
-        <?php esc_html_e('Content Indexing', 'wp-gpt-rag-chat'); ?>
-        <span id="indexed-items-count" style="font-size: 18px; font-weight: normal; color: #646970; margin-left: 15px; display: inline-block; padding: 5px 12px; background: #f0f0f0; border-radius: 4px;">
-            <?php esc_html_e('Indexed Items:', 'wp-gpt-rag-chat'); ?> 
-            <span id="indexed-items-number" style="color: #2271b1; font-weight: 600; transition: all 0.3s ease;"><?php echo esc_html(number_format($stats['total_posts'])); ?></span>
-        </span>
+        <?php esc_html_e('Nuwab AI Assistant - Content Indexing', 'wp-gpt-rag-chat'); ?>
     </h1>
     
     <!-- Emergency Stop Button (Shows when indexing is active) -->

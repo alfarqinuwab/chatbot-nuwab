@@ -190,7 +190,7 @@ class OpenAI {
         $headers = [
             'Authorization' => 'Bearer ' . $this->settings['openai_api_key'],
             'Content-Type' => 'application/json',
-            'User-Agent' => 'WP-GPT-RAG-Chat/' . WP_GPT_RAG_CHAT_VERSION
+            'User-Agent' => 'Nuwab-AI-Assistant/' . WP_GPT_RAG_CHAT_VERSION
         ];
         
         $args = [
@@ -204,10 +204,12 @@ class OpenAI {
         $response = wp_remote_request($url, $args);
         
         if (is_wp_error($response)) {
-            throw new \Exception(sprintf(
+            $error_message = sprintf(
                 __('OpenAI API request failed: %s', 'wp-gpt-rag-chat'),
                 $response->get_error_message()
-            ));
+            );
+            Error_Logger::log_openai_error($error_message, ['url' => $url, 'args' => $args]);
+            throw new \Exception($error_message);
         }
         
         $status_code = wp_remote_retrieve_response_code($response);
@@ -215,13 +217,16 @@ class OpenAI {
         
         if ($status_code !== 200) {
             $error_message = $this->parse_error_response($body, $status_code);
+            Error_Logger::log_openai_error($error_message, ['status_code' => $status_code, 'body' => $body]);
             throw new \Exception($error_message);
         }
         
         $decoded = json_decode($body, true);
         
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \Exception(__('Invalid JSON response from OpenAI API.', 'wp-gpt-rag-chat'));
+            $error_message = __('Invalid JSON response from OpenAI API.', 'wp-gpt-rag-chat');
+            Error_Logger::log_openai_error($error_message, ['body' => $body, 'json_error' => json_last_error_msg()]);
+            throw new \Exception($error_message);
         }
         
         return $decoded;

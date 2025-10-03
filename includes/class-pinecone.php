@@ -155,9 +155,59 @@ class Pinecone {
             throw new \Exception(__('Pinecone API key is not configured.', 'wp-gpt-rag-chat'));
         }
         
-        $response = $this->make_request('/describe_index_stats', []);
+        $response = $this->make_get_request('/describe_index_stats');
         
         return $response;
+    }
+    
+    /**
+     * Make GET HTTP request to Pinecone API
+     */
+    private function make_get_request($endpoint) {
+        $url = $this->get_api_base_url() . $endpoint;
+        
+        $headers = [
+            'Api-Key' => $this->settings['pinecone_api_key'],
+            'Content-Type' => 'application/json',
+            'User-Agent' => 'Nuwab-AI-Assistant/' . WP_GPT_RAG_CHAT_VERSION
+        ];
+        
+        $args = [
+            'method' => 'GET',
+            'headers' => $headers,
+            'timeout' => 60,
+            'sslverify' => true
+        ];
+        
+        $response = wp_remote_request($url, $args);
+        
+        if (is_wp_error($response)) {
+            $error_message = sprintf(
+                __('Pinecone API request failed: %s', 'wp-gpt-rag-chat'),
+                $response->get_error_message()
+            );
+            Error_Logger::log_pinecone_error($error_message, ['url' => $url, 'args' => $args]);
+            throw new \Exception($error_message);
+        }
+        
+        $status_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        
+        if ($status_code !== 200) {
+            $error_message = $this->parse_error_response($body, $status_code);
+            Error_Logger::log_pinecone_error($error_message, ['status_code' => $status_code, 'body' => $body]);
+            throw new \Exception($error_message);
+        }
+        
+        $decoded = json_decode($body, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $error_message = __('Invalid JSON response from Pinecone API.', 'wp-gpt-rag-chat');
+            Error_Logger::log_pinecone_error($error_message, ['body' => $body, 'json_error' => json_last_error_msg()]);
+            throw new \Exception($error_message);
+        }
+        
+        return $decoded;
     }
     
     /**
@@ -169,7 +219,7 @@ class Pinecone {
         $headers = [
             'Api-Key' => $this->settings['pinecone_api_key'],
             'Content-Type' => 'application/json',
-            'User-Agent' => 'WP-GPT-RAG-Chat/' . WP_GPT_RAG_CHAT_VERSION
+            'User-Agent' => 'Nuwab-AI-Assistant/' . WP_GPT_RAG_CHAT_VERSION
         ];
         
         $args = [
@@ -183,10 +233,12 @@ class Pinecone {
         $response = wp_remote_request($url, $args);
         
         if (is_wp_error($response)) {
-            throw new \Exception(sprintf(
+            $error_message = sprintf(
                 __('Pinecone API request failed: %s', 'wp-gpt-rag-chat'),
                 $response->get_error_message()
-            ));
+            );
+            Error_Logger::log_pinecone_error($error_message, ['url' => $url, 'args' => $args]);
+            throw new \Exception($error_message);
         }
         
         $status_code = wp_remote_retrieve_response_code($response);
@@ -194,13 +246,16 @@ class Pinecone {
         
         if ($status_code !== 200) {
             $error_message = $this->parse_error_response($body, $status_code);
+            Error_Logger::log_pinecone_error($error_message, ['status_code' => $status_code, 'body' => $body]);
             throw new \Exception($error_message);
         }
         
         $decoded = json_decode($body, true);
         
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \Exception(__('Invalid JSON response from Pinecone API.', 'wp-gpt-rag-chat'));
+            $error_message = __('Invalid JSON response from Pinecone API.', 'wp-gpt-rag-chat');
+            Error_Logger::log_pinecone_error($error_message, ['body' => $body, 'json_error' => json_last_error_msg()]);
+            throw new \Exception($error_message);
         }
         
         return $decoded;

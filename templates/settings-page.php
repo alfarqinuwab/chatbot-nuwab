@@ -26,77 +26,73 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     }
     ?>
     
-    <form method="post" action="options.php" class="settings-form" id="settings-form">
+    <form method="post" action="options.php" class="cornuwab-settings-form" id="settings-form">
         <!-- AJAX Nonce for Security -->
         <?php wp_nonce_field('wp_gpt_rag_chat_settings_nonce', 'wp_gpt_rag_chat_settings_nonce'); ?>
         
         <!-- Toast Notification Container -->
-        <div id="toast-container" class="toast-container"></div>
+        <div id="toast-container" class="cornuwab-toast-container"></div>
         
-        <div class="settings-card-container">
-            <div class="settings-header">
+        <div class="cornuwab-settings-card-container">
+            <div class="cornuwab-settings-header">
     <h1>
         <span class="dashicons dashicons-format-chat"></span>
-        <?php esc_html_e('WP GPT RAG Chat Settings', 'wp-gpt-rag-chat'); ?>
+        <?php esc_html_e('Nuwab AI Assistant Settings', 'wp-gpt-rag-chat'); ?>
     </h1>
             </div>
-    <nav class="nav-tab-wrapper wp-clearfix">
-                <a href="#general" class="nav-tab nav-tab-active" data-tab="general">
+    <nav class="cornuwab-nav-tab-wrapper wp-clearfix">
+                <a href="#general" class="cornuwab-nav-tab cornuwab-nav-tab-active" data-tab="general">
             <span class="dashicons dashicons-admin-settings"></span>
                     <?php esc_html_e('General Settings', 'wp-gpt-rag-chat'); ?>
                 </a>
-                <a href="#indexing" class="nav-tab" data-tab="indexing">
+                <a href="#indexing" class="cornuwab-nav-tab" data-tab="indexing">
                     <span class="dashicons dashicons-database"></span>
                     <?php esc_html_e('Indexing Settings', 'wp-gpt-rag-chat'); ?>
                 </a>
-                <a href="#chat" class="nav-tab" data-tab="chat">
+                <a href="#chat" class="cornuwab-nav-tab" data-tab="chat">
                     <span class="dashicons dashicons-format-chat"></span>
                     <?php esc_html_e('Chat Settings', 'wp-gpt-rag-chat'); ?>
                 </a>
-                <a href="#analytics" class="nav-tab" data-tab="analytics">
-                    <span class="dashicons dashicons-chart-bar"></span>
-                    <?php esc_html_e('Analytics & Logs', 'wp-gpt-rag-chat'); ?>
-                </a>
-                <a href="#advanced" class="nav-tab" data-tab="advanced">
+                <a href="#advanced" class="cornuwab-nav-tab" data-tab="advanced">
                     <span class="dashicons dashicons-admin-tools"></span>
                     <?php esc_html_e('Advanced Settings', 'wp-gpt-rag-chat'); ?>
         </a>
     </nav>
 
-            <div class="tab-content">
+            <div class="cornuwab-tab-content">
         <?php settings_fields('wp_gpt_rag_chat_settings'); ?>
         
         <!-- General Settings Tab -->
-        <div id="tab-general" class="tab-panel active">
-            <div class="settings-section">
-                <div class="settings-header">
+        <div id="tab-general" class="cornuwab-tab-panel active">
+            <div class="cornuwab-settings-section">
+                <div class="cornuwab-settings-header">
                     <h2><?php esc_html_e('General Settings', 'wp-gpt-rag-chat'); ?></h2>
                 </div>
                 
                 <!-- Inner Tabs for General Settings -->
-                <div class="inner-tab-wrapper">
-                    <a href="#openai-config" class="inner-tab inner-tab-active" data-inner-tab="openai-config">
+                <div class="cornuwab-inner-tab-wrapper">
+                    <a href="#openai-config" class="cornuwab-inner-tab cornuwab-inner-tab-active" data-inner-tab="openai-config">
                         <span class="dashicons dashicons-admin-network"></span>
                         <?php esc_html_e('OpenAI Configuration', 'wp-gpt-rag-chat'); ?>
                     </a>
-                    <a href="#pinecone-config" class="inner-tab" data-inner-tab="pinecone-config">
+                    <a href="#pinecone-config" class="cornuwab-inner-tab" data-inner-tab="pinecone-config">
                         <span class="dashicons dashicons-database"></span>
                         <?php esc_html_e('Pinecone Configuration', 'wp-gpt-rag-chat'); ?>
                     </a>
-                    <a href="#chatbot-behavior" class="inner-tab" data-inner-tab="chatbot-behavior">
+                    <a href="#chatbot-behavior" class="cornuwab-inner-tab" data-inner-tab="chatbot-behavior">
                         <span class="dashicons dashicons-format-chat"></span>
                         <?php esc_html_e('Chatbot Behavior', 'wp-gpt-rag-chat'); ?>
                     </a>
                     </div>
                     
                 <!-- OpenAI Configuration Tab -->
-                <div id="inner-tab-openai-config" class="inner-tab-panel active">
-                    <div class="settings-group">
+                <div id="inner-tab-openai-config" class="cornuwab-inner-tab-panel active">
+                    <div class="cornuwab-settings-group">
                         <h3><?php esc_html_e('OpenAI Configuration', 'wp-gpt-rag-chat'); ?></h3>
-                    <div class="ai-model-header">
-                        <span class="ai-model-provider"><?php esc_html_e('OpenAI, GPT-4.1', 'wp-gpt-rag-chat'); ?></span>
+                    <div class="cornuwab-ai-model-header">
+                        <span class="cornuwab-ai-model-provider"><?php esc_html_e('OpenAI, GPT-4.1', 'wp-gpt-rag-chat'); ?></span>
                     </div>
-                    <table class="form-table">
+                    <table class="cornuwab-form-table">
                         <tr>
                             <th scope="row">
                                 <label for="openai_api_key"><?php esc_html_e('API Key', 'wp-gpt-rag-chat'); ?></label>
@@ -160,7 +156,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                             </th>
                             <td>
                                 <input type="number" id="max_tokens" name="wp_gpt_rag_chat_settings[max_tokens]" value="<?php echo esc_attr($settings['max_tokens'] ?? '1024'); ?>" min="1" max="32768" class="small-text" />
-                                <div class="token-info">
+                                <div class="cornuwab-token-info">
                                     <p class="description"><?php esc_html_e('Contextual: 1047576 - Completion: 32768', 'wp-gpt-rag-chat'); ?></p>
                                     <p class="description recommended"><?php esc_html_e('Recommended: 32768', 'wp-gpt-rag-chat'); ?></p>
                 </div>
@@ -171,10 +167,10 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         </div>
 
                 <!-- Pinecone Configuration Tab -->
-                <div id="inner-tab-pinecone-config" class="inner-tab-panel">
-                    <div class="settings-group">
+                <div id="inner-tab-pinecone-config" class="cornuwab-inner-tab-panel">
+                    <div class="cornuwab-settings-group">
                         <h3><?php esc_html_e('Pinecone Configuration', 'wp-gpt-rag-chat'); ?></h3>
-                    <table class="form-table">
+                    <table class="cornuwab-form-table">
                         <tr>
                             <th scope="row">
                                 <label for="pinecone_name"><?php esc_html_e('Name', 'wp-gpt-rag-chat'); ?></label>
@@ -283,10 +279,10 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     </div>
                     
                 <!-- Chatbot Behavior Tab -->
-                <div id="inner-tab-chatbot-behavior" class="inner-tab-panel">
-                    <div class="settings-group">
+                <div id="inner-tab-chatbot-behavior" class="cornuwab-inner-tab-panel">
+                    <div class="cornuwab-settings-group">
                         <h3><?php esc_html_e('Chatbot Behavior', 'wp-gpt-rag-chat'); ?></h3>
-                    <table class="form-table">
+                    <table class="cornuwab-form-table">
                         <tr>
                             <th scope="row">
                                 <label for="system_prompt"><?php esc_html_e('System Prompt / Bot Personality', 'wp-gpt-rag-chat'); ?></label>
@@ -319,10 +315,10 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     </div>
                     
                     <!-- Sitemap Fallback Settings -->
-                    <div class="settings-group" style="border-top: 1px solid #ddd; padding-top: 20px; margin-top: 20px;">
+                    <div class="cornuwab-settings-group" style="padding-top: 20px; margin-top: 20px;">
                         <h3><?php esc_html_e('Sitemap Fallback Suggestions', 'wp-gpt-rag-chat'); ?></h3>
                         <p class="description"><?php esc_html_e('When RAG finds no relevant answers, suggest related pages from your sitemap.', 'wp-gpt-rag-chat'); ?></p>
-                        <table class="form-table">
+                        <table class="cornuwab-form-table">
                             <tr>
                                 <th scope="row">
                                     <label for="enable_sitemap_fallback"><?php esc_html_e('Enable Sitemap Fallback', 'wp-gpt-rag-chat'); ?></label>
@@ -364,17 +360,17 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         </div>
 
         <!-- Indexing Settings Tab -->
-        <div id="tab-indexing" class="tab-panel">
-            <div class="settings-section">
-                <div class="settings-header">
+        <div id="tab-indexing" class="cornuwab-tab-panel">
+            <div class="cornuwab-settings-section">
+                <div class="cornuwab-settings-header">
                     <h2><?php esc_html_e('Indexing Settings', 'wp-gpt-rag-chat'); ?></h2>
                     <p class="description"><?php esc_html_e('Configure content sources and indexing controls.', 'wp-gpt-rag-chat'); ?></p>
                 </div>
                 
                 <!-- Content Sources Section -->
-                <div class="settings-group">
+                <div class="cornuwab-settings-group">
                     <h3><?php esc_html_e('Select Content Sources', 'wp-gpt-rag-chat'); ?></h3>
-                    <table class="form-table">
+                    <table class="cornuwab-form-table">
                         <tr>
                             <th scope="row"><?php esc_html_e('Post Types', 'wp-gpt-rag-chat'); ?></th>
                             <td>
@@ -393,9 +389,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     </div>
                     
                 <!-- Indexing Controls Section -->
-                <div class="settings-group">
+                <div class="cornuwab-settings-group">
                     <h3><?php esc_html_e('Indexing Controls', 'wp-gpt-rag-chat'); ?></h3>
-                    <table class="form-table">
+                    <table class="cornuwab-form-table">
                         <tr>
                             <th scope="row"><?php esc_html_e('Auto-sync', 'wp-gpt-rag-chat'); ?></th>
                             <td>
@@ -422,7 +418,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 </div>
                 
                 <!-- Auto-Indexing Settings Section -->
-                <div class="settings-group">
+                <div class="cornuwab-settings-group">
                     <h3>
                         <span class="dashicons dashicons-update-alt" style="color: #2271b1;"></span>
                         <?php esc_html_e('Automatic Indexing', 'wp-gpt-rag-chat'); ?>
@@ -430,7 +426,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     <p class="description" style="margin: 10px 0 20px;">
                         <?php esc_html_e('Control automatic background indexing when content is saved or published.', 'wp-gpt-rag-chat'); ?>
                     </p>
-                    <table class="form-table">
+                    <table class="cornuwab-form-table">
                         <tr>
                             <th scope="row">
                                 <label for="enable_auto_indexing"><?php esc_html_e('Enable Auto-Indexing', 'wp-gpt-rag-chat'); ?></label>
@@ -491,7 +487,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 </div>
 
                 <!-- Indexing Status Section -->
-                <div class="settings-group">
+                <div class="cornuwab-settings-group">
                     <h3><?php esc_html_e('Indexing Status', 'wp-gpt-rag-chat'); ?></h3>
                     <div id="indexing-status">
                         <p><?php esc_html_e('Loading indexing status...', 'wp-gpt-rag-chat'); ?></p>
@@ -501,17 +497,17 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         </div>
 
         <!-- Chat Settings Tab -->
-        <div id="tab-chat" class="tab-panel">
-            <div class="settings-section">
-                <div class="settings-header">
+        <div id="tab-chat" class="cornuwab-tab-panel">
+            <div class="cornuwab-settings-section">
+                <div class="cornuwab-settings-header">
                     <h2><?php esc_html_e('Chat Settings', 'wp-gpt-rag-chat'); ?></h2>
                     <p class="description"><?php esc_html_e('Configure chat widget appearance and behavior.', 'wp-gpt-rag-chat'); ?></p>
                 </div>
                 
                 <!-- Chat Widget Customization Section -->
-                <div class="settings-group">
+                <div class="cornuwab-settings-group">
                     <h3><?php esc_html_e('Chat Widget Customization', 'wp-gpt-rag-chat'); ?></h3>
-                    <table class="form-table">
+                    <table class="cornuwab-form-table">
                         <tr>
                             <th scope="row"><?php esc_html_e('Enable Chatbot', 'wp-gpt-rag-chat'); ?></th>
                             <td>
@@ -572,9 +568,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     </div>
                     
                 <!-- Conversation Settings Section -->
-                <div class="settings-group">
+                <div class="cornuwab-settings-group">
                     <h3><?php esc_html_e('Conversation Settings', 'wp-gpt-rag-chat'); ?></h3>
-                    <table class="form-table">
+                    <table class="cornuwab-form-table">
                         <tr>
                             <th scope="row"><?php esc_html_e('Conversation History', 'wp-gpt-rag-chat'); ?></th>
                             <td>
@@ -607,60 +603,37 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             </div>
         </div>
 
-        <!-- Analytics & Logs Tab -->
-        <div id="tab-analytics" class="tab-panel">
-            <div class="settings-section">
-                <div class="settings-header">
-                    <h2><?php esc_html_e('User Analytics & Logs', 'wp-gpt-rag-chat'); ?></h2>
-                    <p class="description"><?php esc_html_e('View chat usage statistics and user tracking data.', 'wp-gpt-rag-chat'); ?></p>
-                </div>
-                
-                <!-- Chat Usage Section -->
-                <div class="settings-group">
-                    <h3><?php esc_html_e('Chat Usage', 'wp-gpt-rag-chat'); ?></h3>
-                    <div id="chat-usage-stats">
-                        <p><?php esc_html_e('Loading usage statistics...', 'wp-gpt-rag-chat'); ?></p>
-                        </div>
-                    </div>
-
-                <!-- User Tracking Section -->
-                <div class="settings-group">
-                    <h3><?php esc_html_e('User Tracking', 'wp-gpt-rag-chat'); ?></h3>
-                    <div id="user-tracking-stats">
-                        <p><?php esc_html_e('Loading user tracking data...', 'wp-gpt-rag-chat'); ?></p>
-        </div>
-        </div>
-        
-                <!-- Export Section -->
-                <div class="settings-group">
-                    <h3><?php esc_html_e('Export', 'wp-gpt-rag-chat'); ?></h3>
-                    <table class="form-table">
-                        <tr>
-                            <th scope="row"><?php esc_html_e('Export Data', 'wp-gpt-rag-chat'); ?></th>
-                            <td>
-                                <button type="button" id="export-queries" class="button button-secondary">
-                                    <?php esc_html_e('Export Queries & Responses to CSV', 'wp-gpt-rag-chat'); ?>
-                            </button>
-                                <p class="description"><?php esc_html_e('Download chat logs and analytics data.', 'wp-gpt-rag-chat'); ?></p>
-                            </td>
-                        </tr>
-                    </table>
-                            </div>
-                            </div>
-                            </div>
 
         <!-- Advanced Settings Tab -->
-        <div id="tab-advanced" class="tab-panel">
-            <div class="settings-section">
-                <div class="settings-header">
+        <div id="tab-advanced" class="cornuwab-tab-panel">
+            <div class="cornuwab-settings-section">
+                <div class="cornuwab-settings-header">
                     <h2><?php esc_html_e('Advanced Settings', 'wp-gpt-rag-chat'); ?></h2>
                     <p class="description"><?php esc_html_e('Debug tools, index maintenance, and custom embeddings.', 'wp-gpt-rag-chat'); ?></p>
                         </div>
         
+                <!-- Maintenance Mode Section -->
+                <div class="cornuwab-settings-group">
+                    <h3><?php esc_html_e('Maintenance Mode', 'wp-gpt-rag-chat'); ?></h3>
+                    <table class="cornuwab-form-table">
+                        <tr>
+                            <th scope="row"><?php esc_html_e('Enable Maintenance Mode', 'wp-gpt-rag-chat'); ?></th>
+                            <td>
+                                <label class="cornuwab-toggle-switch">
+                                    <input type="checkbox" name="wp_gpt_rag_chat_settings[maintenance_mode]" value="1" <?php checked($settings['maintenance_mode'] ?? 0, 1); ?> />
+                                    <span class="cornuwab-toggle-slider"></span>
+                                </label>
+                                <span class="cornuwab-toggle-label"><?php esc_html_e('Show chat widget only to logged-in admin users', 'wp-gpt-rag-chat'); ?></span>
+                                <p class="description"><?php esc_html_e('When enabled, the chat widget will only be visible to administrators who are logged in. Regular visitors and non-admin users will not see the chat.', 'wp-gpt-rag-chat'); ?></p>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
                 <!-- Debug & Developer Tools Section -->
-                <div class="settings-group">
+                <div class="cornuwab-settings-group">
                     <h3><?php esc_html_e('Debug & Developer Tools', 'wp-gpt-rag-chat'); ?></h3>
-                    <table class="form-table">
+                    <table class="cornuwab-form-table">
                         <tr>
                             <th scope="row"><?php esc_html_e('Debug Mode', 'wp-gpt-rag-chat'); ?></th>
                             <td>
@@ -685,9 +658,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     </div>
         
                 <!-- Index Maintenance Section -->
-                <div class="settings-group">
+                <div class="cornuwab-settings-group">
                     <h3><?php esc_html_e('Index Maintenance', 'wp-gpt-rag-chat'); ?></h3>
-                    <table class="form-table">
+                    <table class="cornuwab-form-table">
                         <tr>
                             <th scope="row"><?php esc_html_e('Clear Index', 'wp-gpt-rag-chat'); ?></th>
                             <td>
@@ -710,9 +683,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                             </div>
 
                 <!-- Custom Embeddings Section -->
-                <div class="settings-group">
+                <div class="cornuwab-settings-group">
                     <h3><?php esc_html_e('Custom Embeddings', 'wp-gpt-rag-chat'); ?></h3>
-                    <table class="form-table">
+                    <table class="cornuwab-form-table">
                         <tr>
                             <th scope="row">
                                 <label for="embedding_model"><?php esc_html_e('Embedding Model', 'wp-gpt-rag-chat'); ?></label>
@@ -732,11 +705,20 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         </div>
     </div>
     
-        <div class="settings-footer">
+        <div class="cornuwab-settings-footer">
             <?php submit_button(__('Save Settings', 'wp-gpt-rag-chat'), 'primary large', 'submit', false); ?>
             </div>
     </div>
     </form>
+    
+    <!-- Nuwab Branding Footer -->
+    <div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 4px; text-align: center; border-left: 4px solid #0073aa;">
+        <p style="margin: 0; color: #646970; font-size: 14px;">
+            <strong>Nuwab AI Assistant</strong> - Developed by 
+            <a href="https://nuwab.com" target="_blank" style="color: #0073aa; text-decoration: none;">Nuwab</a>
+            | Powered by OpenAI & Pinecone
+        </p>
+    </div>
 </div>
 
 <style>
@@ -781,38 +763,38 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 }
 
 /* Settings Form Container */
-.settings-form {
+.cornuwab-settings-form {
     margin: 40px;
 }
 
-.settings-card-container {
+.cornuwab-settings-card-container {
     background: #ffffff;
     border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    border: 1px solid #e1e5e9;
+    box-shadow: none;
+    border: none;
     overflow: hidden;
 }
 
-/* Navigation Tabs */
-.nav-tab-wrapper {
-    background: #f8f9fa;
+/* Navigation Tabs - Modern Clean Style */
+.cornuwab-nav-tab-wrapper {
+    background: #f9f9f9;
     margin: 0;
-    padding: 0 40px;
+    padding: 0;
     border-bottom: 1px solid #e1e5e9;
     display: flex;
     flex-wrap: wrap;
 }
 
-.nav-tab {
+.cornuwab-nav-tab {
     background: transparent;
     border: none;
-    border-bottom: 3px solid transparent;
+    border-bottom: 2px solid transparent;
     color: #646970;
-    padding: 20px 24px;
+    padding: 16px 20px;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     font-weight: 500;
     transition: all 0.3s ease;
     border-radius: 0;
@@ -821,48 +803,46 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     flex: 1;
     justify-content: center;
     min-width: 0;
+    font-size: 14px;
 }
 
-.nav-tab:hover {
+.cornuwab-nav-tab:hover {
     color: #0073aa;
-    background: rgba(0, 115, 170, 0.08);
+    background: rgba(0, 115, 170, 0.05);
+    border-bottom-color: rgba(0, 115, 170, 0.3);
 }
 
-.nav-tab.nav-tab-active {
+.cornuwab-nav-tab.cornuwab-nav-tab-active {
     color: #0073aa;
     border-bottom-color: #0073aa;
-    background: #ffffff;
-    box-shadow: 0 -2px 8px rgba(0, 115, 170, 0.1);
+    background: transparent;
+    font-weight: 600;
 }
 
-.nav-tab.nav-tab-active::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: #ffffff;
-}
-
-.nav-tab .dashicons {
+.cornuwab-nav-tab .dashicons {
     font-size: 16px;
+    opacity: 0.8;
+}
+
+.cornuwab-nav-tab:hover .dashicons,
+.cornuwab-nav-tab.cornuwab-nav-tab-active .dashicons {
+    opacity: 1;
 }
 
 /* Tab Content */
-.tab-content {
+.cornuwab-tab-content {
     background: #ffffff;
     min-height: 600px;
     padding: 0;
 }
 
-.tab-panel {
+.cornuwab-tab-panel {
     display: none;
     padding: 40px;
     animation: fadeIn 0.4s ease;
 }
 
-.tab-panel.active {
+.cornuwab-tab-panel.active {
     display: block;
 }
 
@@ -872,7 +852,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 }
 
 /* Settings Sections */
-.settings-section {
+.cornuwab-settings-section {
     margin: 0;
     padding: 0;
     border: none;
@@ -880,14 +860,14 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     background: transparent;
 }
 
-.settings-header {
+.cornuwab-settings-header {
     margin-bottom: 0;
     padding: 0;
     border-bottom: none;
     background: #ffffff;
 }
 
-.settings-header h1 {
+.cornuwab-settings-header h1 {
     margin: 0 0 8px 0;
     font-size: 24px;
     color: #1d2327;
@@ -897,12 +877,12 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     gap: 8px;
 }
 
-.settings-header h1 .dashicons {
+.cornuwab-settings-header h1 .dashicons {
     font-size: 24px;
     color: #0073aa;
 }
 
-.settings-header .description {
+.cornuwab-settings-header .description {
     color: #646970;
     font-size: 15px;
     margin: 0;
@@ -910,25 +890,25 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 }
 
 /* Settings Groups */
-.settings-group {
+.cornuwab-settings-group {
     margin-bottom: 32px;
     background: transparent;
     border: none;
     border-radius: 0;
-    padding: 20px 12px;
+    padding: 0;
     box-shadow: none;
     transition: none;
 }
 
-.settings-group:hover {
+.cornuwab-settings-group:hover {
     box-shadow: none;
 }
 
-.settings-group:last-child {
+.cornuwab-settings-group:last-child {
     margin-bottom: 0;
 }
 
-.settings-group h3 {
+.cornuwab-settings-group h3 {
     margin: 0 0 20px 0;
     font-size: 18px;
     color: #1d2327;
@@ -938,7 +918,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     position: relative;
 }
 
-.settings-group h3::after {
+.cornuwab-settings-group h3::after {
     content: '';
     position: absolute;
     bottom: -2px;
@@ -974,98 +954,83 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     color: #d63638;
 }
 
-/* Inner Tabs */
-.inner-tab-wrapper {
-    background: #ffffff;
-    border: 1px solid #e1e5e9;
-    border-radius: 8px 8px 0 0;
-    padding: 8px 16px 0 16px;
+/* Inner Tabs - Modern Clean Style */
+.cornuwab-inner-tab-wrapper {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
     display: flex;
     flex-wrap: wrap;
-    margin-bottom: 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #e1e5e9;
 }
 
-.inner-tab {
+.cornuwab-inner-tab {
     display: flex;
     align-items: center;
-    padding: 10px 20px;
+    padding: 12px 20px;
     text-decoration: none;
     color: #646970;
-    font-size: 13px;
-    font-weight: 600;
-    border: 1px solid #e1e5e9;
-    border-bottom: none;
-    border-radius: 6px 6px 0 0;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
     transition: all 0.3s ease;
-    margin-right: 4px;
-    background: #f8f9fa;
+    margin-right: 0;
+    background: transparent;
     position: relative;
     z-index: 1;
 }
 
-.inner-tab:hover {
-    color: #1d2327;
-    background: #ffffff;
-    border-color: #c3c4c7;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.cornuwab-inner-tab:hover {
+    color: #0073aa;
+    background: rgba(0, 115, 170, 0.05);
+    border-bottom-color: rgba(0, 115, 170, 0.3);
 }
 
-.inner-tab.inner-tab-active {
-    color: #1d2327;
-    background: #ffffff;
-    border-color: #c3c4c7;
-    border-bottom-color: #ffffff;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    z-index: 2;
+.cornuwab-inner-tab.cornuwab-inner-tab-active {
+    color: #0073aa;
+    background: transparent;
+    border-bottom-color: #0073aa;
+    font-weight: 600;
 }
 
-.inner-tab.inner-tab-active::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: #ffffff;
-}
-
-.inner-tab .dashicons {
-    font-size: 14px;
+.cornuwab-inner-tab .dashicons {
+    font-size: 16px;
     margin-right: 8px;
     opacity: 0.8;
 }
 
-.inner-tab:hover .dashicons,
-.inner-tab.inner-tab-active .dashicons {
+.cornuwab-inner-tab:hover .dashicons,
+.cornuwab-inner-tab.cornuwab-inner-tab-active .dashicons {
     opacity: 1;
 }
 
-.inner-tab-panel {
+.cornuwab-inner-tab-panel {
     display: none;
-    background: #ffffff;
-    padding: 24px;
-    border: 1px solid #e1e5e9;
-    border-top: none;
-    border-radius: 0 0 8px 8px;
+    background: transparent;
+    padding: 0;
+    border: none;
+    border-radius: 0;
 }
 
-.inner-tab-panel.active {
+.cornuwab-inner-tab-panel.active {
     display: block;
 }
 
 /* Form Fields */
-.form-table {
+.cornuwab-form-table {
     width: 100%;
     border-collapse: collapse;
     margin: 0;
     background: transparent;
-    border: 1px solid #e1e5e9;
+    border: none;
     box-shadow: none;
 }
 
-.form-table th {
+.cornuwab-form-table th {
     text-align: left;
     padding: 16px 0 16px 20px;
     width: 220px;
@@ -1076,23 +1041,23 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     border-bottom: 1px solid #f0f0f1;
 }
 
-.form-table td {
+.cornuwab-form-table td {
     padding: 16px 0 16px 20px;
     vertical-align: top;
     border-bottom: 1px solid #f0f0f1;
 }
 
-.form-table tr:last-child th,
-.form-table tr:last-child td {
+.cornuwab-form-table tr:last-child th,
+.cornuwab-form-table tr:last-child td {
     border-bottom: none;
 }
 
-.form-table input[type="text"],
-.form-table input[type="password"],
-.form-table input[type="number"],
-.form-table input[type="range"],
-.form-table select,
-.form-table textarea {
+.cornuwab-form-table input[type="text"],
+.cornuwab-form-table input[type="password"],
+.cornuwab-form-table input[type="number"],
+.cornuwab-form-table input[type="range"],
+.cornuwab-form-table select,
+.cornuwab-form-table textarea {
     width: 100%;
     max-width: 450px;
     padding: 10px 14px;
@@ -1104,23 +1069,23 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.form-table input:focus,
-.form-table select:focus,
-.form-table textarea:focus {
+.cornuwab-form-table input:focus,
+.cornuwab-form-table select:focus,
+.cornuwab-form-table textarea:focus {
     border-color: #0073aa;
     box-shadow: 0 0 0 3px rgba(0, 115, 170, 0.1);
     outline: none;
     transform: translateY(-1px);
 }
 
-.form-table input:hover,
-.form-table select:hover,
-.form-table textarea:hover {
+.cornuwab-form-table input:hover,
+.cornuwab-form-table select:hover,
+.cornuwab-form-table textarea:hover {
     border-color: #0073aa;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 
-.form-table .description {
+.cornuwab-form-table .description {
     color: #646970;
     font-size: 13px;
     margin-top: 8px;
@@ -1132,13 +1097,13 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 }
 
 /* Checkbox Styling */
-.form-table input[type="checkbox"] {
+.cornuwab-form-table input[type="checkbox"] {
     margin-right: 10px;
     transform: scale(1.2);
     accent-color: #0073aa;
 }
 
-.form-table label {
+.cornuwab-form-table label {
     display: flex;
     align-items: center;
     cursor: pointer;
@@ -1147,7 +1112,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 }
 
 /* Range Slider Styling */
-.form-table input[type="range"] {
+.cornuwab-form-table input[type="range"] {
     width: 250px;
     margin-right: 12px;
     height: 6px;
@@ -1157,7 +1122,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     -webkit-appearance: none;
 }
 
-.form-table input[type="range"]::-webkit-slider-thumb {
+.cornuwab-form-table input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 20px;
@@ -1168,7 +1133,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.form-table input[type="range"]::-moz-range-thumb {
+.cornuwab-form-table input[type="range"]::-moz-range-thumb {
     width: 20px;
     height: 20px;
     border-radius: 50%;
@@ -1189,8 +1154,67 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     border: 1px solid #0073aa;
 }
 
+/* Toggle Switch Styling */
+.cornuwab-toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+    margin-right: 12px;
+    vertical-align: middle;
+}
+
+.cornuwab-toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.cornuwab-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.cornuwab-toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.cornuwab-toggle-switch input:checked + .cornuwab-toggle-slider {
+    background-color: #0073aa;
+}
+
+.cornuwab-toggle-switch input:checked + .cornuwab-toggle-slider:before {
+    transform: translateX(26px);
+}
+
+.cornuwab-toggle-switch:hover .cornuwab-toggle-slider {
+    box-shadow: 0 0 8px rgba(0, 115, 170, 0.3);
+}
+
+.cornuwab-toggle-label {
+    vertical-align: middle;
+    font-weight: 500;
+    color: #1d2327;
+}
+
 /* Button Styling */
-.form-table .button {
+.cornuwab-form-table .button {
     margin-right: 8px;
     padding: 8px 16px;
     border-radius: 4px;
@@ -1198,7 +1222,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     transition: all 0.2s ease;
 }
 
-.form-table .button:hover {
+.cornuwab-form-table .button:hover {
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -1358,15 +1382,15 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 
 
 /* Footer */
-.settings-footer {
+.cornuwab-settings-footer {
     background: #f8f9fa;
     padding: 24px 40px;
-    border-top: 1px solid #e1e5e9;
+    border-top: none;
     margin: 0;
     text-align: center;
 }
 
-.settings-footer .button {
+.cornuwab-settings-footer .button {
     padding: 12px 24px;
     font-size: 14px;
     height: auto;
@@ -1376,52 +1400,57 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 
 /* Responsive Design */
 @media (max-width: 1024px) {
-    .settings-form {
+    .cornuwab-settings-form {
         margin: 20px;
     }
     
-    .nav-tab {
-        padding: 16px 20px;
+    .cornuwab-nav-tab {
+        padding: 14px 16px;
         font-size: 14px;
     }
     
-    .nav-tab-wrapper {
-        padding: 0 20px;
+    .cornuwab-nav-tab-wrapper {
+        padding: 0;
     }
     
-    .tab-panel {
+    .cornuwab-tab-panel {
         padding: 32px;
     }
     
-    .settings-footer {
+    .cornuwab-settings-footer {
         padding: 20px 32px;
     }
     
-    .form-table th {
+    .cornuwab-form-table th {
         width: 180px;
     }
     
-    .settings-group {
-        padding: 16px 8px;
+    .cornuwab-settings-group {
+        padding: 0;
     }
     
-    .inner-tab-wrapper {
-        padding: 6px 12px 0 12px;
+    .cornuwab-inner-tab-wrapper {
+        padding: 0;
         flex-direction: column;
-        border-radius: 6px 6px 0 0;
+        border-bottom: 1px solid #e1e5e9;
     }
     
-    .inner-tab {
+    .cornuwab-inner-tab {
         margin-right: 0;
-        margin-bottom: 4px;
+        margin-bottom: 0;
         justify-content: center;
-        border-radius: 4px 4px 0 0;
-        padding: 8px 16px;
+        border-radius: 0;
+        padding: 12px 16px;
+        border-bottom: 1px solid #e1e5e9;
     }
     
-    .inner-tab-panel {
-        padding: 16px;
-        border-radius: 0 0 6px 6px;
+    .cornuwab-inner-tab:last-child {
+        border-bottom: none;
+    }
+    
+    .cornuwab-inner-tab-panel {
+        padding: 0;
+        border-radius: 0;
     }
     
     .wp-gpt-rag-chat-settings .notice {
@@ -1431,54 +1460,56 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 }
 
 @media (max-width: 768px) {
-    .settings-form {
+    .cornuwab-settings-form {
         margin: 16px;
     }
     
     /* Main h1 responsive styling removed */
     
-    .nav-tab-wrapper {
-        padding: 0 16px;
+    .cornuwab-nav-tab-wrapper {
+        padding: 0;
         flex-direction: column;
+        border-bottom: 1px solid #e1e5e9;
     }
     
-    .nav-tab {
-        padding: 14px 16px;
+    .cornuwab-nav-tab {
+        padding: 12px 16px;
         font-size: 13px;
         flex: none;
         border-bottom: 1px solid #e1e5e9;
         border-radius: 0;
+        justify-content: flex-start;
     }
     
-    .nav-tab:last-child {
+    .cornuwab-nav-tab:last-child {
         border-bottom: none;
     }
     
-    .tab-panel {
+    .cornuwab-tab-panel {
         padding: 24px;
     }
     
-    .settings-footer {
+    .cornuwab-settings-footer {
         padding: 16px 24px;
     }
     
-    .form-table th,
-    .form-table td {
+    .cornuwab-form-table th,
+    .cornuwab-form-table td {
         display: block;
         width: 100%;
         padding: 8px 0 8px 16px;
         border-bottom: none;
     }
     
-    .form-table th {
+    .cornuwab-form-table th {
         font-weight: 600;
         margin-bottom: 6px;
         padding-bottom: 4px;
         border-bottom: 1px solid #e1e5e9;
     }
     
-    .settings-group {
-        padding: 12px 6px;
+    .cornuwab-settings-group {
+        padding: 0;
     }
     
     .wp-gpt-rag-chat-settings .notice {
@@ -1492,7 +1523,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         margin: 20px 0 0 0;
     }
     
-    .settings-form {
+    .cornuwab-settings-form {
         margin: 12px;
     }
     
@@ -1501,29 +1532,29 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         font-size: 20px;
     }
     
-    .nav-tab-wrapper {
-        padding: 0 12px;
+    .cornuwab-nav-tab-wrapper {
+        padding: 0;
     }
     
-    .nav-tab {
-        padding: 12px 14px;
+    .cornuwab-nav-tab {
+        padding: 10px 12px;
         font-size: 12px;
     }
     
-    .tab-panel {
+    .cornuwab-tab-panel {
         padding: 20px;
     }
     
-    .settings-footer {
+    .cornuwab-settings-footer {
         padding: 12px 20px;
     }
     
-    .form-table input[type="text"],
-    .form-table input[type="password"],
-    .form-table input[type="number"],
-    .form-table input[type="range"],
-    .form-table select,
-    .form-table textarea {
+    .cornuwab-form-table input[type="text"],
+    .cornuwab-form-table input[type="password"],
+    .cornuwab-form-table input[type="number"],
+    .cornuwab-form-table input[type="range"],
+    .cornuwab-form-table select,
+    .cornuwab-form-table textarea {
         max-width: 100%;
     }
 }
@@ -1532,17 +1563,17 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 <script>
 jQuery(document).ready(function($) {
     // Tab Navigation
-    $('.nav-tab').on('click', function(e) {
+    $('.cornuwab-nav-tab').on('click', function(e) {
         e.preventDefault();
         
         var targetTab = $(this).data('tab');
         
         // Update active tab
-        $('.nav-tab').removeClass('nav-tab-active');
-        $(this).addClass('nav-tab-active');
+        $('.cornuwab-nav-tab').removeClass('cornuwab-nav-tab-active');
+        $(this).addClass('cornuwab-nav-tab-active');
         
         // Show target panel
-        $('.tab-panel').removeClass('active');
+        $('.cornuwab-tab-panel').removeClass('active');
         $('#tab-' + targetTab).addClass('active');
         
         // Update URL hash
@@ -1552,21 +1583,21 @@ jQuery(document).ready(function($) {
     // Handle initial hash
     var hash = window.location.hash.substr(1);
     if (hash && $('#tab-' + hash).length) {
-        $('.nav-tab[data-tab="' + hash + '"]').click();
+        $('.cornuwab-nav-tab[data-tab="' + hash + '"]').click();
     }
 
     // Inner tab switching
-    $('.inner-tab').on('click', function(e) {
+    $('.cornuwab-inner-tab').on('click', function(e) {
         e.preventDefault();
         
         var targetInnerTab = $(this).data('inner-tab');
         
         // Update active inner tab
-        $('.inner-tab').removeClass('inner-tab-active');
-        $(this).addClass('inner-tab-active');
+        $('.cornuwab-inner-tab').removeClass('cornuwab-inner-tab-active');
+        $(this).addClass('cornuwab-inner-tab-active');
         
         // Show target inner panel
-        $('.inner-tab-panel').removeClass('active');
+        $('.cornuwab-inner-tab-panel').removeClass('active');
         $('#inner-tab-' + targetInnerTab).addClass('active');
     });
     

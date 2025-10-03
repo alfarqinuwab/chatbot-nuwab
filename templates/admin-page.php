@@ -14,7 +14,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 ?>
 
 <div class="wrap cornuwab-admin-wrap">
-    <h1><?php esc_html_e('WP GPT RAG Chat Dashboard', 'wp-gpt-rag-chat'); ?></h1>
+    <h1><?php esc_html_e('Nuwab AI Assistant Dashboard', 'wp-gpt-rag-chat'); ?></h1>
     
     <div class="wp-gpt-rag-chat-dashboard">
         <!-- Overview Stats -->
@@ -236,6 +236,15 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 </div>
             </div>
         </div>
+    </div>
+    
+    <!-- Nuwab Branding Footer -->
+    <div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 4px; text-align: center; border-left: 4px solid #0073aa;">
+        <p style="margin: 0; color: #646970; font-size: 14px;">
+            <strong>Nuwab AI Assistant</strong> - Developed by 
+            <a href="https://nuwab.com" target="_blank" style="color: #0073aa; text-decoration: none;">Nuwab</a>
+            | Powered by OpenAI & Pinecone
+        </p>
     </div>
 </div>
 

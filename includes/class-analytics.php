@@ -307,52 +307,46 @@ class Analytics {
         
         $filename = 'chat-logs-' . date('Y-m-d-His') . '.csv';
         
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-        
-        $output = fopen('php://output', 'w');
+        // Create CSV content
+        $csv_content = '';
         
         // CSV headers
-        fputcsv($output, [
-            'ID',
-            'Chat ID',
-            'Turn',
-            'Role',
-            'User',
-            'Content (120 chars)',
-            'Latency (ms)',
-            'Sources',
-            'Rating',
-            'Tags',
-            'Model',
-            'Tokens',
-            'Created At'
-        ]);
+        $csv_content .= '"ID","Chat ID","Turn","Role","User","Content (120 chars)","Latency (ms)","Sources","Rating","Tags","Model","Tokens","Created At"' . "\n";
         
         // CSV data
         foreach ($logs as $log) {
             $user = $log->user_id ? get_userdata($log->user_id)->display_name : 'Guest';
-            fputcsv($output, [
+            $csv_content .= sprintf(
+                '"%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s"' . "\n",
                 $log->id,
                 $log->chat_id,
                 $log->turn_number,
                 $log->role,
-                $user,
-                mb_substr($log->content, 0, 120),
+                str_replace('"', '""', $user),
+                str_replace('"', '""', mb_substr($log->content, 0, 120)),
                 $log->response_latency,
                 $log->sources_count,
                 $log->rating,
-                $log->tags,
+                str_replace('"', '""', $log->tags),
                 $log->model_used,
                 $log->tokens_used,
                 $log->created_at
-            ]);
+            );
         }
         
-        fclose($output);
-        exit;
+        // Save to temporary file
+        $upload_dir = wp_upload_dir();
+        $file_path = $upload_dir['path'] . '/' . $filename;
+        
+        if (file_put_contents($file_path, $csv_content) === false) {
+            throw new Exception(__('Failed to create export file.', 'wp-gpt-rag-chat'));
+        }
+        
+        return [
+            'file_url' => $upload_dir['url'] . '/' . $filename,
+            'file_path' => $file_path,
+            'record_count' => count($logs)
+        ];
     }
     
     /**
@@ -511,7 +505,7 @@ class Analytics {
                 WHERE created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)
                 GROUP BY user_identifier
                 HAVING sessions > 1
-            ) as returning",
+            ) as returning_users",
             $days
         ));
         

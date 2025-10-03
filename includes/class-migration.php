@@ -25,6 +25,18 @@ class Migration {
             self::migrate_to_2_1_0();
             update_option('wp_gpt_rag_chat_db_version', '2.1.0');
         }
+        
+        // Migration to version 2.2.0 (Error logs and API usage tracking)
+        if (version_compare($current_version, '2.2.0', '<')) {
+            self::migrate_to_2_2_0();
+            update_option('wp_gpt_rag_chat_db_version', '2.2.0');
+        }
+        
+        // Migration to version 2.3.0 (Export history tracking)
+        if (version_compare($current_version, '2.3.0', '<')) {
+            self::migrate_to_2_3_0();
+            update_option('wp_gpt_rag_chat_db_version', '2.3.0');
+        }
     }
     
     /**
@@ -159,24 +171,128 @@ class Migration {
     }
     
     /**
+     * Migrate to 2.2.0 - Add error logs and API usage tracking tables
+     */
+    private static function migrate_to_2_2_0() {
+        global $wpdb;
+        
+        $charset_collate = $wpdb->get_charset_collate();
+        
+        // Create error logs table
+        $errors_table = $wpdb->prefix . 'wp_gpt_rag_chat_errors';
+        $errors_sql = "CREATE TABLE IF NOT EXISTS {$errors_table} (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            error_type varchar(50) NOT NULL,
+            api_service varchar(50) NOT NULL,
+            error_message text NOT NULL,
+            context longtext DEFAULT NULL,
+            user_id bigint(20) DEFAULT NULL,
+            ip_address varchar(45) DEFAULT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY error_type (error_type),
+            KEY api_service (api_service),
+            KEY created_at (created_at)
+        ) {$charset_collate};";
+        
+        // Create API usage tracking table
+        $usage_table = $wpdb->prefix . 'wp_gpt_rag_chat_api_usage';
+        $usage_sql = "CREATE TABLE IF NOT EXISTS {$usage_table} (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            api_service varchar(50) NOT NULL,
+            endpoint varchar(100) NOT NULL,
+            tokens_used int(11) DEFAULT NULL,
+            cost decimal(10,4) DEFAULT NULL,
+            context longtext DEFAULT NULL,
+            user_id bigint(20) DEFAULT NULL,
+            ip_address varchar(45) DEFAULT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY api_service (api_service),
+            KEY endpoint (endpoint),
+            KEY created_at (created_at)
+        ) {$charset_collate};";
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        
+        if (function_exists('dbDelta')) {
+            dbDelta($errors_sql);
+            dbDelta($usage_sql);
+            error_log('WP GPT RAG Chat: Migration to 2.2.0 completed - Error logs and API usage tables created');
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Migrate to 2.3.0 - Add export history table
+     */
+    private static function migrate_to_2_3_0() {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'wp_gpt_rag_chat_export_history';
+        
+        $charset_collate = $wpdb->get_charset_collate();
+        
+        $sql = "CREATE TABLE {$table_name} (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            export_type varchar(50) NOT NULL,
+            file_url text,
+            file_path text,
+            file_size bigint(20) DEFAULT 0,
+            record_count int(11) DEFAULT 0,
+            user_id bigint(20) DEFAULT 0,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY export_type (export_type),
+            KEY user_id (user_id),
+            KEY created_at (created_at)
+        ) {$charset_collate};";
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        
+        if (function_exists('dbDelta')) {
+            dbDelta($sql);
+            error_log('WP GPT RAG Chat: Migration to 2.3.0 completed - Export history table created');
+        }
+        
+        return true;
+    }
+    
+    /**
      * Check database health and compatibility
      */
     public static function check_database_health() {
         global $wpdb;
         
         $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
+        $errors_table = $wpdb->prefix . 'wp_gpt_rag_chat_errors';
+        $usage_table = $wpdb->prefix . 'wp_gpt_rag_chat_api_usage';
+        $export_history_table = $wpdb->prefix . 'wp_gpt_rag_chat_export_history';
         
-        // Check if table exists
-        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$logs_table}'") === $logs_table;
+        // Check if main logs table exists
+        $logs_table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$logs_table}'") === $logs_table;
         
-        if (!$table_exists) {
+        if (!$logs_table_exists) {
             return [
                 'status' => 'error',
                 'message' => 'Logs table does not exist. Please deactivate and reactivate the plugin.'
             ];
         }
         
-        // Check required columns
+        // Check if new tables exist
+        $errors_table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$errors_table}'") === $errors_table;
+        $usage_table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$usage_table}'") === $usage_table;
+        $export_history_table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$export_history_table}'") === $export_history_table;
+        
+        if (!$errors_table_exists || !$usage_table_exists || !$export_history_table_exists) {
+            return [
+                'status' => 'warning',
+                'message' => 'New analytics tables missing. Please run database migration.'
+            ];
+        }
+        
+        // Check required columns in logs table
         $columns = $wpdb->get_results("SHOW COLUMNS FROM {$logs_table}");
         $column_names = wp_list_pluck($columns, 'Field');
         

@@ -5,7 +5,7 @@
 
 /* Main Settings Container */
 .cornuwab-admin-wrap.wrap {
-    background: #f8f9fa;
+    background: transparent;
     margin: 20px 0 0 -20px;
     padding: 0;
     min-height: 100vh;
@@ -25,18 +25,18 @@
 }
 
 /* Form Table Styling */
-.cornuwab-admin-wrap .form-table {
+.cornuwab-admin-wrap .cornuwab-form-table {
     background: #ffffff;
     border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: none;
     border: 1px solid #e1e5e9;
-    margin: 40px;
+    margin: 40px 0;
     overflow: hidden;
     border-collapse: separate;
     border-spacing: 0;
 }
 
-.cornuwab-admin-wrap .form-table th {
+.cornuwab-admin-wrap .cornuwab-form-table th {
     background: #f8f9fa;
     padding: 20px 24px;
     border-bottom: 1px solid #e1e5e9;
@@ -47,25 +47,25 @@
     vertical-align: top;
 }
 
-.cornuwab-admin-wrap .form-table td {
+.cornuwab-admin-wrap .cornuwab-form-table td {
     padding: 20px 24px;
     border-bottom: 1px solid #f0f0f1;
     vertical-align: top;
 }
 
-.cornuwab-admin-wrap .form-table tr:last-child th,
-.cornuwab-admin-wrap .form-table tr:last-child td {
+.cornuwab-admin-wrap .cornuwab-form-table tr:last-child th,
+.cornuwab-admin-wrap .cornuwab-form-table tr:last-child td {
     border-bottom: none;
 }
 
 /* Form Input Styling */
-.cornuwab-admin-wrap .form-table input[type="text"],
-.cornuwab-admin-wrap .form-table input[type="email"],
-.cornuwab-admin-wrap .form-table input[type="url"],
-.cornuwab-admin-wrap .form-table input[type="password"],
-.cornuwab-admin-wrap .form-table input[type="number"],
-.cornuwab-admin-wrap .form-table select,
-.cornuwab-admin-wrap .form-table textarea {
+.cornuwab-admin-wrap .cornuwab-form-table input[type="text"],
+.cornuwab-admin-wrap .cornuwab-form-table input[type="email"],
+.cornuwab-admin-wrap .cornuwab-form-table input[type="url"],
+.cornuwab-admin-wrap .cornuwab-form-table input[type="password"],
+.cornuwab-admin-wrap .cornuwab-form-table input[type="number"],
+.cornuwab-admin-wrap .cornuwab-form-table select,
+.cornuwab-admin-wrap .cornuwab-form-table textarea {
     width: 100%;
     max-width: 400px;
     padding: 12px 16px;
@@ -77,24 +77,24 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.cornuwab-admin-wrap .form-table input:focus,
-.cornuwab-admin-wrap .form-table select:focus,
-.cornuwab-admin-wrap .form-table textarea:focus {
+.cornuwab-admin-wrap .cornuwab-form-table input:focus,
+.cornuwab-admin-wrap .cornuwab-form-table select:focus,
+.cornuwab-admin-wrap .cornuwab-form-table textarea:focus {
     border-color: #0073aa;
     box-shadow: 0 0 0 3px rgba(0, 115, 170, 0.1);
     outline: none;
     transform: translateY(-1px);
 }
 
-.cornuwab-admin-wrap .form-table input:hover,
-.cornuwab-admin-wrap .form-table select:hover,
-.cornuwab-admin-wrap .form-table textarea:hover {
+.cornuwab-admin-wrap .cornuwab-form-table input:hover,
+.cornuwab-admin-wrap .cornuwab-form-table select:hover,
+.cornuwab-admin-wrap .cornuwab-form-table textarea:hover {
     border-color: #0073aa;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 /* Description Text */
-.cornuwab-admin-wrap .form-table .description {
+.cornuwab-admin-wrap .cornuwab-form-table .description {
     color: #646970;
     font-size: 13px;
     margin-top: 8px;
@@ -107,14 +107,14 @@
 }
 
 /* Checkbox Styling */
-.cornuwab-admin-wrap .form-table input[type="checkbox"] {
+.cornuwab-admin-wrap .cornuwab-form-table input[type="checkbox"] {
     margin-right: 12px;
     transform: scale(1.2);
     accent-color: #0073aa;
 }
 
 /* Fieldset Styling */
-.cornuwab-admin-wrap .form-table fieldset {
+.cornuwab-admin-wrap .cornuwab-form-table fieldset {
     border: 1px solid #e1e5e9;
     border-radius: 8px;
     padding: 16px;
@@ -122,7 +122,7 @@
     margin: 8px 0;
 }
 
-.cornuwab-admin-wrap .form-table legend {
+.cornuwab-admin-wrap .cornuwab-form-table legend {
     font-weight: 600;
     color: #1d2327;
     padding: 0 8px;
@@ -157,29 +157,32 @@
 }
 
 /* Settings Sections */
-.cornuwab-admin-wrap .settings-section {
-    background: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    border: 1px solid #e1e5e9;
-    margin: 40px;
-    padding: 32px 40px;
+.cornuwab-admin-wrap .cornuwab-settings-section {
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    border: none;
+    margin: 0;
+    padding: 0;
 }
 
-.cornuwab-admin-wrap .settings-section h2 {
+.cornuwab-admin-wrap .cornuwab-settings-section h2 {
     font-size: 20px;
     margin: 0 0 20px 0;
     color: #1d2327;
     font-weight: 600;
     padding-bottom: 12px;
-    border-bottom: 2px solid #f0f0f1;
+    border-bottom: none;
 }
 
-.cornuwab-admin-wrap .settings-section .description {
-    color: #646970;
+.cornuwab-admin-wrap .cornuwab-settings-section .description {
+    color: #aaa;
     font-size: 14px;
     margin: 0 0 24px 0;
     line-height: 1.5;
+    background: none;
+    border: none;
+    padding-left: 0;
 }
 
 /* Admin Notices within plugin pages */
@@ -202,13 +205,13 @@
 
 /* Responsive Design */
 @media (max-width: 1024px) {
-    .cornuwab-admin-wrap .form-table {
-        margin: 20px;
+    .cornuwab-admin-wrap .cornuwab-form-table {
+        margin: 20px 0;
     }
     
-    .cornuwab-admin-wrap .settings-section {
-        margin: 20px;
-        padding: 24px 32px;
+    .cornuwab-admin-wrap .cornuwab-settings-section {
+        margin: 0;
+        padding: 0;
     }
     
     .cornuwab-admin-wrap .submit {
@@ -222,18 +225,18 @@
 }
 
 @media (max-width: 768px) {
-    .cornuwab-admin-wrap .form-table {
-        margin: 16px;
+    .cornuwab-admin-wrap .cornuwab-form-table {
+        margin: 16px 0;
     }
     
-    .cornuwab-admin-wrap .form-table th,
-    .cornuwab-admin-wrap .form-table td {
+    .cornuwab-admin-wrap .cornuwab-form-table th,
+    .cornuwab-admin-wrap .cornuwab-form-table td {
         padding: 16px 20px;
     }
     
-    .cornuwab-admin-wrap .settings-section {
-        margin: 16px;
-        padding: 20px 24px;
+    .cornuwab-admin-wrap .cornuwab-settings-section {
+        margin: 0;
+        padding: 0;
     }
     
     .cornuwab-admin-wrap .submit {
@@ -246,13 +249,13 @@
         font-size: 22px;
     }
     
-    .cornuwab-admin-wrap .form-table input[type="text"],
-    .cornuwab-admin-wrap .form-table input[type="email"],
-    .cornuwab-admin-wrap .form-table input[type="url"],
-    .cornuwab-admin-wrap .form-table input[type="password"],
-    .cornuwab-admin-wrap .form-table input[type="number"],
-    .cornuwab-admin-wrap .form-table select,
-    .cornuwab-admin-wrap .form-table textarea {
+    .cornuwab-admin-wrap .cornuwab-form-table input[type="text"],
+    .cornuwab-admin-wrap .cornuwab-form-table input[type="email"],
+    .cornuwab-admin-wrap .cornuwab-form-table input[type="url"],
+    .cornuwab-admin-wrap .cornuwab-form-table input[type="password"],
+    .cornuwab-admin-wrap .cornuwab-form-table input[type="number"],
+    .cornuwab-admin-wrap .cornuwab-form-table select,
+    .cornuwab-admin-wrap .cornuwab-form-table textarea {
         max-width: 100%;
     }
 }
@@ -262,27 +265,27 @@
         margin: 20px 0 0 0;
     }
     
-    .cornuwab-admin-wrap .form-table {
-        margin: 12px;
+    .cornuwab-admin-wrap .cornuwab-form-table {
+        margin: 12px 0;
     }
     
-    .cornuwab-admin-wrap .form-table th,
-    .cornuwab-admin-wrap .form-table td {
+    .cornuwab-admin-wrap .cornuwab-form-table th,
+    .cornuwab-admin-wrap .cornuwab-form-table td {
         padding: 12px 16px;
         display: block;
         width: 100%;
     }
     
-    .cornuwab-admin-wrap .form-table th {
+    .cornuwab-admin-wrap .cornuwab-form-table th {
         background: #f8f9fa;
         border-bottom: none;
         font-weight: 600;
         margin-bottom: 8px;
     }
     
-    .cornuwab-admin-wrap .settings-section {
-        margin: 12px;
-        padding: 16px 20px;
+    .cornuwab-admin-wrap .cornuwab-settings-section {
+        margin: 0;
+        padding: 0;
     }
     
     .cornuwab-admin-wrap .submit {

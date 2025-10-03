@@ -392,6 +392,7 @@ class Settings {
         $sanitized['debug_mode'] = isset($input['debug_mode']) ? (bool) $input['debug_mode'] : false;
         $sanitized['logging_level'] = sanitize_text_field($input['logging_level'] ?? 'error');
         $sanitized['embedding_model'] = sanitize_text_field($input['embedding_model'] ?? 'text-embedding-3-small');
+        $sanitized['maintenance_mode'] = isset($input['maintenance_mode']) ? (bool) $input['maintenance_mode'] : false;
         
         // Legacy settings (for backward compatibility)
         // Note: embedding_model is set above, don't override it here

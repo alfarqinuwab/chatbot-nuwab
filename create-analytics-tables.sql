@@ -42,3 +42,4 @@ WHERE `option_name` = 'wp_gpt_rag_chat_db_version';
 -- If the option doesn't exist, create it
 INSERT IGNORE INTO `wp_options` (`option_name`, `option_value`, `autoload`) 
 VALUES ('wp_gpt_rag_chat_db_version', '2.2.0', 'yes');
+

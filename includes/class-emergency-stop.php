@@ -9,6 +9,7 @@ namespace WP_GPT_RAG_Chat;
 class Emergency_Stop {
     
     const TRANSIENT_KEY = 'wp_gpt_rag_emergency_stop';
+    const ACK_TRANSIENT_KEY = 'wp_gpt_rag_emergency_stop_ack';
     const CRON_LIMIT_WARNING = 100;
     const CRON_LIMIT_AUTO_STOP = 500;
     
@@ -28,6 +29,7 @@ class Emergency_Stop {
         // Handle emergency stop AJAX
         add_action('wp_ajax_wp_gpt_rag_emergency_stop', [$this, 'handle_emergency_stop']);
         add_action('wp_ajax_wp_gpt_rag_resume_indexing', [$this, 'handle_resume_indexing']);
+        add_action('wp_ajax_wp_gpt_rag_confirm_stop', [$this, 'handle_confirm_stop']);
     }
     
     /**
@@ -42,6 +44,8 @@ class Emergency_Stop {
      */
     public static function activate($duration = HOUR_IN_SECONDS) {
         set_transient(self::TRANSIENT_KEY, true, $duration);
+        // Clear any previous acknowledgement so notice shows again for a new stop
+        delete_transient(self::ACK_TRANSIENT_KEY);
         
         // Clear all scheduled indexing cron jobs
         self::clear_all_cron_jobs();
@@ -55,7 +59,23 @@ class Emergency_Stop {
      */
     public static function deactivate() {
         delete_transient(self::TRANSIENT_KEY);
+        // Clear acknowledgement once indexing is resumed
+        delete_transient(self::ACK_TRANSIENT_KEY);
         error_log('WP GPT RAG Chat: Emergency stop deactivated');
+    }
+
+    /**
+     * Check if the current emergency stop has been acknowledged by an admin
+     */
+    public static function is_acknowledged() {
+        return (bool) get_transient(self::ACK_TRANSIENT_KEY);
+    }
+
+    /**
+     * Acknowledge the emergency stop (hide the notice until resume)
+     */
+    public static function acknowledge($duration = WEEK_IN_SECONDS) {
+        set_transient(self::ACK_TRANSIENT_KEY, true, $duration);
     }
     
     /**
@@ -156,13 +176,95 @@ class Emergency_Stop {
         
         // Warning for high cron count
         if (self::is_active()) {
+            // If acknowledged, don't show the banner again until resume
+            if (self::is_acknowledged()) {
+                return;
+            }
             $screen = get_current_screen();
-            if ($screen && strpos($screen->id, 'wp-gpt-rag-chat') !== false) {
+            // Only show on indexing page, not on settings page
+            if ($screen && strpos($screen->id, 'wp-gpt-rag-chat') !== false && strpos($screen->id, 'settings') === false) {
                 ?>
-                <div class="notice notice-warning">
-                    <h3>⚠️ Emergency Stop Active</h3>
-                    <p>All indexing is currently stopped. Click "Resume Indexing" to continue.</p>
+                <div class="notice notice-warning" style="border-left-color: #d63638; background: #fcf0f1; padding: 25px 20px; margin: 20px 0;">
+                    <h3 style="color: #d63638; margin-top: 0; margin-bottom: 15px;">⚠️ Emergency Stop Active</h3>
+                    <p style="margin-bottom: 20px; font-size: 16px;">All indexing is currently stopped. Choose an action below:</p>
+                    <div style="margin-top: 20px; padding-top: 10px;">
+                        <button type="button" id="resume-indexing-btn" class="button button-primary" style="background: #00a32a; border-color: #00a32a; margin-right: 15px; padding: 8px 16px; font-size: 14px;">
+                            <span class="dashicons dashicons-controls-play" style="margin-top: 3px;"></span>
+                            Resume Indexing
+                        </button>
+                        <button type="button" id="confirm-stop-btn" class="button button-secondary" style="background: #d63638; border-color: #d63638; color: white; padding: 8px 16px; font-size: 14px;">
+                            <span class="dashicons dashicons-yes" style="margin-top: 3px;"></span>
+                            Confirm Stop
+                        </button>
+                    </div>
                 </div>
+                
+                <script>
+                jQuery(document).ready(function($) {
+                    // Resume Indexing button
+                    $('#resume-indexing-btn').on('click', function() {
+                        if (!confirm('Are you sure you want to resume indexing? This will re-enable all indexing operations.')) {
+                            return;
+                        }
+                        
+                        $(this).prop('disabled', true).text('Resuming...');
+                        
+                        $.ajax({
+                            url: ajaxurl,
+                            type: 'POST',
+                            data: {
+                                action: 'wp_gpt_rag_resume_indexing',
+                                nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    location.reload();
+                                } else {
+                                    alert('Error: ' + (response.data.message || 'Failed to resume indexing'));
+                                    $('#resume-indexing-btn').prop('disabled', false).html('<span class="dashicons dashicons-controls-play" style="margin-top: 3px;"></span> Resume Indexing');
+                                }
+                            },
+                            error: function() {
+                                alert('Error: Failed to resume indexing. Please try again.');
+                                $('#resume-indexing-btn').prop('disabled', false).html('<span class="dashicons dashicons-controls-play" style="margin-top: 3px;"></span> Resume Indexing');
+                            }
+                        });
+                    });
+                    
+                    // Confirm Stop button
+                    $('#confirm-stop-btn').on('click', function() {
+                        if (!confirm('Are you sure you want to confirm the emergency stop? This will keep indexing disabled until manually resumed.')) {
+                            return;
+                        }
+                        
+                        var $btn = $(this);
+                        $btn.prop('disabled', true).text('Confirming...');
+                        
+                        $.ajax({
+                            url: ajaxurl,
+                            type: 'POST',
+                            data: {
+                                action: 'wp_gpt_rag_confirm_stop',
+                                nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
+                            },
+                            success: function(response) {
+                                // Hide the notice after confirmation
+                                $('.notice.notice-warning').fadeOut();
+                                
+                                // Show success message
+                                $('<div class="notice notice-success" style="margin-top: 10px;"><p><strong>Emergency stop confirmed.</strong> Indexing will remain disabled until manually resumed.</p></div>')
+                                    .insertAfter('.wrap h1:eq(0)')
+                                    .delay(3000)
+                                    .fadeOut();
+                            },
+                            error: function() {
+                                alert('Failed to confirm stop. Please try again.');
+                                $btn.prop('disabled', false).html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Confirm Stop');
+                            }
+                        });
+                    });
+                });
+                </script>
                 <?php
             }
         } else {
@@ -267,6 +369,24 @@ class Emergency_Stop {
         
         wp_send_json_success([
             'message' => 'Indexing resumed. Auto-indexing will work normally now.'
+        ]);
+    }
+
+    /**
+     * Handle confirm stop (acknowledge) AJAX
+     */
+    public function handle_confirm_stop() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Insufficient permissions']);
+        }
+        
+        // Mark acknowledged so the banner doesn't show again
+        self::acknowledge();
+        
+        wp_send_json_success([
+            'message' => 'Emergency stop acknowledged. The notice will stay hidden until indexing is resumed.'
         ]);
     }
 }

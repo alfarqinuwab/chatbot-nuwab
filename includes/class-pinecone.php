@@ -62,6 +62,18 @@ class Pinecone {
             throw new \Exception(__('Invalid response from Pinecone API.', 'wp-gpt-rag-chat'));
         }
         
+        // Track API usage for Pinecone upsert
+        \WP_GPT_RAG_Chat\API_Usage_Tracker::track_pinecone_usage(
+            '/vectors/upsert',
+            null, // Pinecone doesn't use tokens
+            null, // No direct cost tracking for Pinecone
+            [
+                'vectors_count' => count($vectors),
+                'upserted_count' => $response['upsertedCount'],
+                'index_name' => $this->settings['pinecone_index_name'] ?? 'unknown'
+            ]
+        );
+        
         return $response;
     }
     
@@ -102,6 +114,21 @@ class Pinecone {
             return $match['score'] >= $threshold;
         });
         
+        // Track API usage for Pinecone query
+        \WP_GPT_RAG_Chat\API_Usage_Tracker::track_pinecone_usage(
+            '/query',
+            null, // Pinecone doesn't use tokens
+            null, // No direct cost tracking for Pinecone
+            [
+                'top_k' => $top_k,
+                'matches_returned' => count($response['matches']),
+                'filtered_matches' => count($filtered_matches),
+                'has_filter' => !empty($filter),
+                'similarity_threshold' => $threshold,
+                'index_name' => $this->settings['pinecone_index_name'] ?? 'unknown'
+            ]
+        );
+        
         return [
             'matches' => array_values($filtered_matches),
             'total_matches' => count($response['matches']),
@@ -124,6 +151,17 @@ class Pinecone {
         $response = $this->make_request('/vectors/delete', [
             'ids' => $vector_ids
         ]);
+        
+        // Track API usage for Pinecone delete
+        \WP_GPT_RAG_Chat\API_Usage_Tracker::track_pinecone_usage(
+            '/vectors/delete',
+            null, // Pinecone doesn't use tokens
+            null, // No direct cost tracking for Pinecone
+            [
+                'vector_ids_count' => count($vector_ids),
+                'index_name' => $this->settings['pinecone_index_name'] ?? 'unknown'
+            ]
+        );
         
         return $response;
     }

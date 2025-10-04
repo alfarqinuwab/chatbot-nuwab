@@ -993,6 +993,18 @@ $total_pages = ceil($total_logs / $per_page);
                 
                 <div class="source-search-box">
                     <input type="text" id="source-search-input" class="custom-tag-input" placeholder="<?php _e('Type to search pages, posts, or PDFs...', 'wp-gpt-rag-chat'); ?>" autocomplete="off">
+                    <select id="source-post-type-filter" class="source-post-type-filter">
+                        <option value="any"><?php _e('All Types', 'wp-gpt-rag-chat'); ?></option>
+                        <?php
+                        $post_types = get_post_types(['public' => true], 'objects');
+                        foreach ($post_types as $post_type) {
+                            if (!in_array($post_type->name, ['attachment'])) {
+                                echo '<option value="' . esc_attr($post_type->name) . '">' . esc_html($post_type->label) . '</option>';
+                            }
+                        }
+                        ?>
+                        <option value="attachment"><?php _e('PDFs', 'wp-gpt-rag-chat'); ?></option>
+                    </select>
                 </div>
                 
                 <div id="source-search-results" class="source-search-results">
@@ -1288,15 +1300,26 @@ $total_pages = ceil($total_logs / $per_page);
             }, 500);
         });
         
+        // Re-search when post type filter changes
+        $('#source-post-type-filter').on('change', function() {
+            var query = $('#source-search-input').val().trim();
+            if (query) {
+                $('#source-search-results').html('<p class="source-search-loading">⏳ <?php _e('Searching...', 'wp-gpt-rag-chat'); ?></p>');
+                searchSources(query);
+            }
+        });
+        
         // Search sources function
         function searchSources(query) {
+            var postType = $('#source-post-type-filter').val() || 'any';
+            
             $.ajax({
                 url: ajaxurl,
                 type: 'POST',
                 data: {
                     action: 'wp_gpt_rag_chat_search_content',
                     search: query,
-                    post_type: 'any',
+                    post_type: postType,
                     nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
                 },
                 success: function(response) {
@@ -2163,17 +2186,19 @@ body.modal-open {
 }
 
 .tag-modal-overlay {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
+    width: 100vw;
+    height: 100vh;
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(4px);
 }
 
 .tag-modal-content {
-    position: absolute;
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -2379,6 +2404,27 @@ body.modal-open {
 }
 
 .source-search-box #source-search-input:focus {
+    border-color: #d1a85f;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(209, 168, 95, 0.1);
+}
+
+.source-post-type-filter {
+    min-width: 180px;
+    font-size: 15px;
+    padding: 12px 16px;
+    border: 2px solid #dcdcde;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.source-post-type-filter:hover {
+    border-color: #b5b5b5;
+}
+
+.source-post-type-filter:focus {
     border-color: #d1a85f;
     outline: none;
     box-shadow: 0 0 0 3px rgba(209, 168, 95, 0.1);

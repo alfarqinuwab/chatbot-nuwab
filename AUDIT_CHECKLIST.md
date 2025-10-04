@@ -314,3 +314,4 @@
 ---
 
 *This checklist is designed to ensure comprehensive coverage of ISO 42001 requirements for the Nuwab AI Assistant plugin audit.*
+

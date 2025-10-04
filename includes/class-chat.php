@@ -39,7 +39,7 @@ class Chat {
     /**
      * Process a chat query with RAG improvements
      */
-    public function process_query($query, $conversation_history = []) {
+    public function process_query($query, $conversation_history = [], $detected_language = null) {
         $response_mode = $this->settings['response_mode'] ?? 'hybrid';
         $context = '';
         $query_embedding = null;
@@ -52,37 +52,53 @@ class Chat {
         
         try {
             if ($response_mode !== 'openai') {
-                // Step 1: Query Expansion
-                $query_variations = $rag_improvements->expand_query($query);
-                $rag_metadata['query_variations'] = $query_variations;
-                $rag_metadata['query_expansion_enabled'] = !empty($this->settings['enable_query_expansion']);
+                // Step 0: Check for similar questions with manually linked sources
+                $linked_sources = $this->get_linked_sources_for_similar_query($query);
                 
-                // Step 2: Create embeddings for all query variations
-                $all_embeddings = $this->openai->create_embeddings($query_variations);
-                
-                // Step 3: Retrieve context using all variations
-                $all_results = [];
-                foreach ($all_embeddings as $embedding) {
-                    $results = $this->pinecone->query_vectors($embedding);
-                    if (!empty($results['matches'])) {
-                        $all_results = array_merge($all_results, $results['matches']);
+                if (!empty($linked_sources)) {
+                    // Use manually linked sources as priority context
+                    $context = $this->build_context_from_linked_sources($linked_sources);
+                    $rag_sources = $linked_sources;
+                    $rag_metadata['used_linked_sources'] = true;
+                    $rag_metadata['linked_sources_count'] = count($linked_sources);
+                } else {
+                    // Step 1: Query Expansion
+                    $query_variations = $rag_improvements->expand_query($query);
+                    $rag_metadata['query_variations'] = $query_variations;
+                    $rag_metadata['query_expansion_enabled'] = !empty($this->settings['enable_query_expansion']);
+                    
+                    // Step 2: Create embeddings for all query variations
+                    $all_embeddings = $this->openai->create_embeddings($query_variations);
+                    
+                    // Step 3: Retrieve context using all variations
+                    $all_results = [];
+                    foreach ($all_embeddings as $embedding) {
+                        $results = $this->pinecone->query_vectors($embedding);
+                        if (!empty($results['matches'])) {
+                            $all_results = array_merge($all_results, $results['matches']);
+                        }
+                    }
+                    
+                    $rag_metadata['total_results_found'] = count($all_results);
+                    
+                    // Remove duplicates based on post_id + chunk_index
+                    $all_results = $this->deduplicate_results($all_results);
+                    $rag_metadata['unique_results'] = count($all_results);
+                    
+                    // Step 4: Re-rank results
+                    $reranked_results = $rag_improvements->rerank_results($query, $all_results);
+                    $rag_metadata['reranking_enabled'] = !empty($this->settings['enable_reranking']);
+                    $rag_metadata['final_results_used'] = count($reranked_results);
+                    
+                    // Step 5: Build context from top results
+                    $context = $this->build_context_from_results($reranked_results);
+                    $rag_sources = $this->extract_sources_from_results($reranked_results);
+                    
+                    // Step 6: If no context found (general question), provide sample indexed items
+                    if (empty($context)) {
+                        $context = $this->get_sample_indexed_content();
                     }
                 }
-                
-                $rag_metadata['total_results_found'] = count($all_results);
-                
-                // Remove duplicates based on post_id + chunk_index
-                $all_results = $this->deduplicate_results($all_results);
-                $rag_metadata['unique_results'] = count($all_results);
-                
-                // Step 4: Re-rank results
-                $reranked_results = $rag_improvements->rerank_results($query, $all_results);
-                $rag_metadata['reranking_enabled'] = !empty($this->settings['enable_reranking']);
-                $rag_metadata['final_results_used'] = count($reranked_results);
-                
-                // Step 5: Build context from top results
-                $context = $this->build_context_from_results($reranked_results);
-                $rag_sources = $this->extract_sources_from_results($reranked_results);
             }
         } catch (\Exception $e) {
             error_log('WP GPT RAG Chat: ' . $e->getMessage());
@@ -113,8 +129,8 @@ class Chat {
         // Build conversation messages
         $messages = $this->build_conversation_messages($conversation_history, $query);
         
-        // Generate response
-        $response = $this->openai->generate_chat_completion($messages, $context);
+        // Generate response with detected language
+        $response = $this->openai->generate_chat_completion($messages, $context, $detected_language);
         
         // Detect content gaps
         $rag_improvements->detect_content_gap($query, $response, $rag_sources);
@@ -244,7 +260,12 @@ class Chat {
             return '';
         }
         
-        // Get the actual content from the post
+        // If content is stored in database, use it directly
+        if (!empty($vector->content)) {
+            return $vector->content;
+        }
+        
+        // Fallback: re-chunk if content not stored (for backwards compatibility)
         $post = get_post($post_id);
         if (!$post) {
             return '';
@@ -362,6 +383,137 @@ class Chat {
     }
     
     /**
+     * Get linked sources for similar queries
+     * Checks if there are manually linked sources for similar questions
+     */
+    private function get_linked_sources_for_similar_query($query) {
+        global $wpdb;
+        
+        $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
+        
+        // Find similar user queries with linked sources (using simple LIKE matching)
+        // Use BINARY for case-sensitive matching, or remove for case-insensitive
+        $similar_logs = $wpdb->get_results($wpdb->prepare("
+            SELECT rag_sources 
+            FROM {$logs_table} 
+            WHERE role = 'user' 
+            AND rag_sources IS NOT NULL 
+            AND rag_sources != '[]'
+            AND rag_sources != ''
+            AND (
+                content LIKE %s 
+                OR %s LIKE CONCAT('%%', SUBSTRING(content, 1, 20), '%%')
+            )
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ", '%' . $wpdb->esc_like($query) . '%', $query));
+        
+        if (empty($similar_logs)) {
+            return [];
+        }
+        
+        $sources_json = $similar_logs[0]->rag_sources;
+        $sources = json_decode($sources_json, true);
+        
+        if (empty($sources) || !is_array($sources)) {
+            return [];
+        }
+        
+        // Filter for manually linked sources only
+        $linked_sources = array_filter($sources, function($source) {
+            return !empty($source['manually_linked']);
+        });
+        
+        return array_values($linked_sources);
+    }
+    
+    /**
+     * Build context from manually linked sources
+     */
+    private function build_context_from_linked_sources($linked_sources) {
+        $context_parts = [];
+        
+        foreach ($linked_sources as $source) {
+            $post_id = $source['id'] ?? 0;
+            if (!$post_id) {
+                continue;
+            }
+            
+            $post = get_post($post_id);
+            if (!$post) {
+                continue;
+            }
+            
+            // Get full post content
+            $content = $post->post_content;
+            $content = wp_strip_all_tags($content);
+            $content = wp_trim_words($content, 500); // Limit to 500 words
+            
+            // Format with title and link
+            $formatted_part = sprintf(
+                "%s\n\n%s\n\n🔗 [%s](%s)",
+                $post->post_title,
+                $content,
+                $source['title'] ?? $post->post_title,
+                $source['url'] ?? get_permalink($post_id)
+            );
+            
+            $context_parts[] = $formatted_part;
+        }
+        
+        if (empty($context_parts)) {
+            return '';
+        }
+        
+        return implode("\n\n━━━━━━━━━━━━━━━━\n\n", $context_parts);
+    }
+    
+    /**
+     * Get sample indexed content for general questions
+     * Returns recent/popular indexed items with titles and links
+     */
+    private function get_sample_indexed_content() {
+        global $wpdb;
+        
+        $vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
+        
+        // Get up to 10 recent indexed items from vectors table
+        $results = $wpdb->get_results("
+            SELECT DISTINCT post_id 
+            FROM {$vectors_table} 
+            WHERE post_id IS NOT NULL
+            ORDER BY updated_at DESC 
+            LIMIT 10
+        ");
+        
+        if (empty($results)) {
+            return '';
+        }
+        
+        $context_parts = [];
+        foreach ($results as $row) {
+            $post = get_post($row->post_id);
+            if ($post && in_array($post->post_status, ['publish', 'private'])) {
+                $post_url = get_permalink($post->ID);
+                // Decode URL for better display but keep it functional
+                $post_url = urldecode($post_url);
+                $context_parts[] = sprintf(
+                    "📄 %s\n🔗 [%s](%s)",
+                    $post->post_title,
+                    $post->post_title,
+                    $post_url
+                );
+            }
+        }
+        
+        if (empty($context_parts)) {
+            return '';
+        }
+        
+        return "=== AVAILABLE TOPICS ON WEBSITE ===\nThe following pages are available. Use these titles and links to answer the user's question:\n\n" . implode("\n\n", $context_parts);
+    }
+    
+    /**
      * Get chat widget HTML
      */
     public function get_chat_widget_html() {
@@ -440,7 +592,7 @@ class Chat {
             
                 <div class="cornuwab-wp-gpt-rag-chat-footer">
                     <small>
-                        مدعوم بالذكاء الاصطناعي. الردود بناءً على محتوى الموقع.
+                        هذه المنصة مدعومة بالذكاء الاصطناعي
                     </small>
                 </div>
             </div>

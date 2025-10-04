@@ -68,3 +68,4 @@ If none of these solutions work, please check:
 - Database permissions
 - Plugin file permissions
 - PHP error logs
+

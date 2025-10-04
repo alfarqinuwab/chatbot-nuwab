@@ -13,6 +13,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 
 <div class="wrap cornuwab-admin-wrap cornuwab-wp-gpt-rag-chat-settings">
     <?php
+    // Display WordPress settings errors (validation errors)
+    settings_errors('wp_gpt_rag_chat_settings');
+    
     // Check if plugin needs configuration
     $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     if (empty($settings['openai_api_key']) || empty($settings['pinecone_api_key']) || empty($settings['pinecone_host'])) {
@@ -1227,134 +1230,150 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Toast Notifications */
-.toast-container {
+/* Toast Notifications (prefixed to avoid WP conflicts) */
+.cornuwab-toast-container {
     position: fixed;
-    top: 32px;
+    top: 50px;
     right: 20px;
     z-index: 999999;
-    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: none;
 }
 
-.toast {
+/* Ensure toast is visible on mobile and different screen sizes */
+@media (max-width: 782px) {
+    .cornuwab-toast-container {
+        top: 70px;
+        right: 10px;
+        left: 10px;
+        align-items: stretch;
+    }
+}
+
+.cornuwab-toast {
     background: #ffffff;
     border: 1px solid #e1e5e9;
     border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-    padding: 16px 20px;
-    margin-bottom: 12px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    padding: 12px 14px;
     display: flex;
-    align-items: center;
-    min-width: 300px;
-    transform: translateX(100%);
+    align-items: flex-start;
+    gap: 10px;
+    width: 360px;
+    max-width: 92vw;
+    transform: translateX(20px);
     opacity: 0;
-    transition: all 0.3s ease;
+    transition: all 0.25s ease;
     position: relative;
     overflow: hidden;
+    pointer-events: auto;
 }
 
-.toast.show {
+.cornuwab-toast.show {
     transform: translateX(0);
     opacity: 1;
 }
 
-.toast.success {
-    border-left: 4px solid #00a32a;
-    background: #d1e7dd;
-}
+.cornuwab-toast.success { background: #d1e7dd; }
 
-.toast.error {
-    border-left: 4px solid #d63638;
-    background: #f8d7da;
-}
+.cornuwab-toast.error { background: #f8d7da; }
 
-.toast.warning {
-    border-left: 4px solid #dba617;
-}
+.cornuwab-toast.warning { background: #fffbe6; }
 
-.toast.info {
-    border-left: 4px solid #0073aa;
-}
+.cornuwab-toast.info { background: #e8f4fb; }
 
-.toast-icon {
-    margin-right: 12px;
-    font-size: 20px;
+.cornuwab-toast-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+    font-size: 18px;
     flex-shrink: 0;
+    line-height: 1;
+    margin-top: 2px; /* align with title */
 }
 
-.toast.success .toast-icon {
+.cornuwab-toast.success .cornuwab-toast-icon {
     color: #0f5132;
 }
 
-.toast.error .toast-icon {
+.cornuwab-toast.error .cornuwab-toast-icon {
     color: #842029;
 }
 
-.toast.warning .toast-icon {
+.cornuwab-toast.warning .cornuwab-toast-icon {
     color: #dba617;
 }
 
-.toast.info .toast-icon {
+.cornuwab-toast.info .cornuwab-toast-icon {
     color: #0073aa;
 }
 
-.toast-content {
+.cornuwab-toast-content {
     flex: 1;
 }
 
-.toast-title {
+.cornuwab-toast-title {
     font-weight: 600;
-    font-size: 14px;
-    margin: 0 0 4px 0;
+    font-size: 13px;
+    margin: 0 0 2px 0;
     color: #1d2327;
 }
 
-.toast-message {
-    font-size: 13px;
+.cornuwab-toast-message {
+    font-size: 12px;
     color: #646970;
     margin: 0;
-    line-height: 1.4;
+    line-height: 1.35;
 }
 
-.toast.success .toast-title {
+.cornuwab-toast.success .cornuwab-toast-title {
     color: #0f5132;
 }
 
-.toast.success .toast-message {
+.cornuwab-toast.success .cornuwab-toast-message {
     color: #0f5132;
 }
 
-.toast.error .toast-title {
+.cornuwab-toast.error .cornuwab-toast-title {
     color: #842029;
 }
 
-.toast.error .toast-message {
+.cornuwab-toast.error .cornuwab-toast-message {
     color: #842029;
 }
 
-.toast-close {
-    margin-left: 12px;
+.cornuwab-toast-close {
+    position: absolute;
+    top: 6px;
+    right: 6px;
     background: none;
     border: none;
     color: #646970;
     cursor: pointer;
     font-size: 16px;
+    font-weight: bold;
     padding: 0;
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: 4px;
     transition: all 0.2s ease;
 }
 
-.toast-close:hover {
+.cornuwab-toast-close:hover {
     background: #f0f0f1;
     color: #1d2327;
 }
 
-.toast-progress {
+.cornuwab-toast-progress {
     position: absolute;
     bottom: 0;
     left: 0;
@@ -1364,19 +1383,19 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     transition: width linear;
 }
 
-.toast.success .toast-progress {
+.cornuwab-toast.success .cornuwab-toast-progress {
     background: #00a32a;
 }
 
-.toast.error .toast-progress {
+.cornuwab-toast.error .cornuwab-toast-progress {
     background: #d63638;
 }
 
-.toast.warning .toast-progress {
+.cornuwab-toast.warning .cornuwab-toast-progress {
     background: #dba617;
 }
 
-.toast.info .toast-progress {
+.cornuwab-toast.info .cornuwab-toast-progress {
     background: #0073aa;
 }
 
@@ -1710,7 +1729,7 @@ jQuery(document).ready(function($) {
         if (!toastContainer) return;
         
         const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
+        toast.className = `cornuwab-toast ${type}`;
         
         const iconMap = {
             success: '✓',
@@ -1720,13 +1739,13 @@ jQuery(document).ready(function($) {
         };
         
         toast.innerHTML = `
-            <div class="toast-icon">${iconMap[type] || iconMap.info}</div>
-            <div class="toast-content">
-                <div class="toast-title">${title}</div>
-                <div class="toast-message">${message}</div>
+            <div class="cornuwab-toast-icon">${iconMap[type] || iconMap.info}</div>
+            <div class="cornuwab-toast-content">
+                <div class="cornuwab-toast-title">${title}</div>
+                <div class="cornuwab-toast-message">${message}</div>
             </div>
-            <button class="toast-close" onclick="this.parentElement.remove()">×</button>
-            <div class="toast-progress"></div>
+            <button class="cornuwab-toast-close" onclick="this.parentElement.remove()">×</button>
+            <div class="cornuwab-toast-progress"></div>
         `;
         
         toastContainer.appendChild(toast);
@@ -1744,7 +1763,7 @@ jQuery(document).ready(function($) {
         toast._timeoutId = timeoutId;
         
         // Progress bar animation
-        const progress = toast.querySelector('.toast-progress');
+        const progress = toast.querySelector('.cornuwab-toast-progress');
         progress.style.width = '100%';
         progress.style.transition = `width ${duration}ms linear`;
         setTimeout(() => progress.style.width = '0%', 100);
@@ -1842,8 +1861,12 @@ jQuery(document).ready(function($) {
                 
                 if (response.success) {
                     showToast('success', 'Settings Saved', response.data.message);
+                    // Scroll to top to show the notification
+                    $('html, body').animate({ scrollTop: 0 }, 300);
                 } else {
                     showToast('error', 'Save Failed', response.data.message);
+                    // Scroll to top to show the notification
+                    $('html, body').animate({ scrollTop: 0 }, 300);
                 }
             },
             error: function(xhr, status, error) {
@@ -1855,6 +1878,8 @@ jQuery(document).ready(function($) {
                 }
                 
                 showToast('error', 'Save Failed', 'An error occurred while saving settings. Please try again.');
+                // Scroll to top to show the notification
+                $('html, body').animate({ scrollTop: 0 }, 300);
                 console.error('AJAX Error:', error);
             },
             complete: function() {

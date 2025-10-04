@@ -67,27 +67,28 @@ $stats['posts_flagged'] = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->postmeta}
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f6f7f7; /* light WP admin gray */
             padding: 20px;
-            color: #333;
+            color: #1d2327;
         }
         .container {
             max-width: 1200px;
             margin: 20px auto;
-            background: white;
-            border-radius: 16px;
+            background: #fff;
+            border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            border: 1px solid #dcdcde;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
         .header {
-            background: linear-gradient(135deg, #2271b1 0%, #135e96 100%);
-            color: white;
-            padding: 40px;
-            text-align: center;
+            background: #f0f0f1;
+            color: #1d2327;
+            padding: 24px 32px;
+            border-bottom: 1px solid #dcdcde;
         }
         .header h1 {
-            font-size: 42px;
-            margin-bottom: 10px;
+            font-size: 24px;
+            margin: 0;
         }
         .status-indicator {
             display: inline-block;
@@ -110,7 +111,7 @@ $stats['posts_flagged'] = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->postmeta}
             50% { transform: scale(1.2); }
         }
         .content {
-            padding: 40px;
+            padding: 24px 32px;
         }
         .monitor-grid {
             display: grid;
@@ -119,12 +120,12 @@ $stats['posts_flagged'] = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->postmeta}
             margin: 30px 0;
         }
         .monitor-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 12px;
+            background: #fff;
+            color: #1d2327;
+            padding: 20px;
+            border-radius: 8px;
             text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            border: 1px solid #dcdcde;
         }
         .monitor-card.updating {
             animation: cardPulse 1s ease-in-out infinite;
@@ -134,7 +135,7 @@ $stats['posts_flagged'] = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->postmeta}
             50% { transform: scale(1.02); }
         }
         .monitor-number {
-            font-size: 56px;
+            font-size: 36px;
             font-weight: bold;
             display: block;
             margin: 15px 0;
@@ -157,20 +158,22 @@ $stats['posts_flagged'] = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->postmeta}
             color: #8bc34a;
         }
         .status-panel {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 30px;
-            margin: 30px 0;
+            background: #f6f7f7;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 24px 0;
+            border: 1px solid #dcdcde;
         }
         .status-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px 20px;
+            padding: 12px 16px;
             margin: 10px 0;
-            background: white;
-            border-radius: 8px;
-            border-left: 5px solid #2271b1;
+            background: #fff;
+            border-radius: 4px;
+            border: 1px solid #dcdcde;
+            border-left: 4px solid #2271b1;
         }
         .status-row.danger {
             border-color: #d63638;
@@ -198,9 +201,9 @@ $stats['posts_flagged'] = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->postmeta}
         }
         .update-time {
             text-align: center;
-            color: #666;
-            font-size: 14px;
-            margin: 20px 0;
+            color: #50575e;
+            font-size: 13px;
+            margin: 16px 0;
         }
         .button-group {
             text-align: center;
@@ -208,19 +211,17 @@ $stats['posts_flagged'] = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->postmeta}
         }
         .button {
             display: inline-block;
-            padding: 15px 30px;
+            padding: 8px 14px;
             background: #2271b1;
-            color: white;
+            color: #fff;
             text-decoration: none;
-            border-radius: 8px;
-            font-weight: bold;
-            margin: 10px;
-            transition: all 0.3s;
+            border-radius: 4px;
+            font-weight: 600;
+            margin: 6px;
+            transition: background .2s ease;
+            border: 1px solid #1c5f94;
         }
-        .button:hover {
-            background: #135e96;
-            transform: translateY(-2px);
-        }
+        .button:hover { background: #135e96; }
         .button-danger {
             background: #d63638;
         }
@@ -228,12 +229,13 @@ $stats['posts_flagged'] = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->postmeta}
             background: #a32727;
         }
         .alert {
-            padding: 20px;
-            border-radius: 12px;
-            margin: 20px 0;
+            padding: 12px 14px;
+            border-radius: 4px;
+            margin: 16px 0;
             text-align: center;
-            font-size: 18px;
-            font-weight: bold;
+            font-size: 14px;
+            font-weight: 600;
+            border: 1px solid #dcdcde;
         }
         .alert.success {
             background: #d5f4e6;

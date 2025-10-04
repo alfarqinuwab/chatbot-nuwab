@@ -400,3 +400,4 @@ Risk Score = Impact × Probability
 ---
 
 *This risk assessment document is proprietary to Nuwab and contains confidential information. Distribution is restricted to authorized personnel only.*
+

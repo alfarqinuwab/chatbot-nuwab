@@ -208,6 +208,10 @@
         sendToServer: function(message) {
             var self = this;
             
+            // Detect language from user message
+            var detectedLanguage = this.detectLanguage(message);
+            console.log('CORNUWB: Detected language:', detectedLanguage, 'for message:', message.substring(0, 50));
+            
             $.ajax({
                 url: wpGptRagChat.ajaxUrl,
                 type: 'POST',
@@ -216,6 +220,7 @@
                     query: message,
                     chat_id: self.chatId,
                     turn_number: self.turnNumber,
+                    detected_language: detectedLanguage,
                     nonce: wpGptRagChat.nonce
                 },
                 success: function(response) {
@@ -498,6 +503,26 @@
             return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         },
         
+        detectLanguage: function(text) {
+            // Enhanced Arabic detection: check for Arabic characters and common Arabic words
+            var arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+            var arabicWords = ['من', 'هو', 'ما', 'متى', 'أين', 'كيف', 'لماذا', 'هل', 'التي', 'الذي', 'هذه', 'ذلك', 'هذا', 'التي', 'التي', 'التي'];
+            
+            // Check for Arabic characters
+            if (arabicPattern.test(text)) {
+                return 'ar';
+            }
+            
+            // Check for common Arabic words (fallback)
+            for (var i = 0; i < arabicWords.length; i++) {
+                if (text.indexOf(arabicWords[i]) !== -1) {
+                    return 'ar';
+                }
+            }
+            
+            return 'en';
+        },
+        
         escapeHtml: function(text) {
             var map = {
                 '&': '&amp;',
@@ -521,14 +546,23 @@
                 return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="source-link">' + linkText + '</a>';
             });
             
+            // Convert separator lines to styled dividers BEFORE converting line breaks
+            escaped = escaped.replace(/━━━━━━━━━━━━━━━━/g, '<div class="content-separator"></div>');
+            
             // Convert line breaks to <br> tags
             escaped = escaped.replace(/\n/g, '<br>');
+            
+            // Remove excessive <br> tags (more than 2 consecutive)
+            escaped = escaped.replace(/(<br>\s*){3,}/g, '<br><br>');
+            
+            // Remove <br> tags immediately before and after content separators
+            escaped = escaped.replace(/<br>\s*<div class="content-separator"><\/div>\s*<br>/g, '<div class="content-separator"></div>');
             
             // Remove multiple <br> tags before source links (max 1 <br> before link)
             escaped = escaped.replace(/(<br>\s*){2,}(<a[^>]*class="source-link")/g, '<br>$2');
             
-            // Convert separator lines to styled dividers
-            escaped = escaped.replace(/━━━━━━━━━━━━━━━━/g, '<div class="content-separator"></div>');
+            // Remove <br> tags at the very end
+            escaped = escaped.replace(/(<br>\s*)+$/g, '');
             
             return escaped;
         }

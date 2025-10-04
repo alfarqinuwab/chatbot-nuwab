@@ -236,6 +236,7 @@ class Indexing {
                 'post_id' => $parsed_id['post_id'],
                 'chunk_index' => $parsed_id['chunk_index'],
                 'content_hash' => $chunk['content_hash'],
+                'content' => $chunk['content'], // Store the actual chunk content
                 'vector_id' => $vector_id,
                 'updated_at' => current_time('mysql')
             ],
@@ -243,6 +244,7 @@ class Indexing {
                 '%d',
                 '%d',
                 '%s',
+                '%s', // content
                 '%s',
                 '%s'
             ]
@@ -279,7 +281,12 @@ class Indexing {
         
         // Delete from Pinecone
         if (!empty($vector_ids)) {
-            $this->pinecone->delete_vectors($vector_ids);
+            try {
+                $this->pinecone->delete_vectors($vector_ids);
+            } catch (\Exception $e) {
+                // If Pinecone deletion fails (e.g., namespace not found), continue with local cleanup
+                error_log('WP GPT RAG Chat: Pinecone delete_vectors failed for post ' . $post_id . ' - ' . $e->getMessage());
+            }
         }
         
         // Delete from local database
@@ -348,10 +355,15 @@ class Indexing {
             'offset' => $offset,
             'post_status' => ['publish', 'private'],
             'meta_query' => [
+                'relation' => 'OR',
                 [
                     'key' => '_wp_gpt_rag_chat_include',
                     'value' => '1',
                     'compare' => '='
+                ],
+                [
+                    'key' => '_wp_gpt_rag_chat_include',
+                    'compare' => 'NOT EXISTS'
                 ]
             ]
         ];
@@ -365,6 +377,9 @@ class Indexing {
         
         $posts = get_posts($query_args);
         
+        // Log query results for debugging
+        error_log("WP GPT RAG Chat: Query returned " . count($posts) . " posts at offset {$offset}");
+        
         $results = [
             'processed' => 0,
             'total' => count($posts),
@@ -372,8 +387,34 @@ class Indexing {
             'indexed_post_ids' => []
         ];
         
+        // If no posts found, return early with success
+        if (empty($posts)) {
+            error_log("WP GPT RAG Chat: No posts found at offset {$offset}, returning early");
+            return $results;
+        }
+        
         foreach ($posts as $post) {
             try {
+                // Log each post being processed for debugging
+                error_log("WP GPT RAG Chat: Processing post ID {$post->ID} - {$post->post_title} (offset: {$offset})");
+                
+                // Check if post content is too large (potential memory issue)
+                $content_length = strlen($post->post_content);
+                if ($content_length > 500000) { // 500KB limit
+                    error_log("WP GPT RAG Chat: Skipping post ID {$post->ID} - content too large ({$content_length} chars)");
+                    $results['errors'][] = sprintf(
+                        __('Post %d (%s): Content too large (%d chars), skipping', 'wp-gpt-rag-chat'),
+                        $post->ID,
+                        $post->post_title,
+                        $content_length
+                    );
+                    continue;
+                }
+                
+                // Clear any cached data to free memory
+                wp_cache_delete($post->ID, 'posts');
+                wp_cache_delete($post->ID, 'post_meta');
+                
                 $index_result = $this->index_post($post->ID);
                 $results['processed']++;
                 
@@ -381,13 +422,49 @@ class Indexing {
                 if (!empty($index_result['added']) || !empty($index_result['updated'])) {
                     $results['indexed_post_ids'][] = $post->ID;
                 }
+                
+                // Log successful processing
+                error_log("WP GPT RAG Chat: Successfully processed post ID {$post->ID}");
+                
+                // Force garbage collection every 5 posts to prevent memory buildup
+                if ($results['processed'] % 5 === 0) {
+                    if (function_exists('gc_collect_cycles')) {
+                        gc_collect_cycles();
+                    }
+                }
+                
             } catch (\Exception $e) {
-                $results['errors'][] = sprintf(
+                $error_message = sprintf(
                     __('Post %d (%s): %s', 'wp-gpt-rag-chat'),
                     $post->ID,
                     $post->post_title,
                     $e->getMessage()
                 );
+                
+                $results['errors'][] = $error_message;
+                
+                // Log the error for debugging
+                error_log("WP GPT RAG Chat: Error processing post ID {$post->ID}: " . $e->getMessage());
+                error_log("WP GPT RAG Chat: Error trace: " . $e->getTraceAsString());
+                
+                // Continue processing other posts even if one fails
+                continue;
+            } catch (\Error $e) {
+                // Handle fatal errors (like memory exhaustion)
+                $error_message = sprintf(
+                    __('Post %d (%s): Fatal error - %s', 'wp-gpt-rag-chat'),
+                    $post->ID,
+                    $post->post_title,
+                    $e->getMessage()
+                );
+                
+                $results['errors'][] = $error_message;
+                
+                // Log the fatal error
+                error_log("WP GPT RAG Chat: Fatal error processing post ID {$post->ID}: " . $e->getMessage());
+                
+                // Continue processing other posts
+                continue;
             }
         }
         
@@ -402,10 +479,15 @@ class Indexing {
             'numberposts' => 1,
             'post_status' => ['publish', 'private'],
             'meta_query' => [
+                'relation' => 'OR',
                 [
                     'key' => '_wp_gpt_rag_chat_include',
                     'value' => '1',
                     'compare' => '='
+                ],
+                [
+                    'key' => '_wp_gpt_rag_chat_include',
+                    'compare' => 'NOT EXISTS'
                 ]
             ]
         ];
@@ -668,5 +750,36 @@ class Indexing {
         ));
         
         return $count > 0;
+    }
+    
+    /**
+     * Get total posts count for a specific post type
+     */
+    public function get_total_posts_count($post_type = 'all') {
+        $query_args = [
+            'numberposts' => -1,
+            'post_status' => ['publish', 'private'],
+            'meta_query' => [
+                'relation' => 'OR',
+                [
+                    'key' => '_wp_gpt_rag_chat_include',
+                    'value' => '1',
+                    'compare' => '='
+                ],
+                [
+                    'key' => '_wp_gpt_rag_chat_include',
+                    'compare' => 'NOT EXISTS'
+                ]
+            ]
+        ];
+        
+        if ($post_type && $post_type !== 'all') {
+            $query_args['post_type'] = $post_type;
+        } else {
+            $query_args['post_type'] = get_post_types(['public' => true]);
+        }
+        
+        $posts = get_posts($query_args);
+        return count($posts);
     }
 }

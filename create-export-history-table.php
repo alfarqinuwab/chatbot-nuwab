@@ -60,3 +60,4 @@ if ($table_exists) {
     echo "❌ Table verification: Export history table does not exist\n";
 }
 ?>
+

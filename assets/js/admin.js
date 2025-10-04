@@ -37,6 +37,14 @@
                 self.validateSettings();
             });
             
+            // Dismiss error notices
+            $(document).on('click', '.notice.is-dismissible .notice-dismiss', function() {
+                var $notice = $(this).closest('.notice');
+                if ($notice.hasClass('settings-error') || $notice.attr('id') === 'settings-validation-errors') {
+                    self.dismissError($notice);
+                }
+            });
+            
             // Chunking test
             $(document).on('click', '#test-chunking', function() {
                 self.testChunking();
@@ -253,7 +261,27 @@
         },
         
         validatePineconeKey: function(key) {
-            return /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(key);
+            // Pinecone API keys can be in different formats:
+            // 1. Legacy UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+            // 2. New format: pckey_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+            // 3. Other formats that might be valid
+            
+            // Check for legacy UUID format
+            if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(key)) {
+                return true;
+            }
+            
+            // Check for new pckey_ format
+            if (/^pckey_[a-zA-Z0-9]{32,}$/.test(key)) {
+                return true;
+            }
+            
+            // Check for other potential valid formats (alphanumeric, reasonable length)
+            if (/^[a-zA-Z0-9_-]{20,}$/.test(key)) {
+                return true;
+            }
+            
+            return false;
         },
         
         showValidationErrors: function(errors) {
@@ -261,7 +289,7 @@
             
             if (errors.length > 0) {
                 if ($errorContainer.length === 0) {
-                    $errorContainer = $('<div id="settings-validation-errors" class="notice notice-error"><p></p></div>');
+                    $errorContainer = $('<div id="settings-validation-errors" class="notice notice-error is-dismissible"><p></p></div>');
                     $('form[action*="options.php"]').before($errorContainer);
                 }
                 
@@ -270,6 +298,33 @@
             } else {
                 $errorContainer.hide();
             }
+        },
+        
+        dismissError: function($errorElement) {
+            var $this = this;
+            var nonce = $('input[name="wp_gpt_rag_chat_settings_nonce"]').val();
+            
+            $.ajax({
+                url: wpGptRagChatAdmin.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'wp_gpt_rag_chat_dismiss_error',
+                    nonce: nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $errorElement.fadeOut(300, function() {
+                            $(this).remove();
+                        });
+                    }
+                },
+                error: function() {
+                    // Even if AJAX fails, still hide the error locally
+                    $errorElement.fadeOut(300, function() {
+                        $(this).remove();
+                    });
+                }
+            });
         },
         
         testChunking: function() {

@@ -275,12 +275,28 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 <div class="post-type-selector">
                     <label for="index-post-type"><?php esc_html_e('Select Post Type:', 'wp-gpt-rag-chat'); ?></label>
                     <select id="index-post-type" class="post-type-dropdown">
-                        <option value="all"><?php esc_html_e('All Post Types', 'wp-gpt-rag-chat'); ?></option>
                         <?php
                         $post_types = get_post_types(['public' => true], 'objects');
+                        $total_initial_count = 0;
                         foreach ($post_types as $post_type) {
                             if ($post_type->name !== 'attachment') {
-                                echo '<option value="' . esc_attr($post_type->name) . '">' . esc_html($post_type->label) . '</option>';
+                                $count = wp_count_posts($post_type->name);
+                                $published_count = isset($count->publish) ? (int) $count->publish : 0;
+                                $private_count = isset($count->private) ? (int) $count->private : 0;
+                                $total_for_type = $published_count + $private_count;
+                                $total_initial_count += $total_for_type;
+                            }
+                        }
+                        ?>
+                        <option value="all" data-count="<?php echo esc_attr($total_initial_count); ?>"><?php esc_html_e('All Post Types', 'wp-gpt-rag-chat'); ?> (<span id="all-post-count"><?php echo esc_html($total_initial_count); ?></span>)</option>
+                        <?php
+                        foreach ($post_types as $post_type) {
+                            if ($post_type->name !== 'attachment') {
+                                $count = wp_count_posts($post_type->name);
+                                $published_count = isset($count->publish) ? (int) $count->publish : 0;
+                                $private_count = isset($count->private) ? (int) $count->private : 0;
+                                $total_for_type = $published_count + $private_count;
+                                echo '<option value="' . esc_attr($post_type->name) . '" data-count="' . esc_attr($total_for_type) . '" data-post-type="' . esc_attr($post_type->name) . '">' . esc_html($post_type->label) . ' (' . esc_html($total_for_type) . ')</option>';
                             }
                         }
                         ?>
@@ -289,7 +305,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 
                 <div class="sync-buttons">
                     <button type="button" id="sync-all-content" class="button button-primary">
-                        <?php esc_html_e('Sync All', 'wp-gpt-rag-chat'); ?> (<span id="sync-all-count">0</span>)
+                        <?php esc_html_e('Sync All', 'wp-gpt-rag-chat'); ?>
             </button>
                     <button type="button" id="sync-single-post" class="button button-secondary">
                         <?php esc_html_e('Sync Only One Post', 'wp-gpt-rag-chat'); ?>
@@ -333,12 +349,15 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 <div class="post-type-selector">
                     <label for="sitemap-post-type"><?php esc_html_e('Select Content Types:', 'wp-gpt-rag-chat'); ?></label>
                     <select id="sitemap-post-type" class="post-type-dropdown">
-                        <option value="all"><?php esc_html_e('All Post Types', 'wp-gpt-rag-chat'); ?></option>
+                        <option value="all"><?php esc_html_e('All Post Types', 'wp-gpt-rag-chat'); ?> (<span id="sitemap-all-post-count"><?php echo esc_html($total_initial_count); ?></span>)</option>
                         <?php
-                        $post_types = get_post_types(['public' => true], 'objects');
                         foreach ($post_types as $post_type) {
                             if ($post_type->name !== 'attachment') {
-                                echo '<option value="' . esc_attr($post_type->name) . '">' . esc_html($post_type->label) . '</option>';
+                                $count = wp_count_posts($post_type->name);
+                                $published_count = isset($count->publish) ? (int) $count->publish : 0;
+                                $private_count = isset($count->private) ? (int) $count->private : 0;
+                                $total_for_type = $published_count + $private_count;
+                                echo '<option value="' . esc_attr($post_type->name) . '" data-count="' . esc_attr($total_for_type) . '">' . esc_html($post_type->label) . ' (' . esc_html($total_for_type) . ')</option>';
                             }
                         }
                         ?>
@@ -372,13 +391,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             </div>
         </div>
         
-        <div class="bulk-action-section">
-            <h3><?php esc_html_e('Clear All Vectors', 'wp-gpt-rag-chat'); ?></h3>
-            <p><?php esc_html_e('Remove all vectors from Pinecone and local database. This will require a full reindex.', 'wp-gpt-rag-chat'); ?></p>
-            <button type="button" id="clear-all-vectors" class="button button-secondary" style="color: #d63638;">
-                <?php esc_html_e('Clear All Vectors', 'wp-gpt-rag-chat'); ?>
-            </button>
-        </div>
+        <!-- Clear All Vectors section removed per request -->
         
         <div class="bulk-action-section cornuwb-danger-section">
             <h3><?php esc_html_e('Delete All Indexed Items', 'wp-gpt-rag-chat'); ?></h3>
@@ -2695,7 +2708,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 0;
+    padding: 15px 33px;
     margin-top: 20px;
     border-top: 1px solid #e1e5e9;
     flex-wrap: wrap;
@@ -2825,12 +2838,17 @@ jQuery(document).ready(function($) {
     // Global variables for progress tracking
     var isIndexingInProgress = false;
     var currentIndexingAction = null;
+    var retryCount = 0;
+    var maxRetries = 3;
+    var currentBatchSize = 10; // Start with 10, reduce on errors
     
     // CORNUWB - Utility functions with cornuwb prefix to avoid WordPress conflicts
     var CORNUWB = {
         // Show notification modal (replaces alert())
         showNotification: function(title, message, type, details) {
             type = type || 'info'; // 'success', 'error', 'warning', 'info'
+            
+            console.log('CORNUWB: showNotification called with:', {title: title, message: message, type: type, details: details});
             
             var icons = {
                 'success': '✅',
@@ -2848,6 +2866,7 @@ jQuery(document).ready(function($) {
             
             $('#notification-modal-title').text(title);
             $('#notification-modal-message').html(message);
+            console.log('CORNUWB: Set modal title to:', title, 'and message to:', message);
             $('#notification-modal-icon').html(icons[type] || icons['info']);
             $('#notification-modal-header').css('border-bottom-color', colors[type] || colors['info']);
             
@@ -3031,44 +3050,378 @@ jQuery(document).ready(function($) {
     // Also update immediately when indexing completes
     var originalSyncNextBatch = syncNextBatch;
     
-    // Sync all content
-    $('#sync-all-content').on('click', function() {
-        var button = $(this);
-        var selectedPostType = $('#index-post-type').val();
-        
-        if (isIndexingInProgress) {
+    // ============================================
+    // PERSISTENT INDEXING FUNCTIONS
+    // ============================================
+    
+    /**
+     * Start persistent indexing
+     */
+    function startPersistentIndexing(button, postType) {
+        $.post(wpGptRagChatAdmin.ajaxUrl, {
+            action: 'wp_gpt_rag_chat_start_persistent_indexing',
+            nonce: wpGptRagChatAdmin.nonce,
+            action_type: 'index_all',
+            post_type: postType
+        }, function(response) {
+            if (response.success) {
+                // Show progress bar
+                button.prop('disabled', true);
+                $('#cancel-sync-all').show();
+                $('#global-progress-container').show();
+                $('#global-progress-container .progress-text').text('<?php esc_html_e('Starting persistent indexing...', 'wp-gpt-rag-chat'); ?>');
+                $('#global-progress-container .progress-fill').css('width', '0%');
+                
+                // Get and display pending posts
+                getAndDisplayPendingPosts(postType);
+                
+                // Start monitoring progress
+                startProgressMonitoring();
+                
+                CORNUWB.showNotification(
+                    '<?php esc_html_e('Persistent Indexing Started', 'wp-gpt-rag-chat'); ?>',
+                    '<?php esc_html_e('Indexing will continue in the background even if you navigate away from this page.', 'wp-gpt-rag-chat'); ?>',
+                    'success'
+                );
+            } else {
+                CORNUWB.showNotification(
+                    '<?php esc_html_e('Error', 'wp-gpt-rag-chat'); ?>',
+                    response.data.message || '<?php esc_html_e('Failed to start persistent indexing.', 'wp-gpt-rag-chat'); ?>',
+                    'error'
+                );
+            }
+        }).fail(function() {
             CORNUWB.showNotification(
-                '<?php esc_html_e('Indexing In Progress', 'wp-gpt-rag-chat'); ?>',
-                '<?php esc_html_e('Indexing is already in progress. Please wait for it to complete.', 'wp-gpt-rag-chat'); ?>',
+                '<?php esc_html_e('Connection Error', 'wp-gpt-rag-chat'); ?>',
+                '<?php esc_html_e('Failed to connect to the server. Please try again.', 'wp-gpt-rag-chat'); ?>',
+                'error'
+            );
+        });
+    }
+    
+    /**
+     * Start monitoring indexing progress
+     */
+    function startProgressMonitoring() {
+        // Clear any existing interval
+        if (window.progressMonitoringInterval) {
+            clearInterval(window.progressMonitoringInterval);
+        }
+        
+        // Check progress every 2 seconds
+        window.progressMonitoringInterval = setInterval(function() {
+            $.post(wpGptRagChatAdmin.ajaxUrl, {
+                action: 'wp_gpt_rag_chat_get_indexing_status',
+                nonce: wpGptRagChatAdmin.nonce
+            }, function(response) {
+                if (response.success) {
+                    console.log('CORNUWB: Progress monitoring response:', response.data);
+                    updateProgressBarFromStatus(response.data);
+                    
+                    // Check for newly indexed items and update table
+                    if (response.data.state) {
+                        console.log('CORNUWB: State found, checking for newly_indexed:', response.data.state.newly_indexed);
+                        
+                        if (response.data.state.newly_indexed && response.data.state.newly_indexed.length > 0) {
+                            console.log('CORNUWB: Found ' + response.data.state.newly_indexed.length + ' newly indexed items:', response.data.state.newly_indexed);
+                            addNewItemsToTable(response.data.state.newly_indexed);
+                            
+                            // Update stats cards in real-time
+                            console.log('CORNUWB: Updating stats cards in real-time');
+                            if (typeof cornuwbStatsUpdater !== 'undefined') {
+                                cornuwbStatsUpdater.updateStats();
+                            }
+                            
+                            // After updating indexed items, fetch and display next batch of pending posts
+                            if (response.data.state.status === 'running' && response.data.state.current_offset < response.data.state.total_posts) {
+                                console.log('CORNUWB: Fetching next batch of pending posts from offset:', response.data.state.current_offset);
+                                fetchNextPendingBatch(response.data.state.post_type, response.data.state.current_offset);
+                            }
+                            
+                            // Clear the newly indexed items from the server state
+                            $.post(wpGptRagChatAdmin.ajaxUrl, {
+                                action: 'wp_gpt_rag_chat_clear_newly_indexed',
+                                nonce: wpGptRagChatAdmin.nonce
+                            }, function(clearResponse) {
+                                if (clearResponse.success) {
+                                    console.log('CORNUWB: Cleared newly indexed items from server state');
+                                }
+                            }).fail(function() {
+                                console.log('CORNUWB: Failed to clear newly indexed items from server state');
+                            });
+                        } else {
+                            console.log('CORNUWB: No newly indexed items found in this poll');
+                        }
+                    } else {
+                        console.log('CORNUWB: No state found in response');
+                    }
+                    
+                    // Stop monitoring if indexing is complete
+                    if (!response.data.is_running) {
+                        stopProgressMonitoring();
+                        handleIndexingComplete(response.data);
+                    }
+                }
+            });
+        }, 2000);
+    }
+    
+    /**
+     * Stop monitoring indexing progress
+     */
+    function stopProgressMonitoring() {
+        if (window.progressMonitoringInterval) {
+            clearInterval(window.progressMonitoringInterval);
+            window.progressMonitoringInterval = null;
+        }
+    }
+    
+    /**
+     * Update progress bar from server status
+     */
+    function updateProgressBarFromStatus(data) {
+        if (data.state) {
+            var percentage = data.progress_percentage || 0;
+            var progressText = data.progress_text || '<?php esc_html_e('Indexing...', 'wp-gpt-rag-chat'); ?>';
+            
+            $('#global-progress-container .progress-fill').css('width', percentage + '%');
+            $('#global-progress-container .progress-text').text(progressText);
+            
+            // Update stats if available
+            if (data.state.processed !== undefined && data.state.total_posts !== undefined) {
+                $('#sync-progress-stats').text(data.state.processed + ' / ' + data.state.total_posts);
+            }
+        }
+    }
+    
+    /**
+     * Restore progress bar state from server
+     */
+    function restoreProgressBarState(data) {
+        if (data.is_running) {
+            $('#sync-all-content').prop('disabled', true);
+            $('#cancel-sync-all').show();
+            $('#global-progress-container').show();
+            updateProgressBarFromStatus(data);
+            
+            // Get and display pending posts if not already shown
+            if (data.state && data.state.post_type) {
+                getAndDisplayPendingPosts(data.state.post_type);
+            }
+            
+            startProgressMonitoring();
+        }
+    }
+    
+    /**
+     * Handle indexing completion
+     */
+    function handleIndexingComplete(data) {
+        $('#sync-all-content').prop('disabled', false);
+        $('#cancel-sync-all').hide();
+        
+        // Update stats cards for all completion states
+        console.log('CORNUWB: Updating stats cards on indexing completion');
+        if (typeof cornuwbStatsUpdater !== 'undefined') {
+            cornuwbStatsUpdater.updateStats();
+        }
+        
+        if (data.state && data.state.status === 'completed') {
+            $('#global-progress-container .progress-fill').css('width', '100%');
+            $('#global-progress-container .progress-text').text('<?php esc_html_e('Completed!', 'wp-gpt-rag-chat'); ?>');
+            
+            CORNUWB.showNotification(
+                '<?php esc_html_e('Indexing Complete', 'wp-gpt-rag-chat'); ?>',
+                '<?php esc_html_e('All content has been successfully indexed.', 'wp-gpt-rag-chat'); ?>',
+                'success'
+            );
+            
+            // Hide progress bar after 3 seconds
+            setTimeout(function() {
+                $('#global-progress-container').fadeOut();
+            }, 3000);
+            
+            // Refresh the indexed items table
+            setTimeout(function() {
+                location.reload();
+            }, 2000);
+        } else if (data.state && data.state.status === 'cancelled') {
+            $('#global-progress-container').fadeOut();
+            CORNUWB.showNotification(
+                '<?php esc_html_e('Indexing Cancelled', 'wp-gpt-rag-chat'); ?>',
+                '<?php esc_html_e('Indexing has been cancelled.', 'wp-gpt-rag-chat'); ?>',
                 'warning'
             );
-            return;
+        } else if (data.state && data.state.status === 'error') {
+            $('#global-progress-container').fadeOut();
+            CORNUWB.showNotification(
+                '<?php esc_html_e('Indexing Error', 'wp-gpt-rag-chat'); ?>',
+                data.state.error || '<?php esc_html_e('An error occurred during indexing.', 'wp-gpt-rag-chat'); ?>',
+                'error'
+            );
         }
+    }
+    
+    /**
+     * Cancel persistent indexing
+     */
+    function cancelPersistentIndexing() {
+        $.post(wpGptRagChatAdmin.ajaxUrl, {
+            action: 'wp_gpt_rag_chat_cancel_persistent_indexing',
+            nonce: wpGptRagChatAdmin.nonce
+        }, function(response) {
+            if (response.success) {
+                stopProgressMonitoring();
+                handleIndexingComplete(response.data);
+            } else {
+                CORNUWB.showNotification(
+                    '<?php esc_html_e('Error', 'wp-gpt-rag-chat'); ?>',
+                    response.data.message || '<?php esc_html_e('Failed to cancel indexing.', 'wp-gpt-rag-chat'); ?>',
+                    'error'
+                );
+            }
+        });
+    }
+    
+    /**
+     * Start regular indexing (fallback when persistent indexing is not available)
+     */
+    function startRegularIndexing(button, postType) {
+        console.log('CORNUWB: Starting regular indexing as fallback');
         
         // Reset sync state
         syncCancelled = false;
         currentSyncOffset = 0;
+        totalToSync = 0;
+        cumulativeProcessed = 0;
         isIndexingInProgress = true;
         
-        // Show emergency stop notice
-        showEmergencyStop('Starting indexing...');
-        
-        // Show progress and cancel button
+        // Show progress bar
         button.prop('disabled', true);
         $('#cancel-sync-all').show();
-        $('#sync-all-progress').fadeIn();
-        $('#sync-progress-message').text('<?php esc_html_e('Starting...', 'wp-gpt-rag-chat'); ?>');
-        $('.progress-fill').css('width', '0%');
+        $('#global-progress-container').show();
+        $('#global-progress-container .progress-text').text('<?php esc_html_e('Starting indexing...', 'wp-gpt-rag-chat'); ?>');
+        $('#global-progress-container .progress-fill').css('width', '0%');
         
-        // Start syncing
-        syncNextBatch('index_all', selectedPostType);
+        // Start with the original syncNextBatch function
+        syncNextBatch('index_all', postType);
+        
+        CORNUWB.showNotification(
+            '<?php esc_html_e('Indexing Started', 'wp-gpt-rag-chat'); ?>',
+            '<?php esc_html_e('Using regular indexing mode. Progress will be lost if you navigate away from this page.', 'wp-gpt-rag-chat'); ?>',
+            'info'
+        );
+    }
+    
+    /**
+     * Get and display pending posts for persistent indexing
+     */
+    function getAndDisplayPendingPosts(postType) {
+        console.log('CORNUWB: Getting pending posts for persistent indexing');
+        
+        $.post(wpGptRagChatAdmin.ajaxUrl, {
+            action: 'wp_gpt_rag_chat_get_persistent_pending_posts',
+            nonce: wpGptRagChatAdmin.nonce,
+            post_type: postType,
+            limit: 10, // Get first 10 posts to show as pending (matches batch size)
+            offset: 0
+        }, function(response) {
+            if (response.success && response.data.items) {
+                console.log('CORNUWB: Got', response.data.count, 'pending posts');
+                
+                // Convert to table item format and mark as pending
+                var pendingItems = response.data.items.map(function(item) {
+                    return {
+                        id: item.id,
+                        title: item.title,
+                        type: item.type,
+                        edit_url: item.edit_url,
+                        pending: true
+                    };
+                });
+                
+                // Add pending items to table
+                addPendingItemsToTable(pendingItems);
+            } else {
+                console.log('CORNUWB: No pending posts found or error:', response);
+            }
+        }).fail(function(xhr) {
+            console.log('CORNUWB: Failed to get pending posts:', xhr);
+        });
+    }
+    
+    /**
+     * Fetch and display the next batch of pending posts
+     */
+    function fetchNextPendingBatch(postType, offset) {
+        console.log('CORNUWB: Fetching next pending batch from offset:', offset);
+        
+        $.post(wpGptRagChatAdmin.ajaxUrl, {
+            action: 'wp_gpt_rag_chat_get_persistent_pending_posts',
+            nonce: wpGptRagChatAdmin.nonce,
+            post_type: postType,
+            limit: 10, // Get next 10 posts (matches batch size)
+            offset: offset
+        }, function(response) {
+            if (response.success && response.data.items && response.data.items.length > 0) {
+                console.log('CORNUWB: Got', response.data.count, 'pending posts for next batch');
+                
+                // Convert to table item format and mark as pending
+                var pendingItems = response.data.items.map(function(item) {
+                    return {
+                        id: item.id,
+                        title: item.title,
+                        type: item.type,
+                        edit_url: item.edit_url,
+                        pending: true
+                    };
+                });
+                
+                // Add pending items to table
+                addPendingItemsToTable(pendingItems);
+            } else {
+                console.log('CORNUWB: No more pending posts found for offset:', offset);
+            }
+        }).fail(function(xhr) {
+            console.log('CORNUWB: Failed to fetch next pending batch:', xhr);
+        });
+    }
+    
+    // Sync all content - PERSISTENT INDEXING VERSION
+    $('#sync-all-content').on('click', function() {
+        var button = $(this);
+        var selectedPostType = $('#index-post-type').val();
+        
+        // Check if persistent indexing is already running
+        $.post(wpGptRagChatAdmin.ajaxUrl, {
+            action: 'wp_gpt_rag_chat_get_indexing_status',
+            nonce: wpGptRagChatAdmin.nonce
+        }, function(response) {
+            if (response.success && response.data.is_running) {
+                CORNUWB.showNotification(
+                    '<?php esc_html_e('Indexing In Progress', 'wp-gpt-rag-chat'); ?>',
+                    '<?php esc_html_e('Indexing is already running in the background. The progress bar will show the current status.', 'wp-gpt-rag-chat'); ?>',
+                    'info'
+                );
+                // Restore progress bar state
+                restoreProgressBarState(response.data);
+                return;
+            }
+            
+            // Start persistent indexing
+            startPersistentIndexing(button, selectedPostType);
+        }).fail(function(xhr) {
+            console.log('CORNUWB: Persistent indexing not available, falling back to regular indexing');
+            // Fallback to regular indexing if persistent indexing fails
+            startRegularIndexing(button, selectedPostType);
+        });
     });
     
-    // Cancel sync button
+    // Cancel sync button - PERSISTENT INDEXING VERSION
     $('#cancel-sync-all').on('click', function() {
         if (confirm('<?php esc_html_e('Are you sure you want to cancel the indexing process?', 'wp-gpt-rag-chat'); ?>')) {
-            syncCancelled = true;
             $(this).prop('disabled', true).text('<?php esc_html_e('Cancelling...', 'wp-gpt-rag-chat'); ?>');
+            cancelPersistentIndexing();
         }
     });
     
@@ -3088,7 +3441,7 @@ jQuery(document).ready(function($) {
             
             CORNUWB.showNotification(
                 '<?php esc_html_e('Cancelled', 'wp-gpt-rag-chat'); ?>',
-                '<?php esc_html_e('Indexing was cancelled. Processed: ', 'wp-gpt-rag-chat'); ?>' + currentSyncOffset + ' <?php esc_html_e('items', 'wp-gpt-rag-chat'); ?>',
+                '<?php esc_html_e('Indexing was cancelled. Processed: ', 'wp-gpt-rag-chat'); ?>' + (cumulativeProcessed || 0) + ' <?php esc_html_e('items', 'wp-gpt-rag-chat'); ?>',
                 'warning'
             );
             return;
@@ -3102,25 +3455,57 @@ jQuery(document).ready(function($) {
                 nonce: wpGptRagChatAdmin.nonce,
                 bulk_action: action,
                 offset: currentSyncOffset,
-                post_type: postType
+                post_type: postType,
+                batch_size: currentBatchSize
             },
             success: function(response) {
                 if (response.success) {
+                    // Reset retry count and batch size on successful batch
+                    retryCount = 0;
+                    if (currentBatchSize < 10) {
+                        currentBatchSize = 10; // Reset to default batch size
+                        console.log('CORNUWB: Resetting batch size to', currentBatchSize, 'after successful batch');
+                    }
+                    
                     var data = response.data;
-                    currentSyncOffset += data.processed;
                     
                     // Get total count if this is first batch
                     if (totalToSync === 0) {
                         totalToSync = data.total_posts || 0;
+                        console.log('CORNUWB: Setting totalToSync to:', totalToSync);
                     }
                     
-                    // Calculate progress
-                    var percentage = totalToSync > 0 ? Math.min((currentSyncOffset / totalToSync) * 100, 100) : 0;
-                    $('.progress-fill').css('width', percentage + '%');
+                    // Update cumulative progress counter
+                    // data.processed is the number of items processed in this batch
+                    cumulativeProcessed += data.processed || 0;
+                    console.log('CORNUWB: Updated cumulativeProcessed to:', cumulativeProcessed, 'added batch processed:', data.processed);
                     
-                    // Update message
-                    $('#sync-progress-message').text('<?php esc_html_e('Indexing...', 'wp-gpt-rag-chat'); ?>');
-                    $('#sync-progress-stats').text(currentSyncOffset + ' / ' + totalToSync);
+                    // Update offset for next batch
+                    currentSyncOffset += data.processed || 0;
+                    
+                    // Calculate progress and update global progress bar
+                    var percentage = totalToSync > 0 ? Math.min((cumulativeProcessed / totalToSync) * 100, 100) : 0;
+                    console.log('CORNUWB: Progress update - cumulativeProcessed:', cumulativeProcessed, 'totalToSync:', totalToSync, 'percentage:', percentage);
+                    $('#global-progress-container .progress-fill').css('width', percentage + '%');
+                    
+                    // Update message (real-time count)
+                    var progressText = '<?php esc_html_e('Indexing...', 'wp-gpt-rag-chat'); ?> ' + cumulativeProcessed + ' / ' + totalToSync;
+                    console.log('CORNUWB: Setting progress text to:', progressText);
+                    $('#global-progress-container .progress-text').text(progressText);
+                    $('#sync-progress-stats').text(cumulativeProcessed + ' / ' + totalToSync);
+
+                    // Update table rows in real-time (flip PENDING -> OK)
+                    console.log('CORNUWB: Checking for newly_indexed items:', data.newly_indexed);
+                    if (data.newly_indexed && data.newly_indexed.length > 0) {
+                        console.log('CORNUWB: Found', data.newly_indexed.length, 'newly indexed items, updating table');
+                        try {
+                            addNewItemsToTable(data.newly_indexed);
+                        } catch (e) {
+                            console.log('Realtime table update failed:', e);
+                        }
+                    } else {
+                        console.log('CORNUWB: No newly_indexed items in this batch');
+                    }
                     
                     // Update stats if provided
                     if (data.stats) {
@@ -3171,51 +3556,139 @@ jQuery(document).ready(function($) {
                         $('.progress-fill').css('width', '100%');
                         
                         setTimeout(function() {
-                            $('#sync-all-progress').fadeOut();
+                            $('#global-progress-container').hide();
                         }, 3000);
                         
                         CORNUWB.showNotification(
                             '<?php esc_html_e('Indexing Complete!', 'wp-gpt-rag-chat'); ?>',
-                            '<?php esc_html_e('Successfully indexed ', 'wp-gpt-rag-chat'); ?>' + currentSyncOffset + ' <?php esc_html_e('items to Pinecone.', 'wp-gpt-rag-chat'); ?>',
+                            '<?php esc_html_e('Successfully indexed ', 'wp-gpt-rag-chat'); ?>' + cumulativeProcessed + ' <?php esc_html_e('items to Pinecone.', 'wp-gpt-rag-chat'); ?>',
                             'success'
                         );
                         
                         // Reset
                         currentSyncOffset = 0;
+                        cumulativeProcessed = 0;
                         totalToSync = 0;
                     }
                 } else {
-                    // Error
+                    // If emergency stop is active, automatically resume and retry without showing the modal
+                    if (response.data && response.data.emergency_stop) {
+                        $.post(wpGptRagChatAdmin.ajaxUrl, {
+                            action: 'wp_gpt_rag_resume_indexing',
+                            nonce: wpGptRagChatAdmin.nonce
+                        }).done(function(resumeResp) {
+                            if (resumeResp && resumeResp.success) {
+                                // Retry the same batch immediately; keep UI in-progress
+                                syncNextBatch(action, postType);
+                            } else {
+                                // Fallback to original error handling
+                                isIndexingInProgress = false;
+                                hideEmergencyStop();
+                                $('#sync-all-content').prop('disabled', false);
+                                $('#cancel-sync-all').hide();
+                                $('#sync-progress-message').text('<?php esc_html_e('Error occurred', 'wp-gpt-rag-chat'); ?>');
+                                CORNUWB.showNotification(
+                                    '<?php esc_html_e('Indexing Error', 'wp-gpt-rag-chat'); ?>',
+                                    (resumeResp && resumeResp.data && resumeResp.data.message) || (response.data && response.data.message) || '<?php esc_html_e('An error occurred during indexing.', 'wp-gpt-rag-chat'); ?>',
+                                    'error'
+                                );
+                            }
+                        }).fail(function() {
+                            isIndexingInProgress = false;
+                            hideEmergencyStop();
+                            $('#sync-all-content').prop('disabled', false);
+                            $('#cancel-sync-all').hide();
+                            $('#sync-progress-message').text('<?php esc_html_e('Connection error', 'wp-gpt-rag-chat'); ?>');
+                            CORNUWB.showNotification(
+                                '<?php esc_html_e('Indexing Error', 'wp-gpt-rag-chat'); ?>',
+                                '<?php esc_html_e('Failed to auto-resume indexing. Please try again.', 'wp-gpt-rag-chat'); ?>',
+                                'error'
+                            );
+                        });
+                    } else {
+                        // Regular error handling
+                        isIndexingInProgress = false;
+                        hideEmergencyStop();
+                        $('#sync-all-content').prop('disabled', false);
+                        $('#cancel-sync-all').hide();
+                        $('#sync-progress-message').text('<?php esc_html_e('Error occurred', 'wp-gpt-rag-chat'); ?>');
+                        
+                        CORNUWB.showNotification(
+                            '<?php esc_html_e('Indexing Error', 'wp-gpt-rag-chat'); ?>',
+                            (response.data && response.data.message) || '<?php esc_html_e('An error occurred during indexing.', 'wp-gpt-rag-chat'); ?>',
+                            'error'
+                        );
+                    }
+                }
+            },
+            error: function(xhr) {
+                console.log('CORNUWB: AJAX error occurred, status:', xhr.status, 'response:', xhr.responseText);
+                
+                // Check if it's a 500 error and we haven't exceeded max retries
+                if (xhr.status === 500 && retryCount < maxRetries) {
+                    retryCount++;
+                    
+                    // Reduce batch size on retry to handle problematic posts
+                    if (retryCount === 1 && currentBatchSize > 5) {
+                        currentBatchSize = 5;
+                        console.log('CORNUWB: Reducing batch size to', currentBatchSize, 'due to 500 error');
+                    } else if (retryCount === 2 && currentBatchSize > 1) {
+                        currentBatchSize = 1;
+                        console.log('CORNUWB: Reducing batch size to', currentBatchSize, 'due to repeated 500 errors');
+                    }
+                    
+                    var retryDelay = Math.pow(2, retryCount) * 1000; // Exponential backoff: 2s, 4s, 8s
+                    
+                    console.log('CORNUWB: Retrying batch in', retryDelay, 'ms (attempt', retryCount, 'of', maxRetries, ') with batch size', currentBatchSize);
+                    
+                    $('#sync-progress-message').text('<?php esc_html_e('Retrying after error...', 'wp-gpt-rag-chat'); ?> (<?php esc_html_e('Attempt', 'wp-gpt-rag-chat'); ?> ' + retryCount + '/' + maxRetries + ', <?php esc_html_e('Batch size', 'wp-gpt-rag-chat'); ?>: ' + currentBatchSize + ')');
+                    
+                    setTimeout(function() {
+                        syncNextBatch(action, postType);
+                    }, retryDelay);
+                    return;
+                }
+                
+                // Reset retry count for next batch
+                retryCount = 0;
+                
+                // Attempt auto-resume on network error as well
+                $.post(wpGptRagChatAdmin.ajaxUrl, {
+                    action: 'wp_gpt_rag_resume_indexing',
+                    nonce: wpGptRagChatAdmin.nonce
+                }).done(function(resumeResp) {
+                    if (resumeResp && resumeResp.success) {
+                        // Retry the same batch
+                        syncNextBatch(action, postType);
+                    } else {
+                        isIndexingInProgress = false;
+                        hideEmergencyStop();
+                        $('#sync-all-content').prop('disabled', false);
+                        $('#cancel-sync-all').hide();
+                        $('#sync-progress-message').text('<?php esc_html_e('Connection error', 'wp-gpt-rag-chat'); ?>');
+                        CORNUWB.showNotification(
+                            '<?php esc_html_e('Connection Error', 'wp-gpt-rag-chat'); ?>',
+                            (resumeResp && resumeResp.data && resumeResp.data.message) || '<?php esc_html_e('Failed to connect to the server. Please try again.', 'wp-gpt-rag-chat'); ?>',
+                            'error'
+                        );
+                    }
+                }).fail(function() {
                     isIndexingInProgress = false;
                     hideEmergencyStop();
                     $('#sync-all-content').prop('disabled', false);
                     $('#cancel-sync-all').hide();
-                    $('#sync-progress-message').text('<?php esc_html_e('Error occurred', 'wp-gpt-rag-chat'); ?>');
-                    
+                    $('#sync-progress-message').text('<?php esc_html_e('Connection error', 'wp-gpt-rag-chat'); ?>');
                     CORNUWB.showNotification(
-                        '<?php esc_html_e('Indexing Error', 'wp-gpt-rag-chat'); ?>',
-                        response.data.message || '<?php esc_html_e('An error occurred during indexing.', 'wp-gpt-rag-chat'); ?>',
+                        '<?php esc_html_e('Connection Error', 'wp-gpt-rag-chat'); ?>',
+                        '<?php esc_html_e('Failed to connect to the server. Please try again.', 'wp-gpt-rag-chat'); ?>',
                         'error'
                     );
-                }
-            },
-            error: function() {
-                isIndexingInProgress = false;
-                hideEmergencyStop();
-                $('#sync-all-content').prop('disabled', false);
-                $('#cancel-sync-all').hide();
-                $('#sync-progress-message').text('<?php esc_html_e('Connection error', 'wp-gpt-rag-chat'); ?>');
-                
-                CORNUWB.showNotification(
-                    '<?php esc_html_e('Connection Error', 'wp-gpt-rag-chat'); ?>',
-                    '<?php esc_html_e('Failed to connect to the server. Please try again.', 'wp-gpt-rag-chat'); ?>',
-                    'error'
-                );
+                });
             }
         });
     }
     
-    // Sync single post
+    // Sync single post (use global full-width progress bar at the top)
     $('#sync-single-post').on('click', function() {
         var button = $(this);
         var selectedPostType = $('#index-post-type').val();
@@ -3229,67 +3702,9 @@ jQuery(document).ready(function($) {
             return;
         }
         
+        // Disable the button and use the global top progress bar
         button.prop('disabled', true);
-        $('#sync-all-progress').fadeIn();
-        $('#sync-progress-message').text('<?php esc_html_e('Indexing one post...', 'wp-gpt-rag-chat'); ?>');
-        $('.progress-fill').css('width', '50%');
-        
-        $.ajax({
-            url: wpGptRagChatAdmin.ajaxUrl,
-            type: 'POST',
-            data: {
-                action: 'wp_gpt_rag_chat_bulk_index',
-                nonce: wpGptRagChatAdmin.nonce,
-                bulk_action: 'index_single',
-                post_type: selectedPostType
-            },
-            success: function(response) {
-                button.prop('disabled', false);
-                
-                if (response.success) {
-                    $('.progress-fill').css('width', '100%');
-                    $('#sync-progress-message').text('<?php esc_html_e('Completed!', 'wp-gpt-rag-chat'); ?>');
-                    
-                    setTimeout(function() {
-                        $('#sync-all-progress').fadeOut();
-                    }, 2000);
-                    
-                    CORNUWB.showNotification(
-                        '<?php esc_html_e('Post Indexed!', 'wp-gpt-rag-chat'); ?>',
-                        '<?php esc_html_e('Successfully indexed one post to Pinecone.', 'wp-gpt-rag-chat'); ?>',
-                        'success'
-                    );
-                    
-                    // Update stats if provided
-                    if (response.data.stats) {
-                        $('#cornuwb-stat-vectors').text(response.data.stats.total_vectors || 0);
-                        $('#cornuwb-stat-posts').text(response.data.stats.total_posts || 0);
-                        
-                        // Update header counter
-                        var newCount = response.data.stats.total_posts || 0;
-                        $('#indexed-items-number').text(newCount.toLocaleString());
-                        $('#indexed-items-table-number').text(newCount.toLocaleString());
-                    }
-                } else {
-                    $('#sync-all-progress').fadeOut();
-                    CORNUWB.showNotification(
-                        '<?php esc_html_e('Indexing Error', 'wp-gpt-rag-chat'); ?>',
-                        response.data.message || '<?php esc_html_e('Failed to index post.', 'wp-gpt-rag-chat'); ?>',
-                        'error'
-                    );
-                }
-            },
-            error: function() {
-                button.prop('disabled', false);
-                $('#sync-all-progress').fadeOut();
-                
-                CORNUWB.showNotification(
-                    '<?php esc_html_e('Connection Error', 'wp-gpt-rag-chat'); ?>',
-                    '<?php esc_html_e('Failed to connect to the server.', 'wp-gpt-rag-chat'); ?>',
-                    'error'
-                );
-            }
-        });
+        showGlobalProgress('index_single', button, selectedPostType);
     });
     
     // Stop indexing button
@@ -3358,6 +3773,135 @@ jQuery(document).ready(function($) {
         $('#sync-all-content').prop('disabled', false).find('span').text('0');
         setButtonBusy($('#sync-single-post'), false);
         updateSyncAllCount();
+    }
+    
+    // Function to update post counts
+    function updatePostCounts() {
+        console.log('Updating post counts...');
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'wp_gpt_rag_chat_get_post_counts',
+                nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
+            },
+            success: function(response) {
+                console.log('Post counts response:', response);
+                if (response.success) {
+                    var postCounts = response.data.post_counts;
+                    var totalCount = response.data.total_count;
+                    
+                    console.log('Post counts:', postCounts);
+                    console.log('Total count:', totalCount);
+                    
+                    // Only update if we have valid counts (greater than 0 or if we explicitly got 0)
+                    if (totalCount >= 0) {
+                        // Update "All Post Types" count
+                        $('#all-post-count').text(totalCount);
+                        $('#sitemap-all-post-count').text(totalCount);
+                        
+                        // Update individual post type counts in dropdowns
+                        $('#index-post-type option, #sitemap-post-type option').each(function() {
+                            var postType = $(this).val();
+                            if (postType !== 'all' && postCounts[postType]) {
+                                var newText = postCounts[postType].label + ' (' + postCounts[postType].count + ')';
+                                $(this).text(newText);
+                                $(this).attr('data-count', postCounts[postType].count);
+                            }
+                        });
+                        
+                        // Update sync all button count
+                        updateSyncAllCount();
+                    } else {
+                        console.log('Invalid total count received:', totalCount);
+                    }
+                } else {
+                    console.log('Error in response:', response.data);
+                    // Don't update counts if there's an error - keep the server-side calculated ones
+                }
+            },
+            error: function(xhr, status, error) {
+                console.log('Failed to update post counts:', error);
+                console.log('XHR:', xhr);
+                // Don't update counts if AJAX fails - keep the server-side calculated ones
+            }
+        });
+    }
+    
+    // Function to update sync all button count based on selected post type
+    function updateSyncAllCount() {
+        var selectedPostType = $('#index-post-type').val();
+        var count = 0;
+        
+        console.log('updateSyncAllCount called for post type:', selectedPostType);
+        
+        if (selectedPostType === 'all') {
+            // Method 1: Get from button's data attribute
+            count = parseInt($('#sync-all-content').attr('data-total-count') || 0);
+            console.log('Method 1 - data-total-count:', count);
+            
+            // Method 2: Get from "all" option's data-count attribute
+            if (count === 0) {
+                count = parseInt($('#index-post-type option[value="all"]').attr('data-count') || 0);
+                console.log('Method 2 - all option data-count:', count);
+            }
+            
+            // Method 3: Get from span text
+            if (count === 0) {
+                var spanText = $('#all-post-count').text();
+                count = parseInt(spanText) || 0;
+                console.log('Method 3 - span text:', count);
+            }
+            
+            // Method 4: Parse from option text
+            if (count === 0) {
+                var allOptionText = $('#index-post-type option[value="all"]').text();
+                var match = allOptionText.match(/\((\d+)\)/);
+                if (match) {
+                    count = parseInt(match[1]);
+                    console.log('Method 4 - parsed from text:', count);
+                }
+            }
+        } else {
+            // Get count for selected post type
+            count = parseInt($('#index-post-type option:selected').attr('data-count') || 0);
+            console.log('Selected post type count:', count);
+        }
+        
+        console.log('Final count to set:', count);
+        $('#sync-all-count').text(count);
+    }
+    
+    // Function to preserve server-side calculated counts
+    function preserveServerSideCounts() {
+        // Store the initial server-side calculated counts
+        var initialAllCount = $('#all-post-count').text();
+        var initialSyncCount = $('#sync-all-count').text();
+        
+        console.log('Preserving server-side counts - All:', initialAllCount, 'Sync:', initialSyncCount);
+        
+        // If AJAX fails or returns 0, restore the server-side counts
+        setTimeout(function() {
+            if ($('#all-post-count').text() === '0' && initialAllCount !== '0') {
+                console.log('Restoring server-side count:', initialAllCount);
+                $('#all-post-count').text(initialAllCount);
+                $('#sitemap-all-post-count').text(initialAllCount);
+                $('#sync-all-count').text(initialSyncCount);
+            }
+        }, 2000);
+    }
+    
+    // Simple function to force set the sync all count
+    function forceSetSyncAllCount(count) {
+        console.log('Force setting sync all count to:', count);
+        
+        // Only update the span, not the entire button
+        $('#sync-all-count').text(count);
+        
+        // Also update the button's data attribute
+        $('#sync-all-content').attr('data-total-count', count);
+        
+        console.log('Count updated to:', count);
     }
     
     // Function to complete indexing
@@ -4326,13 +4870,13 @@ jQuery(document).ready(function($) {
             nonce: wpGptRagChatAdmin.nonce
         }, function(response) {
             if (response.success) {
-                alert('<?php esc_js(__('All vectors cleared successfully.', 'wp-gpt-rag-chat')); ?>');
+                CORNUWB.showNotification('<?php esc_js(__('Vectors Cleared', 'wp-gpt-rag-chat')); ?>', '<?php esc_js(__('All vectors cleared successfully.', 'wp-gpt-rag-chat')); ?>', 'success');
                 location.reload();
             } else {
-                alert('<?php esc_js(__('Error:', 'wp-gpt-rag-chat')); ?> ' + response.data.message);
+                CORNUWB.showNotification('<?php esc_js(__('Error', 'wp-gpt-rag-chat')); ?>', (response.data && response.data.message) || '<?php esc_js(__('Unexpected error.', 'wp-gpt-rag-chat')); ?>', 'error');
             }
         }).fail(function() {
-            alert('<?php esc_js(__('Error clearing vectors.', 'wp-gpt-rag-chat')); ?>');
+            CORNUWB.showNotification('<?php esc_js(__('Error', 'wp-gpt-rag-chat')); ?>', '<?php esc_js(__('Error clearing vectors.', 'wp-gpt-rag-chat')); ?>', 'error');
         }).always(function() {
             setButtonBusy(button, false);
         });
@@ -4378,7 +4922,7 @@ jQuery(document).ready(function($) {
         var selectedItems = $('.item-checkbox:checked');
         
         if (selectedItems.length === 0) {
-            alert('<?php esc_js(__('Please select at least one item to reindex.', 'wp-gpt-rag-chat')); ?>');
+            CORNUWB.showNotification('<?php esc_js(__('No Items Selected', 'wp-gpt-rag-chat')); ?>', '<?php esc_js(__('Please select at least one item to reindex.', 'wp-gpt-rag-chat')); ?>', 'warning');
             return;
         }
         
@@ -4398,7 +4942,7 @@ jQuery(document).ready(function($) {
         function reindexNext() {
             if (completed >= total) {
                 setButtonBusy(button, false);
-                alert('<?php esc_js(__('Bulk reindexing completed.', 'wp-gpt-rag-chat')); ?>');
+                CORNUWB.showNotification('<?php esc_js(__('Reindex Complete', 'wp-gpt-rag-chat')); ?>', '<?php esc_js(__('Bulk reindexing completed.', 'wp-gpt-rag-chat')); ?>', 'success');
                 location.reload();
                 return;
             }
@@ -4452,10 +4996,10 @@ jQuery(document).ready(function($) {
                     String(now.getSeconds()).padStart(2, '0');
                 row.find('.updated-time').text(timestamp);
             } else {
-                alert('<?php esc_js(__('Error:', 'wp-gpt-rag-chat')); ?> ' + response.data.message);
+                CORNUWB.showNotification('<?php esc_js(__('Error', 'wp-gpt-rag-chat')); ?>', (response.data && response.data.message) || '<?php esc_js(__('Unexpected error.', 'wp-gpt-rag-chat')); ?>', 'error');
             }
         }).fail(function() {
-            alert('<?php esc_js(__('Error reindexing post.', 'wp-gpt-rag-chat')); ?>');
+            CORNUWB.showNotification('<?php esc_js(__('Error', 'wp-gpt-rag-chat')); ?>', '<?php esc_js(__('Error reindexing post.', 'wp-gpt-rag-chat')); ?>', 'error');
         }).always(function() {
             button.prop('disabled', false);
             row.removeClass('processing');
@@ -4698,6 +5242,8 @@ jQuery(document).ready(function($) {
             return;
         }
         
+        console.log('CORNUWB: Processing', newlyIndexedItems.length, 'items for table update');
+        
         var tbody = $('.indexed-items-table tbody');
         console.log('CORNUWB: Found tbody:', tbody.length);
         
@@ -4750,6 +5296,32 @@ jQuery(document).ready(function($) {
             updateSelectAllButton();
         });
     }
+
+    // Add items with PENDING status to the table
+    function addPendingItemsToTable(items){
+        console.log('CORNUWB: addPendingItemsToTable called with:', items);
+        if(!items || items.length === 0) {
+            console.log('CORNUWB: No pending items to add, returning');
+            return;
+        }
+        console.log('CORNUWB: Adding', items.length, 'pending items to table');
+        var tbody = $('.indexed-items-table tbody');
+
+        // Remove "no items" message if present
+        var noItemsRow = tbody.find('.no-items-message').closest('tr');
+        if (noItemsRow.length > 0) noItemsRow.remove();
+
+        items.forEach(function(item){
+            // Avoid duplicates
+            if ($('tr[data-post-id="' + item.id + '"]').length) return;
+            var row = createIndexedItemRow(item);
+            // Force pending status visuals
+            row.find('.status-badge').removeClass('status-ok status-outdated').addClass('status-pending');
+            row.find('.status-text').text('PENDING');
+            row.find('.status-icon').text('…');
+            row.hide().prependTo(tbody).fadeIn(300);
+        });
+    }
     
     // Function to create a table row for an indexed item
     function createIndexedItemRow(item) {
@@ -4766,9 +5338,9 @@ jQuery(document).ready(function($) {
                 '<input type="checkbox" class="item-checkbox" value="' + item.id + '" />' +
             '</td>' +
             '<td class="status-column">' +
-                '<span class="status-badge status-ok">' +
-                    '<span class="status-icon">✓</span>' +
-                    '<span class="status-text">OK</span>' +
+                '<span class="status-badge ' + (item.pending ? 'status-pending' : 'status-ok') + '">' +
+                    '<span class="status-icon">' + (item.pending ? '…' : '✓') + '</span>' +
+                    '<span class="status-text">' + (item.pending ? 'PENDING' : 'OK') + '</span>' +
                 '</span>' +
             '</td>' +
             '<td class="title-column">' +
@@ -5125,7 +5697,7 @@ jQuery(document).ready(function($) {
         var totalItems = $('.indexed-items-table tbody tr').not('.no-items-message').length;
         
         if (totalItems === 0) {
-            alert('<?php esc_js(__('There are no indexed items to delete.', 'wp-gpt-rag-chat')); ?>');
+            CORNUWB.showNotification('<?php esc_js(__('Nothing to delete', 'wp-gpt-rag-chat')); ?>', '<?php esc_js(__('There are no indexed items to delete.', 'wp-gpt-rag-chat')); ?>', 'info');
             return;
         }
         
@@ -5188,7 +5760,7 @@ jQuery(document).ready(function($) {
         });
         
         if (postIds.length === 0) {
-            alert('<?php esc_js(__('No items found to delete.', 'wp-gpt-rag-chat')); ?>');
+            CORNUWB.showNotification('<?php esc_js(__('Nothing to delete', 'wp-gpt-rag-chat')); ?>', '<?php esc_js(__('No items found to delete.', 'wp-gpt-rag-chat')); ?>', 'info');
             return;
         }
         
@@ -5214,15 +5786,26 @@ jQuery(document).ready(function($) {
                 // All done
                 CORNUWB.setButtonLoading(button, false);
                 
-                if (failedItems === 0) {
-                    alert('<?php esc_js(__('Successfully deleted all indexed items!', 'wp-gpt-rag-chat')); ?>');
-                } else {
-                    alert('<?php esc_js(__('Completed with errors. Some items could not be deleted.', 'wp-gpt-rag-chat')); ?> ' + failedItems + ' <?php esc_js(__('failed.', 'wp-gpt-rag-chat')); ?>');
-                }
+                var successCount = totalItems - failedItems;
+                console.log('CORNUWB: Delete all completed - totalItems:', totalItems, 'failedItems:', failedItems, 'successCount:', successCount);
                 
-                // Close modal and refresh page
+                // Close the modal first
                 $('#delete-all-modal').removeClass('show');
-                location.reload();
+                // Scroll to top so the toast is visible
+                $('html, body').animate({ scrollTop: 0 }, 250);
+                
+                // Show a clear toast message
+                if (failedItems === 0) {
+                    var successMessage = successCount + ' <?php esc_js(__('items were successfully deleted.', 'wp-gpt-rag-chat')); ?>';
+                    console.log('CORNUWB: Showing success notification with message:', successMessage);
+                    CORNUWB.showNotification('<?php esc_js(__('Delete Complete', 'wp-gpt-rag-chat')); ?>', successMessage, 'success');
+                } else {
+                    var errorMessage = successCount + ' <?php esc_js(__('deleted,', 'wp-gpt-rag-chat')); ?> ' + failedItems + ' <?php esc_js(__('failed.', 'wp-gpt-rag-chat')); ?>';
+                    console.log('CORNUWB: Showing error notification with message:', errorMessage);
+                    CORNUWB.showNotification('<?php esc_js(__('Completed with Errors', 'wp-gpt-rag-chat')); ?>', errorMessage, 'warning');
+                }
+                // Refresh after a short delay so the user can read the toast
+                setTimeout(function(){ location.reload(); }, 1200);
                 return;
             }
             
@@ -5487,6 +6070,88 @@ jQuery(document).ready(function($) {
                 'error'
             );
         });
+    });
+    
+    // Initialize post counts and event handlers
+    // Don't call updatePostCounts() on page load since server-side calculation is working
+    // updatePostCounts(); // Load post counts on page load
+    
+    // Preserve server-side calculated counts
+    preserveServerSideCounts();
+    
+    // Get the initial count from the button's data attribute
+    var initialCount = parseInt($('#sync-all-content').attr('data-total-count') || 0);
+    console.log('Initial count from data attribute:', initialCount);
+    
+    // Force set the count immediately
+    if (initialCount > 0) {
+        forceSetSyncAllCount(initialCount);
+    }
+    
+    // Update sync all button count on page load - multiple attempts
+    updateSyncAllCount();
+    
+    // Try again after a short delay
+    setTimeout(function() {
+        console.log('Delayed update attempt...');
+        updateSyncAllCount();
+        if (initialCount > 0) {
+            forceSetSyncAllCount(initialCount);
+        }
+    }, 500);
+    
+    // Try again after another delay
+    setTimeout(function() {
+        console.log('Second delayed update attempt...');
+        updateSyncAllCount();
+        if (initialCount > 0) {
+            forceSetSyncAllCount(initialCount);
+        }
+    }, 1000);
+    
+    // Test the AJAX endpoint immediately
+    console.log('Testing AJAX endpoint...');
+    $.ajax({
+        url: ajaxurl,
+        type: 'POST',
+        data: {
+            action: 'wp_gpt_rag_chat_get_post_counts',
+            nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
+        },
+        success: function(response) {
+            console.log('AJAX test successful:', response);
+        },
+        error: function(xhr, status, error) {
+            console.log('AJAX test failed:', error, xhr.responseText);
+        }
+    });
+    
+    // Set up periodic updates for post counts (less frequent since server-side calculation works)
+    setInterval(updatePostCounts, 300000); // Update post counts every 5 minutes
+    
+    // Handle dropdown changes
+    $('#index-post-type, #sitemap-post-type').on('change', function() {
+        if ($(this).attr('id') === 'index-post-type') {
+            updateSyncAllCount();
+        }
+    });
+    
+    // ============================================
+    // PAGE LOAD: CHECK FOR PERSISTENT INDEXING
+    // ============================================
+    
+    // Check if persistent indexing is already running on page load
+    $.post(wpGptRagChatAdmin.ajaxUrl, {
+        action: 'wp_gpt_rag_chat_get_indexing_status',
+        nonce: wpGptRagChatAdmin.nonce
+    }, function(response) {
+        if (response.success && response.data.is_running) {
+            console.log('CORNUWB: Persistent indexing detected on page load, restoring progress bar');
+            restoreProgressBarState(response.data);
+        }
+    }).fail(function(xhr) {
+        console.log('CORNUWB: Persistent indexing status check failed on page load, continuing normally');
+        // Don't show error to user, just continue normally
     });
 });
 </script>

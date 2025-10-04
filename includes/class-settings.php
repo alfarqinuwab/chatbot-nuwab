@@ -18,6 +18,8 @@ class Settings {
     public function __construct() {
         add_action('admin_init', [$this, 'register_settings']);
         add_action('wp_ajax_wp_gpt_rag_chat_save_settings', [$this, 'ajax_save_settings']);
+        add_action('wp_ajax_wp_gpt_rag_chat_dismiss_error', [$this, 'ajax_dismiss_error']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_post_counts', [$this, 'ajax_get_post_counts']);
     }
     
     /**
@@ -407,6 +409,29 @@ class Settings {
         $sanitized['require_consent'] = isset($input['require_consent']) ? (bool) $input['require_consent'] : true;
         $sanitized['enable_pii_masking'] = isset($input['enable_pii_masking']) ? (bool) $input['enable_pii_masking'] : true;
         
+        // Validate API keys only when form is submitted
+        if (isset($_POST['submit']) || isset($_POST['wp_gpt_rag_chat_settings_nonce'])) {
+            if (!empty($sanitized['pinecone_api_key'])) {
+                if (!$this->validate_pinecone_api_key($sanitized['pinecone_api_key'])) {
+                    add_settings_error(
+                        'wp_gpt_rag_chat_settings',
+                        'invalid_pinecone_api_key',
+                        __('Invalid Pinecone API key format', 'wp-gpt-rag-chat')
+                    );
+                }
+            }
+            
+            if (!empty($sanitized['openai_api_key'])) {
+                if (!$this->validate_openai_api_key($sanitized['openai_api_key'])) {
+                    add_settings_error(
+                        'wp_gpt_rag_chat_settings',
+                        'invalid_openai_api_key',
+                        __('Invalid OpenAI API key format', 'wp-gpt-rag-chat')
+                    );
+                }
+            }
+        }
+        
         // Validate ranges
         $sanitized['max_tokens'] = max(1, min(32768, $sanitized['max_tokens']));
         $sanitized['temperature'] = max(0, min(2, $sanitized['temperature']));
@@ -471,6 +496,96 @@ class Settings {
                 ]);
             }
         }
+    }
+    
+    /**
+     * AJAX handler for dismissing settings errors
+     */
+    public function ajax_dismiss_error() {
+        // Verify nonce for security
+        if (!wp_verify_nonce($_POST['nonce'], 'wp_gpt_rag_chat_settings_nonce')) {
+            wp_send_json_error([
+                'message' => __('Security check failed. Please refresh the page and try again.', 'wp-gpt-rag-chat')
+            ]);
+        }
+        
+        // Check user capabilities
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error([
+                'message' => __('You do not have permission to dismiss errors.', 'wp-gpt-rag-chat')
+            ]);
+        }
+        
+        // Clear settings errors transient
+        delete_transient('settings_errors');
+        
+        // Clear any global settings errors
+        global $wp_settings_errors;
+        $wp_settings_errors = [];
+        
+        wp_send_json_success([
+            'message' => __('Error dismissed successfully.', 'wp-gpt-rag-chat')
+        ]);
+    }
+    
+    /**
+     * AJAX handler for getting post counts
+     */
+    public function ajax_get_post_counts() {
+        // Verify nonce for security
+        if (!wp_verify_nonce($_POST['nonce'], 'wp_gpt_rag_chat_admin_nonce')) {
+            error_log('WP GPT RAG Chat - Nonce verification failed for post counts');
+            wp_send_json_error([
+                'message' => __('Security check failed. Please refresh the page and try again.', 'wp-gpt-rag-chat')
+            ]);
+        }
+        
+        // Check user capabilities
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error([
+                'message' => __('You do not have permission to get post counts.', 'wp-gpt-rag-chat')
+            ]);
+        }
+        
+        $post_counts = [];
+        $total_count = 0;
+        
+        // Get all public post types
+        $post_types = get_post_types(['public' => true], 'objects');
+        
+        foreach ($post_types as $post_type) {
+            if ($post_type->name === 'attachment') {
+                continue; // Skip attachments
+            }
+            
+            // Get count of published posts for this post type
+            $count = wp_count_posts($post_type->name);
+            $published_count = isset($count->publish) ? (int) $count->publish : 0;
+            
+            // Also check for other statuses that might be relevant
+            $total_for_type = $published_count;
+            if (isset($count->private)) {
+                $total_for_type += (int) $count->private;
+            }
+            
+            $post_counts[$post_type->name] = [
+                'label' => $post_type->label,
+                'count' => $total_for_type
+            ];
+            
+            $total_count += $total_for_type;
+        }
+        
+        // Debug logging
+        error_log('WP GPT RAG Chat - Post counts calculated: ' . print_r($post_counts, true));
+        error_log('WP GPT RAG Chat - Total count: ' . $total_count);
+        
+        error_log('WP GPT RAG Chat - Sending AJAX response with total_count: ' . $total_count);
+        
+        wp_send_json_success([
+            'post_counts' => $post_counts,
+            'total_count' => $total_count
+        ]);
     }
     
     /**
@@ -681,5 +796,51 @@ class Settings {
         if (!empty($args['description'])) {
             echo '<p class="description">' . esc_html($args['description']) . '</p>';
         }
+    }
+    
+    /**
+     * Validate Pinecone API key format
+     */
+    private function validate_pinecone_api_key($api_key) {
+        if (empty($api_key)) {
+            return false;
+        }
+        
+        // Pinecone API keys can be in different formats:
+        // 1. Legacy UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        // 2. New format: pckey_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        // 3. Other formats that might be valid
+        
+        // Check for legacy UUID format
+        if (preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i', $api_key)) {
+            return true;
+        }
+        
+        // Check for new pckey_ format
+        if (preg_match('/^pckey_[a-zA-Z0-9]{32,}$/', $api_key)) {
+            return true;
+        }
+        
+        // Check for other potential valid formats (alphanumeric, reasonable length)
+        if (preg_match('/^[a-zA-Z0-9_-]{20,}$/', $api_key)) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Validate OpenAI API key format
+     */
+    private function validate_openai_api_key($api_key) {
+        if (empty($api_key)) {
+            return false;
+        }
+        
+        // OpenAI API keys start with 'sk-' and can have various formats:
+        // - Legacy: sk-[48 chars] (51 total)
+        // - Project: sk-proj-[more chars] (varies)
+        // - Organization: sk-[org]-[more chars] (varies)
+        return preg_match('/^sk-[a-zA-Z0-9\-_]{20,}$/', $api_key);
     }
 }

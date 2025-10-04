@@ -75,8 +75,20 @@ class Plugin {
         add_action('wp_ajax_wp_gpt_rag_chat_get_user_activity', [$this, 'handle_get_user_activity']);
         add_action('wp_ajax_wp_gpt_rag_emergency_stop', [$this, 'handle_emergency_stop_ajax']);
         add_action('wp_ajax_wp_gpt_rag_resume_indexing', [$this, 'handle_resume_indexing_ajax']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_next_batch', [$this, 'handle_get_next_batch']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_error_context', [$this, 'handle_get_error_context']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_usage_context', [$this, 'handle_get_usage_context']);
+        
+        // Persistent indexing AJAX actions
+        add_action('wp_ajax_wp_gpt_rag_chat_start_persistent_indexing', [$this, 'handle_start_persistent_indexing']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_indexing_status', [$this, 'handle_get_indexing_status']);
+        add_action('wp_ajax_wp_gpt_rag_chat_cancel_persistent_indexing', [$this, 'handle_cancel_persistent_indexing']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_persistent_pending_posts', [$this, 'handle_get_persistent_pending_posts']);
+        add_action('wp_ajax_wp_gpt_rag_chat_clear_newly_indexed', [$this, 'handle_clear_newly_indexed']);
+        
+        // Cron hooks for persistent indexing
+        add_action('wp_gpt_rag_chat_process_indexing_batch', ['WP_GPT_RAG_Chat\Persistent_Indexing', 'process_batch']);
+        add_action('wp_gpt_rag_chat_cleanup_indexing_state', ['WP_GPT_RAG_Chat\Persistent_Indexing', 'cleanup_indexing_state']);
         add_action('wp_ajax_wp_gpt_rag_chat_start_export', [$this, 'handle_start_export']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_export_history', [$this, 'handle_get_export_history']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_diagnostics_data', [$this, 'handle_get_diagnostics_data']);
@@ -119,7 +131,8 @@ class Plugin {
             'includes/class-emergency-stop.php',
             'includes/class-import-protection.php',
             'includes/class-error-logger.php',
-            'includes/class-api-usage-tracker.php'
+            'includes/class-api-usage-tracker.php',
+            'includes/class-persistent-indexing.php'
         ];
         
         foreach ($files as $file) {
@@ -251,6 +264,16 @@ class Plugin {
             [$this, 'diagnostics_page']
         );
         
+        // Cron Status submenu
+        add_submenu_page(
+            'wp-gpt-rag-chat-dashboard',
+            __('Cron Status', 'wp-gpt-rag-chat'),
+            __('Cron Status', 'wp-gpt-rag-chat'),
+            'manage_options',
+            'wp-gpt-rag-chat-cron-status',
+            [$this, 'cron_status_page']
+        );
+        
         // Conversation View (hidden submenu)
         add_submenu_page(
             null, // Hidden from menu
@@ -315,6 +338,13 @@ class Plugin {
      */
     public function diagnostics_page() {
         include WP_GPT_RAG_CHAT_PLUGIN_DIR . 'templates/diagnostics-page.php';
+    }
+    
+    /**
+     * Cron Status page callback
+     */
+    public function cron_status_page() {
+        include WP_GPT_RAG_CHAT_PLUGIN_DIR . 'templates/cron-status-page.php';
     }
     
     /**
@@ -402,6 +432,14 @@ class Plugin {
             wp_enqueue_style(
                 'wp-gpt-rag-chat-admin',
                 WP_GPT_RAG_CHAT_PLUGIN_URL . 'assets/css/admin.css',
+                [],
+                WP_GPT_RAG_CHAT_VERSION
+            );
+            
+            // Enqueue plugin-specific admin styles
+            wp_enqueue_style(
+                'wp-gpt-rag-chat-cor-admin-style',
+                WP_GPT_RAG_CHAT_PLUGIN_URL . 'assets/css/cor-admin-style.css',
                 [],
                 WP_GPT_RAG_CHAT_VERSION
             );
@@ -516,6 +554,7 @@ class Plugin {
         $query = sanitize_text_field($_POST['query'] ?? '');
         $chat_id = sanitize_text_field($_POST['chat_id'] ?? '');
         $turn_number = intval($_POST['turn_number'] ?? 1);
+        $detected_language = sanitize_text_field($_POST['detected_language'] ?? '');
         
         if (empty($query)) {
             wp_send_json_error(['message' => __('Query is required.', 'wp-gpt-rag-chat')]);
@@ -531,7 +570,7 @@ class Plugin {
             $start_time = microtime(true);
             
             $chat = new Chat();
-            $response = $chat->process_query($query);
+            $response = $chat->process_query($query, [], $detected_language);
             $rag_metadata = $chat->get_last_rag_metadata();
             
             $latency = round((microtime(true) - $start_time) * 1000); // milliseconds
@@ -711,30 +750,45 @@ class Plugin {
                 ['%d']
             );
             
-            // Re-index if requested and not already indexed
-            if ($reindex && !$this->is_post_indexed($source_id)) {
+            // ALWAYS check and index if needed (not just when checkbox is checked)
+            $indexing_status = ['indexed' => false, 'message' => ''];
+            $is_already_indexed = $this->is_post_indexed($source_id);
+            
+            try {
                 $indexing = new Indexing();
                 
-                if ($source_type === 'post') {
-                    $indexing->index_post($source_id);
-                } elseif ($source_type === 'attachment') {
-                    // For attachments (PDFs), use index_post as well
-                    $indexing->index_post($source_id);
+                // If not indexed OR user requested re-index
+                if (!$is_already_indexed || $reindex) {
+                    if ($source_type === 'post') {
+                        $indexing->index_post($source_id, true);
+                    } elseif ($source_type === 'attachment') {
+                        $indexing->index_post($source_id, true);
+                    }
+                    
+                    $indexing_status['indexed'] = true;
+                    $indexing_status['message'] = $is_already_indexed 
+                        ? __('Source re-indexed.', 'wp-gpt-rag-chat')
+                        : __('Source auto-indexed.', 'wp-gpt-rag-chat');
+                    
+                    error_log('WP GPT RAG Chat: Auto-indexed linked source #' . $source_id);
+                } else {
+                    $indexing_status['message'] = __('Already indexed.', 'wp-gpt-rag-chat');
                 }
-                
-                wp_send_json_success([
-                    'message' => __('Source linked and content indexed successfully.', 'wp-gpt-rag-chat'),
-                    'reindexed' => true
-                ]);
+            } catch (\Exception $e) {
+                error_log('WP GPT RAG Chat: Auto-index error: ' . $e->getMessage());
+                $indexing_status['message'] = __('Indexing failed: ', 'wp-gpt-rag-chat') . $e->getMessage();
             }
             
             if ($result !== false) {
                 $message = __('Source linked successfully.', 'wp-gpt-rag-chat');
-                if ($reindex && $this->is_post_indexed($source_id)) {
-                    $message .= ' ' . __('(Content was already indexed)', 'wp-gpt-rag-chat');
+                if (!empty($indexing_status['message'])) {
+                    $message .= ' (' . $indexing_status['message'] . ')';
                 }
+                
                 wp_send_json_success([
-                    'message' => $message
+                    'message' => $message,
+                    'indexing' => $indexing_status,
+                    'sources_count' => count($sources)
                 ]);
             } else {
                 wp_send_json_error(['message' => __('Failed to link source.', 'wp-gpt-rag-chat')]);
@@ -761,49 +815,59 @@ class Plugin {
             wp_send_json_error(['message' => __('Search query is required.', 'wp-gpt-rag-chat')]);
         }
         
-        // Search posts
-        $args = [
-            's' => $search,
-            'post_type' => $post_type === 'any' ? ['post', 'page'] : $post_type,
-            'post_status' => 'publish',
-            'posts_per_page' => 20,
-            'orderby' => 'relevance'
-        ];
-        
-        $posts = get_posts($args);
-        
         $results = [];
-        foreach ($posts as $post) {
-            $results[] = [
-                'id' => $post->ID,
-                'title' => $post->post_title,
-                'type' => $post->post_type,
-                'url' => get_permalink($post->ID),
-                'excerpt' => wp_trim_words($post->post_content, 20),
-                'is_indexed' => $this->is_post_indexed($post->ID)
+        
+        // Handle attachment/PDF search separately
+        if ($post_type === 'attachment') {
+            $attachment_args = [
+                's' => $search,
+                'post_type' => 'attachment',
+                'post_status' => 'inherit',
+                'post_mime_type' => 'application/pdf',
+                'posts_per_page' => 100
             ];
-        }
-        
-        // Search attachments (PDFs)
-        $attachment_args = [
-            's' => $search,
-            'post_type' => 'attachment',
-            'post_status' => 'inherit',
-            'post_mime_type' => 'application/pdf',
-            'posts_per_page' => 10
-        ];
-        
-        $attachments = get_posts($attachment_args);
-        
-        foreach ($attachments as $attachment) {
-            $results[] = [
-                'id' => $attachment->ID,
-                'title' => $attachment->post_title,
-                'type' => 'pdf',
-                'url' => wp_get_attachment_url($attachment->ID),
-                'excerpt' => __('PDF Document', 'wp-gpt-rag-chat'),
-                'is_indexed' => $this->is_post_indexed($attachment->ID)
+            
+            $attachments = get_posts($attachment_args);
+            
+            foreach ($attachments as $attachment) {
+                $results[] = [
+                    'id' => $attachment->ID,
+                    'title' => $attachment->post_title,
+                    'type' => 'pdf',
+                    'url' => wp_get_attachment_url($attachment->ID),
+                    'excerpt' => __('PDF Document', 'wp-gpt-rag-chat'),
+                    'is_indexed' => $this->is_post_indexed($attachment->ID)
+                ];
+            }
+        } else {
+            // Search posts (all public post types if 'any')
+            $post_types_to_search = $post_type === 'any' 
+                ? get_post_types(['public' => true], 'names')
+                : [$post_type];
+            
+            // Remove attachment from the list
+            $post_types_to_search = array_diff($post_types_to_search, ['attachment']);
+            
+            $args = [
+                's' => $search,
+                'post_type' => $post_types_to_search,
+                'post_status' => ['publish', 'private'],
+                'posts_per_page' => 100,
+                'orderby' => 'relevance'
             ];
+            
+            $posts = get_posts($args);
+            
+            foreach ($posts as $post) {
+                $results[] = [
+                    'id' => $post->ID,
+                    'title' => $post->post_title,
+                    'type' => $post->post_type,
+                    'url' => get_permalink($post->ID),
+                    'excerpt' => wp_trim_words($post->post_content, 20),
+                    'is_indexed' => $this->is_post_indexed($post->ID)
+                ];
+            }
         }
         
         wp_send_json_success(['results' => $results]);
@@ -1362,6 +1426,10 @@ class Plugin {
      * Handle bulk index AJAX request
      */
     public function handle_bulk_index() {
+        // Increase memory limit and execution time for bulk operations
+        ini_set('memory_limit', '512M');
+        set_time_limit(300); // 5 minutes
+        
         check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_options')) {
@@ -1379,19 +1447,26 @@ class Plugin {
         $action = sanitize_text_field($_POST['bulk_action'] ?? '');
         $offset = intval($_POST['offset'] ?? 0);
         $post_type = sanitize_text_field($_POST['post_type'] ?? '');
+        $batch_size = intval($_POST['batch_size'] ?? 10);
+        
+        // Ensure batch size is reasonable (1-50)
+        $batch_size = max(1, min(50, $batch_size));
+        
+        // Log the request for debugging
+        error_log("WP GPT RAG Chat: Bulk index request - Action: {$action}, Offset: {$offset}, Post Type: {$post_type}, Batch Size: {$batch_size}");
         
         try {
             $indexing = new Indexing();
             
             switch ($action) {
                 case 'index_all':
-                    $result = $indexing->index_all_content(10, $offset, $post_type);
+                    $result = $indexing->index_all_content($batch_size, $offset, $post_type);
                     break;
                 case 'index_single':
                     $result = $indexing->index_single_post($post_type);
                     break;
                 case 'reindex_changed':
-                    $result = $indexing->reindex_changed_content(10, $offset, $post_type);
+                    $result = $indexing->reindex_changed_content($batch_size, $offset, $post_type);
                     break;
                 default:
                     wp_send_json_error(['message' => __('Invalid action.', 'wp-gpt-rag-chat')]);
@@ -1429,6 +1504,19 @@ class Plugin {
             // Get updated stats
             $stats = $indexing->get_indexing_stats();
             
+            // If nothing was processed and we have errors, report as an error response
+            if (empty($result['processed']) && !empty($result['errors'])) {
+                $message = is_array($result['errors']) ? implode("\n", $result['errors']) : (string) $result['errors'];
+                wp_send_json_error([
+                    'message' => $message,
+                    'processed' => 0,
+                    'total' => $total_posts,
+                    'total_posts' => $total_posts,
+                    'errors' => $result['errors'],
+                    'stats' => $stats
+                ]);
+            }
+            
             wp_send_json_success([
                 'processed' => $result['processed'],
                 'total' => $total_posts,
@@ -1441,6 +1529,57 @@ class Plugin {
         } catch (\Exception $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Provide the next batch of posts (IDs and titles) that would be indexed
+     */
+    public function handle_get_next_batch() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+
+        $offset = intval($_POST['offset'] ?? 0);
+        $post_type = sanitize_text_field($_POST['post_type'] ?? '');
+        $limit = 10; // match processing batch size
+
+        $query_args = [
+            'numberposts' => $limit,
+            'offset' => $offset,
+            'post_status' => ['publish', 'private'],
+            'meta_query' => [
+                'relation' => 'OR',
+                [
+                    'key' => '_wp_gpt_rag_chat_include',
+                    'value' => '1',
+                    'compare' => '='
+                ],
+                [
+                    'key' => '_wp_gpt_rag_chat_include',
+                    'compare' => 'NOT EXISTS'
+                ]
+            ]
+        ];
+
+        if ($post_type && $post_type !== 'all') {
+            $query_args['post_type'] = $post_type;
+        } else {
+            $query_args['post_type'] = get_post_types(['public' => true]);
+        }
+
+        $posts = get_posts($query_args);
+        $items = [];
+        foreach ($posts as $post) {
+            $items[] = [
+                'id' => $post->ID,
+                'title' => $post->post_title,
+                'type' => $post->post_type,
+                'edit_url' => get_edit_post_link($post->ID)
+            ];
+        }
+
+        wp_send_json_success(['items' => $items]);
     }
     
     /**
@@ -1748,6 +1887,7 @@ class Plugin {
             post_id bigint(20) NOT NULL,
             chunk_index int(11) NOT NULL,
             content_hash varchar(64) NOT NULL,
+            content LONGTEXT DEFAULT NULL COMMENT 'Actual chunk content text',
             vector_id varchar(255) NOT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -3332,6 +3472,206 @@ class Plugin {
             
         } catch (Exception $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle start persistent indexing AJAX request
+     */
+    public function handle_start_persistent_indexing() {
+        error_log('WP GPT RAG Chat: handle_start_persistent_indexing called');
+        
+        try {
+            check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+            
+            if (!current_user_can('edit_posts')) {
+                wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+            }
+            
+            $action = sanitize_text_field($_POST['action_type'] ?? 'index_all');
+            $post_type = sanitize_text_field($_POST['post_type'] ?? 'all');
+            
+            // Check if Persistent_Indexing class exists
+            if (!class_exists('WP_GPT_RAG_Chat\Persistent_Indexing')) {
+                error_log('WP GPT RAG Chat: Persistent_Indexing class not found in start method');
+                wp_send_json_error(['message' => __('Persistent indexing not available.', 'wp-gpt-rag-chat')]);
+            }
+            
+            // Get total posts count
+            $indexing = new Indexing();
+            $total_posts = $indexing->get_total_posts_count($post_type);
+            
+            error_log("WP GPT RAG Chat: Starting persistent indexing - Action: {$action}, Post Type: {$post_type}, Total Posts: {$total_posts}");
+            
+            // Start persistent indexing
+            $state = Persistent_Indexing::start_indexing($action, $post_type, $total_posts);
+            
+            wp_send_json_success([
+                'message' => __('Persistent indexing started successfully.', 'wp-gpt-rag-chat'),
+                'state' => $state
+            ]);
+            
+        } catch (\Exception $e) {
+            error_log('WP GPT RAG Chat: Error in handle_start_persistent_indexing: ' . $e->getMessage());
+            error_log('WP GPT RAG Chat: Error trace: ' . $e->getTraceAsString());
+            wp_send_json_error(['message' => $e->getMessage()]);
+        } catch (\Error $e) {
+            error_log('WP GPT RAG Chat: Fatal error in handle_start_persistent_indexing: ' . $e->getMessage());
+            wp_send_json_error(['message' => 'Fatal error: ' . $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle get indexing status AJAX request
+     */
+    public function handle_get_indexing_status() {
+        // Add error logging
+        error_log('WP GPT RAG Chat: handle_get_indexing_status called');
+        
+        try {
+            check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+            
+            if (!current_user_can('edit_posts')) {
+                wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+            }
+            
+            // Check if Persistent_Indexing class exists
+            if (!class_exists('WP_GPT_RAG_Chat\Persistent_Indexing')) {
+                error_log('WP GPT RAG Chat: Persistent_Indexing class not found');
+                wp_send_json_success([
+                    'status' => 'idle',
+                    'message' => __('Persistent indexing not available.', 'wp-gpt-rag-chat'),
+                    'is_running' => false
+                ]);
+            }
+            
+            $state = Persistent_Indexing::get_indexing_state();
+            
+            if (!$state) {
+                wp_send_json_success([
+                    'status' => 'idle',
+                    'message' => __('No indexing in progress.', 'wp-gpt-rag-chat'),
+                    'is_running' => false
+                ]);
+            }
+            
+            $progress_percentage = Persistent_Indexing::get_progress_percentage();
+            $progress_text = Persistent_Indexing::get_progress_text();
+            
+            wp_send_json_success([
+                'status' => $state['status'],
+                'state' => $state,
+                'progress_percentage' => $progress_percentage,
+                'progress_text' => $progress_text,
+                'is_running' => $state['status'] === 'running'
+            ]);
+            
+        } catch (\Exception $e) {
+            error_log('WP GPT RAG Chat: Error in handle_get_indexing_status: ' . $e->getMessage());
+            error_log('WP GPT RAG Chat: Error trace: ' . $e->getTraceAsString());
+            wp_send_json_error(['message' => $e->getMessage()]);
+        } catch (\Error $e) {
+            error_log('WP GPT RAG Chat: Fatal error in handle_get_indexing_status: ' . $e->getMessage());
+            wp_send_json_error(['message' => 'Fatal error: ' . $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle cancel persistent indexing AJAX request
+     */
+    public function handle_cancel_persistent_indexing() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        try {
+            $state = Persistent_Indexing::cancel_indexing();
+            
+            wp_send_json_success([
+                'message' => __('Indexing cancelled successfully.', 'wp-gpt-rag-chat'),
+                'state' => $state
+            ]);
+            
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle get persistent pending posts AJAX request
+     */
+    public function handle_get_persistent_pending_posts() {
+        error_log('WP GPT RAG Chat: handle_get_persistent_pending_posts called');
+        
+        try {
+            check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+            
+            if (!current_user_can('edit_posts')) {
+                wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+            }
+            
+            $post_type = sanitize_text_field($_POST['post_type'] ?? 'all');
+            $offset = intval($_POST['offset'] ?? 0);
+            $limit = intval($_POST['limit'] ?? 10);
+            
+            // Check if Persistent_Indexing class exists
+            if (!class_exists('WP_GPT_RAG_Chat\Persistent_Indexing')) {
+                error_log('WP GPT RAG Chat: Persistent_Indexing class not found in pending posts method');
+                wp_send_json_error(['message' => __('Persistent indexing not available.', 'wp-gpt-rag-chat')]);
+            }
+            
+            $items = Persistent_Indexing::get_next_batch_for_pending($limit, $offset, $post_type);
+            
+            wp_send_json_success([
+                'items' => $items,
+                'count' => count($items)
+            ]);
+            
+        } catch (\Exception $e) {
+            error_log('WP GPT RAG Chat: Error in handle_get_persistent_pending_posts: ' . $e->getMessage());
+            wp_send_json_error(['message' => $e->getMessage()]);
+        } catch (\Error $e) {
+            error_log('WP GPT RAG Chat: Fatal error in handle_get_persistent_pending_posts: ' . $e->getMessage());
+            wp_send_json_error(['message' => 'Fatal error: ' . $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle clear newly indexed AJAX request
+     */
+    public function handle_clear_newly_indexed() {
+        error_log('WP GPT RAG Chat: handle_clear_newly_indexed called');
+        
+        try {
+            check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+            
+            if (!current_user_can('edit_posts')) {
+                wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+            }
+            
+            // Check if Persistent_Indexing class exists
+            if (!class_exists('WP_GPT_RAG_Chat\Persistent_Indexing')) {
+                error_log('WP GPT RAG Chat: Persistent_Indexing class not found in clear newly indexed method');
+                wp_send_json_error(['message' => __('Persistent indexing not available.', 'wp-gpt-rag-chat')]);
+            }
+            
+            $state = Persistent_Indexing::get_indexing_state();
+            if ($state && isset($state['newly_indexed'])) {
+                $state['newly_indexed'] = []; // Clear the newly indexed items
+                set_transient(Persistent_Indexing::INDEXING_STATE_KEY, $state, HOUR_IN_SECONDS * 2);
+                error_log('WP GPT RAG Chat: Cleared newly indexed items from state');
+            }
+            
+            wp_send_json_success(['message' => __('Newly indexed items cleared.', 'wp-gpt-rag-chat')]);
+            
+        } catch (\Exception $e) {
+            error_log('WP GPT RAG Chat: Error in handle_clear_newly_indexed: ' . $e->getMessage());
+            wp_send_json_error(['message' => $e->getMessage()]);
+        } catch (\Error $e) {
+            error_log('WP GPT RAG Chat: Fatal error in handle_clear_newly_indexed: ' . $e->getMessage());
+            wp_send_json_error(['message' => 'Fatal error: ' . $e->getMessage()]);
         }
     }
     

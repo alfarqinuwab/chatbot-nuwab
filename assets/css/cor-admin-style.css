@@ -1,0 +1,10 @@
+/* CORNUWB Admin Style - Plugin-specific CSS to avoid conflicts with WordPress admin */
+
+/* Remove bottom margin from nav-tab-wrapper only for this plugin */
+.cornuwab-admin-wrap .nav-tab-wrapper,
+.wp-gpt-rag-analytics .nav-tab-wrapper,
+.wp-gpt-rag-chat-settings .nav-tab-wrapper {
+    margin-bottom: 0 !important;
+}
+
+/* Additional plugin-specific styles can be added here */

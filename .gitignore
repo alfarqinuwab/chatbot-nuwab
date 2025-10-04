@@ -1,0 +1,71 @@
+# WordPress Plugin - Nuwab AI Assistant
+# Ignore files that shouldn't be in version control
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# Temporary and log files
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Node modules (if you add any build tools later)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Composer dependencies (if you add any later)
+vendor/
+composer.lock
+
+# Build artifacts
+dist/
+build/
+
+# Environment and config files
+.env
+.env.local
+wp-config.php
+wp-config-local.php
+
+# Database dumps
+*.sql
+*.sql.gz
+
+# Backup files
+*.bak
+*.backup
+
+# Test files (keep test structure but ignore results)
+tests/_output/*
+tests/_support/_generated
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Plugin-specific temporary files
+debug_*.php
+test_*.php
+check_*.php
+LIVE-MONITOR.php
+add-content-column-migration.php
+test-sample-content.php
+
+# Keep these test files but they're optional
+# Uncomment if you don't want them in version control
+# test-chat.php
+# check-cron-status.php

@@ -81,6 +81,71 @@ class RAG_Improvements {
             return [$original_query];
         }
     }
+
+    /**
+     * Generate a short hypothetical answer (HyDE) for better retrieval
+     */
+    public function generate_hyde_answer($original_query) {
+        if (empty($this->settings['enable_hyde'])) {
+            return '';
+        }
+
+        try {
+            $is_arabic = preg_match('/[\x{0600}-\x{06FF}]/u', $original_query);
+            $system = $is_arabic
+                ? "اكتب إجابة قصيرة ومباشرة للسؤال التالي كما لو كانت صحيحة وموجودة في الموقع. لا تضف آراء أو أمثلة. لا تتجاوز 5-7 جمل."
+                : "Write a short, direct answer to the user question as if it were correct and present in the docs. No opinions, no examples. Keep it 5-7 sentences.";
+
+            $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+                'timeout' => 20,
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $this->settings['openai_api_key'],
+                    'Content-Type' => 'application/json'
+                ],
+                'body' => wp_json_encode([
+                    'model' => 'gpt-3.5-turbo',
+                    'messages' => [
+                        ['role' => 'system', 'content' => $system],
+                        ['role' => 'user', 'content' => $original_query]
+                    ],
+                    'temperature' => 0.2,
+                    'max_tokens' => 220
+                ])
+            ]);
+
+            if (is_wp_error($response)) {
+                return '';
+            }
+
+            $body = json_decode(wp_remote_retrieve_body($response), true);
+            return trim($body['choices'][0]['message']['content'] ?? '');
+        } catch (\Exception $e) {
+            error_log('HyDE generation error: ' . $e->getMessage());
+            return '';
+        }
+    }
+
+    /**
+     * Create an embedding vector for HyDE
+     */
+    public function create_hyde_embedding($original_query) {
+        if (empty($this->settings['enable_hyde'])) {
+            return null;
+        }
+
+        $hypo = $this->generate_hyde_answer($original_query);
+        if (empty($hypo)) {
+            return null;
+        }
+
+        try {
+            $embeddings = $this->openai->create_embeddings([$hypo]);
+            return $embeddings[0] ?? null;
+        } catch (\Exception $e) {
+            error_log('HyDE embedding error: ' . $e->getMessage());
+            return null;
+        }
+    }
     
     /**
      * Build prompt for query expansion
@@ -118,6 +183,14 @@ Output:
         }
         
         try {
+            // If LLM re-ranker is enabled, try it first
+            if (!empty($this->settings['enable_llm_rerank'])) {
+                $llm_sorted = $this->llm_rerank($original_query, $results);
+                if (!empty($llm_sorted)) {
+                    return $llm_sorted;
+                }
+            }
+
             // Score each result against the query
             $scored_results = [];
             
@@ -140,13 +213,111 @@ Output:
                 return $score_b <=> $score_a;
             });
             
-            // Return top results with updated scores
+            // Return all results sorted; caller can slice as needed
             return array_map(function($item) {
                 return $item['result'];
-            }, array_slice($scored_results, 0, 5));
+            }, $scored_results);
             
         } catch (\Exception $e) {
             error_log('Re-ranking error: ' . $e->getMessage());
+            return $results;
+        }
+    }
+
+    /**
+     * LLM-based re-ranker for better relevance on top candidates
+     */
+    private function llm_rerank($original_query, $results) {
+        try {
+            $top_k = intval($this->settings['llm_rerank_top_k'] ?? 20);
+            $candidates = array_slice($results, 0, max(1, $top_k));
+
+            // Build passages
+            $passages = [];
+            foreach ($candidates as $i => $res) {
+                $content = $this->extract_content_from_result($res);
+                $content = mb_substr($content, 0, 800);
+                $passages[] = [
+                    'idx' => $i,
+                    'content' => $content
+                ];
+            }
+
+            if (empty($passages)) {
+                return $results;
+            }
+
+            $instructions = "You are a relevance judge. Score each passage from 0.0 to 1.0 for how well it answers the user query. Return ONLY a compact JSON array of objects: [{\"idx\":number,\"score\":number}] with the given idx values, no text, no markdown.";
+
+            $prompt = [
+                ['role' => 'system', 'content' => $instructions],
+                ['role' => 'user', 'content' => "Query:\n" . $original_query]
+            ];
+
+            $passages_text = "\nPassages:\n";
+            foreach ($passages as $p) {
+                $passages_text .= "#" . $p['idx'] . ": " . $p['content'] . "\n\n";
+            }
+            $prompt[] = ['role' => 'user', 'content' => $passages_text . "\nReturn JSON now."];
+
+            $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+                'timeout' => 25,
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $this->settings['openai_api_key'],
+                    'Content-Type' => 'application/json'
+                ],
+                'body' => wp_json_encode([
+                    'model' => 'gpt-3.5-turbo',
+                    'messages' => $prompt,
+                    'temperature' => 0.0,
+                    'max_tokens' => 200
+                ])
+            ]);
+
+            if (is_wp_error($response)) {
+                return $results;
+            }
+
+            $body = json_decode(wp_remote_retrieve_body($response), true);
+            $content = $body['choices'][0]['message']['content'] ?? '';
+            $json = json_decode(trim($content), true);
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($json)) {
+                return $results;
+            }
+
+            // Build score map
+            $score_map = [];
+            foreach ($json as $row) {
+                if (isset($row['idx']) && isset($row['score'])) {
+                    $score_map[intval($row['idx'])] = floatval($row['score']);
+                }
+            }
+
+            // Combine with original similarity
+            $scored = [];
+            foreach ($candidates as $i => $res) {
+                $orig = $res['score'] ?? 0;
+                $llm = $score_map[$i] ?? 0;
+                $combined = ($orig * 0.5) + ($llm * 0.5);
+                $scored[] = [
+                    'result' => $res,
+                    'score' => $combined
+                ];
+            }
+
+            usort($scored, function($a, $b) {
+                return $b['score'] <=> $a['score'];
+            });
+
+            // Append any leftover results not scored by LLM (preserve order)
+            $sorted = array_map(function($r) { return $r['result']; }, $scored);
+            if (count($results) > count($candidates)) {
+                $sorted = array_merge($sorted, array_slice($results, count($candidates)));
+            }
+
+            return $sorted;
+        } catch (\Exception $e) {
+            error_log('LLM rerank error: ' . $e->getMessage());
             return $results;
         }
     }

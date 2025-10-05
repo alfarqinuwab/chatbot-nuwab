@@ -67,15 +67,34 @@ class Chat {
                     $rag_metadata['query_variations'] = $query_variations;
                     $rag_metadata['query_expansion_enabled'] = !empty($this->settings['enable_query_expansion']);
                     
+                    // Step 1.5: HyDE embedding (optional)
+                    $hyde_embedding = null;
+                    if (!empty($this->settings['enable_hyde'])) {
+                        $hyde_embedding = $rag_improvements->create_hyde_embedding($query);
+                        $rag_metadata['hyde_enabled'] = true;
+                        $rag_metadata['has_hyde_vector'] = !empty($hyde_embedding);
+                    } else {
+                        $rag_metadata['hyde_enabled'] = false;
+                    }
+
                     // Step 2: Create embeddings for all query variations
                     $all_embeddings = $this->openai->create_embeddings($query_variations);
                     
                     // Step 3: Retrieve context using all variations
                     $all_results = [];
+                    $pre_filter = $this->build_metadata_filter();
                     foreach ($all_embeddings as $embedding) {
-                        $results = $this->pinecone->query_vectors($embedding);
+                        $results = $this->pinecone->query_vectors($embedding, null, $pre_filter);
                         if (!empty($results['matches'])) {
                             $all_results = array_merge($all_results, $results['matches']);
+                        }
+                    }
+
+                    // Query with HyDE embedding as well
+                    if (!empty($hyde_embedding)) {
+                        $hyde_results = $this->pinecone->query_vectors($hyde_embedding, null, $pre_filter);
+                        if (!empty($hyde_results['matches'])) {
+                            $all_results = array_merge($all_results, $hyde_results['matches']);
                         }
                     }
                     
@@ -88,6 +107,8 @@ class Chat {
                     // Step 4: Re-rank results
                     $reranked_results = $rag_improvements->rerank_results($query, $all_results);
                     $rag_metadata['reranking_enabled'] = !empty($this->settings['enable_reranking']);
+                    $final_limit = intval($this->settings['final_context_chunks'] ?? 6);
+                    $reranked_results = array_slice($reranked_results, 0, max(1, $final_limit));
                     $rag_metadata['final_results_used'] = count($reranked_results);
                     
                     // Step 5: Build context from top results
@@ -139,6 +160,26 @@ class Chat {
         $this->last_rag_metadata = $rag_metadata;
         
         return $response;
+    }
+
+    /**
+     * Build Pinecone metadata filter based on settings
+     */
+    private function build_metadata_filter() {
+        $filter = [];
+
+        // Example: filter by post types selected for auto-indexing (if configured)
+        $allowed_post_types = $this->settings['auto_index_post_types'] ?? [];
+        if (!empty($allowed_post_types) && is_array($allowed_post_types)) {
+            $filter['post_type'] = [ '$in' => array_values($allowed_post_types) ];
+        }
+
+        // Optionally filter by language when detected
+        // If you later store language in metadata, you can enable this block
+        // $detected_language = null; // pass in if needed
+        // if ($detected_language) { $filter['language'] = [ '$eq' => $detected_language ]; }
+
+        return !empty($filter) ? $filter : null;
     }
     
     /**

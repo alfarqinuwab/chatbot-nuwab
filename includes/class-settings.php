@@ -195,6 +195,61 @@ class Settings {
                 'step' => 0.1
             ]
         );
+
+        // RAG Enhancements toggles
+        add_settings_field(
+            'enable_query_expansion',
+            __('Enable Query Expansion', 'wp-gpt-rag-chat'),
+            [$this, 'checkbox_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_retrieval',
+            [ 'field' => 'enable_query_expansion' ]
+        );
+
+        add_settings_field(
+            'enable_hyde',
+            __('Enable HyDE (Hypothetical Answer)', 'wp-gpt-rag-chat'),
+            [$this, 'checkbox_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_retrieval',
+            [ 'field' => 'enable_hyde' ]
+        );
+
+        add_settings_field(
+            'enable_reranking',
+            __('Enable Re-ranking', 'wp-gpt-rag-chat'),
+            [$this, 'checkbox_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_retrieval',
+            [ 'field' => 'enable_reranking' ]
+        );
+
+        add_settings_field(
+            'enable_llm_rerank',
+            __('Use LLM Re-ranker (top K)', 'wp-gpt-rag-chat'),
+            [$this, 'checkbox_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_retrieval',
+            [ 'field' => 'enable_llm_rerank' ]
+        );
+
+        add_settings_field(
+            'llm_rerank_top_k',
+            __('LLM Re-rank Top K', 'wp-gpt-rag-chat'),
+            [$this, 'number_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_retrieval',
+            [ 'field' => 'llm_rerank_top_k', 'min' => 5, 'max' => 50, 'step' => 1 ]
+        );
+
+        add_settings_field(
+            'final_context_chunks',
+            __('Final Context Chunks', 'wp-gpt-rag-chat'),
+            [$this, 'number_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_retrieval',
+            [ 'field' => 'final_context_chunks', 'min' => 3, 'max' => 12, 'step' => 1 ]
+        );
         
         // Chunking Settings Section
         add_settings_section(
@@ -408,6 +463,14 @@ class Settings {
         $sanitized['anonymize_ips'] = isset($input['anonymize_ips']) ? (bool) $input['anonymize_ips'] : false;
         $sanitized['require_consent'] = isset($input['require_consent']) ? (bool) $input['require_consent'] : true;
         $sanitized['enable_pii_masking'] = isset($input['enable_pii_masking']) ? (bool) $input['enable_pii_masking'] : true;
+
+        // RAG enhancements
+        $sanitized['enable_query_expansion'] = isset($input['enable_query_expansion']) ? (bool) $input['enable_query_expansion'] : true;
+        $sanitized['enable_hyde'] = isset($input['enable_hyde']) ? (bool) $input['enable_hyde'] : true;
+        $sanitized['enable_reranking'] = isset($input['enable_reranking']) ? (bool) $input['enable_reranking'] : true;
+        $sanitized['enable_llm_rerank'] = isset($input['enable_llm_rerank']) ? (bool) $input['enable_llm_rerank'] : false;
+        $sanitized['llm_rerank_top_k'] = intval($input['llm_rerank_top_k'] ?? 20);
+        $sanitized['final_context_chunks'] = intval($input['final_context_chunks'] ?? 6);
         
         // Validate API keys only when form is submitted
         if (isset($_POST['submit']) || isset($_POST['wp_gpt_rag_chat_settings_nonce'])) {
@@ -443,6 +506,8 @@ class Settings {
         $sanitized['chunk_size'] = max(500, min(2000, $sanitized['chunk_size']));
         $sanitized['chunk_overlap'] = max(50, min(500, $sanitized['chunk_overlap']));
         $sanitized['log_retention_days'] = max(1, min(365, $sanitized['log_retention_days']));
+        $sanitized['llm_rerank_top_k'] = max(5, min(50, $sanitized['llm_rerank_top_k']));
+        $sanitized['final_context_chunks'] = max(3, min(12, $sanitized['final_context_chunks']));
         
         // Add redirect with success message after settings are saved
         add_action('admin_init', [$this, 'redirect_after_save'], 20);
@@ -668,6 +733,10 @@ class Settings {
             'enable_reranking' => true,
             'enable_few_shot' => true,
             'few_shot_examples_count' => 5,
+            'enable_hyde' => true,
+            'enable_llm_rerank' => false,
+            'llm_rerank_top_k' => 20,
+            'final_context_chunks' => 6,
             
             // Sitemap fallback settings
             'enable_sitemap_fallback' => true,

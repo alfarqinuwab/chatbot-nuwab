@@ -86,6 +86,10 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                         <span class="dashicons dashicons-format-chat"></span>
                         <?php esc_html_e('Chatbot Behavior', 'wp-gpt-rag-chat'); ?>
                     </a>
+                    <a href="#retrieval-rag" class="cornuwab-inner-tab" data-inner-tab="retrieval-rag">
+                        <span class="dashicons dashicons-search"></span>
+                        <?php esc_html_e('Retrieval & RAG', 'wp-gpt-rag-chat'); ?>
+                    </a>
                     </div>
                     
                 <!-- OpenAI Configuration Tab -->
@@ -354,6 +358,100 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                                 <td>
                                     <input type="number" id="sitemap_suggestions_count" name="wp_gpt_rag_chat_settings[sitemap_suggestions_count]" min="1" max="10" value="<?php echo esc_attr($settings['sitemap_suggestions_count'] ?? '5'); ?>" class="small-text" />
                                     <p class="description"><?php esc_html_e('Maximum number of page suggestions to show (1-10).', 'wp-gpt-rag-chat'); ?></p>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Retrieval & RAG Tab -->
+                <div id="inner-tab-retrieval-rag" class="cornuwab-inner-tab-panel">
+                    <div class="cornuwab-settings-group">
+                        <h3><?php esc_html_e('Retrieval Settings', 'wp-gpt-rag-chat'); ?></h3>
+                        <table class="cornuwab-form-table">
+                            <tr>
+                                <th scope="row">
+                                    <label for="top_k"><?php esc_html_e('Top K Results', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <input type="number" id="top_k" name="wp_gpt_rag_chat_settings[top_k]" value="<?php echo esc_attr($settings['top_k'] ?? 5); ?>" min="1" max="50" step="1" class="small-text" />
+                                    <p class="description"><?php esc_html_e('How many nearest chunks to retrieve before re-ranking (try 30–40).', 'wp-gpt-rag-chat'); ?></p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="similarity_threshold"><?php esc_html_e('Similarity Threshold', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <input type="number" id="similarity_threshold" name="wp_gpt_rag_chat_settings[similarity_threshold]" value="<?php echo esc_attr($settings['similarity_threshold'] ?? 0.7); ?>" min="0" max="1" step="0.01" class="small-text" />
+                                    <p class="description"><?php esc_html_e('Minimum cosine similarity score to keep a match (0.6–0.65 recommended for recall).', 'wp-gpt-rag-chat'); ?></p>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div class="cornuwab-settings-group">
+                        <h3><?php esc_html_e('RAG Enhancements', 'wp-gpt-rag-chat'); ?></h3>
+                        <table class="cornuwab-form-table">
+                            <tr>
+                                <th scope="row">
+                                    <label for="enable_query_expansion"><?php esc_html_e('Query Expansion', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" id="enable_query_expansion" name="wp_gpt_rag_chat_settings[enable_query_expansion]" value="1" <?php checked($settings['enable_query_expansion'] ?? 1, 1); ?> />
+                                        <?php esc_html_e('Enable multi-query expansion to improve recall', 'wp-gpt-rag-chat'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="enable_hyde"><?php esc_html_e('HyDE (Hypothetical Answer)', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" id="enable_hyde" name="wp_gpt_rag_chat_settings[enable_hyde]" value="1" <?php checked($settings['enable_hyde'] ?? 1, 1); ?> />
+                                        <?php esc_html_e('Generate a hypothetical answer to guide retrieval', 'wp-gpt-rag-chat'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="enable_reranking"><?php esc_html_e('Re-ranking', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" id="enable_reranking" name="wp_gpt_rag_chat_settings[enable_reranking]" value="1" <?php checked($settings['enable_reranking'] ?? 1, 1); ?> />
+                                        <?php esc_html_e('Re-rank retrieved results for better relevance', 'wp-gpt-rag-chat'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="enable_llm_rerank"><?php esc_html_e('LLM Re-ranker', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" id="enable_llm_rerank" name="wp_gpt_rag_chat_settings[enable_llm_rerank]" value="1" <?php checked($settings['enable_llm_rerank'] ?? 0, 1); ?> />
+                                        <?php esc_html_e('Use the chat model to score top candidates (more accurate, higher cost)', 'wp-gpt-rag-chat'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="llm_rerank_top_k"><?php esc_html_e('LLM Re-rank Top K', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <input type="number" id="llm_rerank_top_k" name="wp_gpt_rag_chat_settings[llm_rerank_top_k]" value="<?php echo esc_attr($settings['llm_rerank_top_k'] ?? 20); ?>" min="5" max="50" step="1" class="small-text" />
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <label for="final_context_chunks"><?php esc_html_e('Final Context Chunks', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <input type="number" id="final_context_chunks" name="wp_gpt_rag_chat_settings[final_context_chunks]" value="<?php echo esc_attr($settings['final_context_chunks'] ?? 6); ?>" min="3" max="12" step="1" class="small-text" />
+                                    <p class="description"><?php esc_html_e('How many top chunks to include in the final context window.', 'wp-gpt-rag-chat'); ?></p>
                                 </td>
                             </tr>
                         </table>

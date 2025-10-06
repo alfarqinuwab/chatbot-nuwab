@@ -4134,7 +4134,9 @@ class Plugin {
             'title' => $post->post_title,
             'type' => $post->post_type,
             'status' => $post->post_status,
-            'url' => get_edit_post_link($post->ID),
+            'url' => get_permalink($post->ID),
+            'view_url' => get_permalink($post->ID),
+            'edit_url' => get_edit_post_link($post->ID),
             'is_indexed' => $this->is_post_indexed($post->ID)
         ]);
     }

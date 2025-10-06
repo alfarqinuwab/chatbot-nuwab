@@ -74,7 +74,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     
     <!-- Manual Search & Reindex -->
     <div class="postbox" style="margin-top:20px;">
-        <div class="postbox-header"><h2 class="hndle"><?php esc_html_e('Manual Search & Re-index', 'wp-gpt-rag-chat'); ?></h2></div>
+        <div class="indexed-items-header"><h2 class="hndle"><?php esc_html_e('Manual Search & Re-index', 'wp-gpt-rag-chat'); ?></h2></div>
         <div class="inside">
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
                 <input type="text" id="manual-search-input" class="regular-text" placeholder="<?php esc_attr_e('Search by title or Post ID (e.g. 67855 or #67855)…', 'wp-gpt-rag-chat'); ?>" />
@@ -116,6 +116,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 </span>
             </h2>
             <div class="header-actions">
+                <input type="text" id="indexed-items-filter" class="regular-text" placeholder="<?php esc_attr_e('Filter by title or ID…', 'wp-gpt-rag-chat'); ?>" style="min-width:280px;margin-right:8px;" />
                 <button type="button" class="button button-secondary" id="select-all-items">
                     <span class="wpgrc-label"><?php esc_html_e('Select All', 'wp-gpt-rag-chat'); ?></span>
                 </button>
@@ -2907,9 +2908,10 @@ jQuery(document).ready(function($) {
             }
             var html = '<table class="widefat"><thead><tr><th><?php echo esc_js(__('ID','wp-gpt-rag-chat')); ?></th><th><?php echo esc_js(__('Title','wp-gpt-rag-chat')); ?></th><th><?php echo esc_js(__('Type','wp-gpt-rag-chat')); ?></th><th><?php echo esc_js(__('Indexed','wp-gpt-rag-chat')); ?></th><th><?php echo esc_js(__('Actions','wp-gpt-rag-chat')); ?></th></tr></thead><tbody>';
             items.forEach(function(it){
+                var viewUrl = it.view_url || it.url || '';
                 html += '<tr>'+
                     '<td>'+ it.id +'</td>'+
-                    '<td>'+ $('<div/>').text(it.title||'').html() +'</td>'+
+                    '<td>'+ $('<div/>').text(it.title||'').html() + (viewUrl ? ' <a href="'+viewUrl+'" target="_blank" rel="noopener" class="button-link"><?php echo esc_js(__('View','wp-gpt-rag-chat')); ?></a>' : '') + '</td>'+
                     '<td>'+ (it.type||'') +'</td>'+
                     '<td>' + (it.is_indexed ? '✅' : '❌') + '</td>'+
                     '<td>'+
@@ -2978,6 +2980,37 @@ jQuery(document).ready(function($) {
                 updateIndexedItemsTable();
             });
         });
+    })();
+
+    // ==========================
+    // Indexed Items - client filter
+    // ==========================
+    (function indexedItemsFilterInit(){
+        var $input = $('#indexed-items-filter');
+        function normalize(str){
+            if (!str) return '';
+            str = (str+'').toLowerCase();
+            // Remove Arabic tatweel and common diacritics for better matching
+            return str.replace(/[\u0640\u064B-\u0652]/g,'').trim();
+        }
+        function applyFilter(){
+            var qRaw = ($input.val()||'');
+            var q = normalize(qRaw);
+            var $rows  = $('.indexed-items-table tbody tr.indexed-item-row');
+            if (!q){ $rows.show(); return; }
+            var idMatch = qRaw.match(/^#?(\d+)$/); // allow numeric ID without normalization
+            $rows.each(function(){
+                var $r = $(this);
+                var id = String($r.data('post-id')||'');
+                var title = normalize($r.find('.item-title').text());
+                var hit = idMatch ? (id === idMatch[1]) : (title.indexOf(q) !== -1);
+                $r.toggle(hit);
+            });
+        }
+        $input.on('input', applyFilter);
+        $input.on('keydown', function(e){ if (e.key==='Enter'){ e.preventDefault(); applyFilter(); } if (e.key==='Escape'){ $(this).val(''); applyFilter(); }});
+        // Re-apply filter after dynamic table updates
+        $(document).on('wpgrc:indexedTableUpdated', applyFilter);
     })();
     var currentIndexingAction = null;
     var retryCount = 0;
@@ -5503,6 +5536,9 @@ jQuery(document).ready(function($) {
         $('.item-checkbox').off('change').on('change', function() {
             updateSelectAllButton();
         });
+
+        // Notify filter to re-apply
+        $(document).trigger('wpgrc:indexedTableUpdated');
     }
 
     // Add items with PENDING status to the table

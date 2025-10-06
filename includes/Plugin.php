@@ -1339,14 +1339,14 @@ class Plugin {
     }
     
     /**
-     * Add posts to indexing queue
+     * Add posts to indexing queue (batch by batch approach)
      */
     private function add_posts_to_queue($post_type, $batch_size, $offset) {
         // Get allowed post types from settings
         $settings = Settings::get_settings();
         $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
         
-        // Simple query without wp_postmeta - just get all eligible posts
+        // Get only the current batch of posts
         $query_args = [
             'numberposts' => $batch_size,
             'offset' => $offset,
@@ -1365,7 +1365,7 @@ class Plugin {
         $added_count = 0;
         $post_ids = [];
         
-        error_log('WP GPT RAG Chat: Found ' . count($posts) . ' posts to add to queue');
+        error_log('WP GPT RAG Chat: Found ' . count($posts) . ' posts in batch (offset: ' . $offset . ', batch_size: ' . $batch_size . ')');
         
         foreach ($posts as $post) {
             error_log('WP GPT RAG Chat: Attempting to add post ' . $post->ID . ' (' . $post->post_title . ') to queue');
@@ -1378,17 +1378,39 @@ class Plugin {
             }
         }
         
+        // Get total count for progress tracking
+        $total_query_args = [
+            'numberposts' => -1,
+            'post_status' => ['publish', 'private']
+        ];
+        
+        if ($post_type && $post_type !== 'all') {
+            $total_query_args['post_type'] = $post_type;
+        } else {
+            $total_query_args['post_type'] = $allowed_post_types;
+        }
+        
+        $total_posts = get_posts($total_query_args);
+        $total_count = count($total_posts);
+        
         // Log the addition (processing will be handled by frontend)
         if ($added_count > 0) {
-            error_log('WP GPT RAG Chat: Added ' . $added_count . ' posts to queue for processing');
+            error_log('WP GPT RAG Chat: Added ' . $added_count . ' posts to queue for processing (batch ' . (($offset / $batch_size) + 1) . ')');
         }
+        
+        $has_more = ($offset + $batch_size) < $total_count;
+        
+        error_log('WP GPT RAG Chat: Batch calculation - offset=' . $offset . ', batch_size=' . $batch_size . ', total_count=' . $total_count . ', has_more=' . ($has_more ? 'true' : 'false'));
         
         return [
             'processed' => $added_count,
-            'total' => count($posts),
+            'total' => $total_count,
+            'batch_size' => $batch_size,
+            'current_offset' => $offset,
+            'has_more' => $has_more,
             'errors' => [],
             'indexed_post_ids' => $post_ids,
-            'message' => sprintf(__('Added %d posts to indexing queue.', 'wp-gpt-rag-chat'), $added_count)
+            'message' => sprintf(__('Added %d posts to indexing queue (batch %d).', 'wp-gpt-rag-chat'), $added_count, (($offset / $batch_size) + 1))
         ];
     }
     
@@ -1467,19 +1489,16 @@ class Plugin {
             $post_type_filter = "'" . implode("','", $allowed_post_types) . "'";
         }
         
-        // Get posts that have been modified since last indexing
-        $posts = $wpdb->get_results($wpdb->prepare(
+        // Get ALL posts that have been modified since last indexing
+        $posts = $wpdb->get_results(
             "SELECT DISTINCT p.ID, p.post_title, p.post_modified
             FROM {$wpdb->posts} p
             LEFT JOIN {$vectors_table} v ON p.ID = v.post_id
             WHERE p.post_status IN ('publish', 'private')
             AND p.post_type IN ($post_type_filter)
             AND (v.post_id IS NULL OR p.post_modified > v.updated_at)
-            ORDER BY p.post_modified DESC
-            LIMIT %d OFFSET %d",
-            $batch_size,
-            $offset
-        ));
+            ORDER BY p.post_modified DESC"
+        );
         
         $added_count = 0;
         $post_ids = [];
@@ -1646,17 +1665,12 @@ class Plugin {
                     wp_send_json_error(['message' => __('Invalid action.', 'wp-gpt-rag-chat')]);
             }
             
-            // Calculate total posts based on selected post type and action
+            // Calculate total posts based on actual posts added to queue
             if ($action === 'index_single') {
                 $total_posts = 1; // Single post action always processes 1 post
             } else {
-                if ($post_type && $post_type !== 'all') {
-                    $post_counts = wp_count_posts($post_type);
-                    $total_posts = $post_counts->publish + $post_counts->private;
-                } else {
-                    $total_posts = wp_count_posts();
-                    $total_posts = $total_posts->publish + $total_posts->private;
-                }
+                // Use the actual number of posts added to the queue
+                $total_posts = $result['total'];
             }
             
             // Get newly indexed items for real-time table updates

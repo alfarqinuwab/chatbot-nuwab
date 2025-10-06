@@ -2841,6 +2841,26 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Real-time statistics update animation - removed green box indicator */
+
+.cornuwb-stat-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #0073aa;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
 </style>
 
 <script>
@@ -3084,12 +3104,13 @@ jQuery(document).ready(function($) {
                 button.prop('disabled', true);
                 $('#cancel-sync-all').show();
                 $('#global-progress-container').show();
-                $('#global-progress-container .progress-text').text('<?php esc_html_e('Posts added to queue, starting processing...', 'wp-gpt-rag-chat'); ?>');
+                $('#global-progress-container .progress-text').text('<?php esc_html_e('Starting batch processing...', 'wp-gpt-rag-chat'); ?>');
                 $('#global-progress-container .progress-fill').css('width', '0%');
                 
-                // Start processing the queue after a short delay to show pending items first
+                // Start sequential batch processing
+                console.log('Starting sequential batch processing with data:', response.data);
                 setTimeout(function() {
-                    startQueueProcessing(button, postType, response.data.processed || 0);
+                    startSequentialBatchProcessing(button, postType, response.data);
                 }, 500);
                 
             } else {
@@ -5407,8 +5428,43 @@ jQuery(document).ready(function($) {
                 } else {
                     tbody.append('<tr><td colspan="6" class="no-items-message"><p><?php esc_js(__('No items in the index queue. Posts will appear here after they have been indexed.', 'wp-gpt-rag-chat')); ?></p></td></tr>');
                 }
+                
+                // Refresh pagination after table update
+                if ($('.cornuwb-pagination').length > 0) {
+                    cornuwbPagination.refresh();
+                }
             }
         });
+    }
+    
+    // Function to update summary statistics
+    function updateSummaryStatistics() {
+        // Show loading indicators
+        $('.cornuwb-stat-loading').fadeIn(200);
+        
+        $.post(wpGptRagChatAdmin.ajaxUrl, {
+            action: 'wp_gpt_rag_chat_get_stats',
+            nonce: wpGptRagChatAdmin.nonce
+        }, function(response) {
+            if (response.success) {
+                // Update the summary statistics boxes with animation
+                updateStatValue('#cornuwb-stat-vectors', response.data.total_vectors || 0);
+                updateStatValue('#cornuwb-stat-posts', response.data.total_posts || 0);
+                updateStatValue('#cornuwb-stat-activity', response.data.recent_activity || 0);
+            }
+            
+            // Hide loading indicators
+            $('.cornuwb-stat-loading').fadeOut(200);
+        }).fail(function() {
+            // Hide loading indicators on error
+            $('.cornuwb-stat-loading').fadeOut(200);
+        });
+    }
+    
+    // Helper function to update stat values
+    function updateStatValue(selector, newValue) {
+        var $element = $(selector);
+        $element.text(newValue.toLocaleString());
     }
     
     // Function to attach event handlers to a table row
@@ -5815,8 +5871,14 @@ jQuery(document).ready(function($) {
                     console.log('CORNUWB: Showing error notification with message:', errorMessage);
                     CORNUWB.showNotification('<?php esc_js(__('Completed with Errors', 'wp-gpt-rag-chat')); ?>', errorMessage, 'warning');
                 }
-                // Refresh after a short delay so the user can read the toast
-                setTimeout(function(){ location.reload(); }, 1200);
+                // Refresh pagination and table after delete all
+                setTimeout(function(){ 
+                    updateIndexedItemsTable();
+                    updateSummaryStatistics();
+                    if ($('.cornuwb-pagination').length > 0) {
+                        cornuwbPagination.refresh();
+                    }
+                }, 500);
                 return;
             }
             
@@ -6168,6 +6230,164 @@ jQuery(document).ready(function($) {
     /**
      * Start processing the queue with progress bar
      */
+    function startSequentialBatchProcessing(button, postType, batchData) {
+        var totalItems = batchData.total || 0;
+        var batchSize = batchData.batch_size || 10;
+        var currentOffset = batchData.current_offset || 0;
+        var hasMore = batchData.has_more || false;
+        var processed = 0;
+        var isProcessing = true;
+        
+        console.log('Sequential batch processing initialized:');
+        console.log('- totalItems:', totalItems);
+        console.log('- batchSize:', batchSize);
+        console.log('- currentOffset:', currentOffset);
+        console.log('- hasMore:', hasMore);
+        
+        function processCurrentBatch() {
+            if (!isProcessing) return;
+            
+            // Process the current batch of posts in the queue
+            $.post(wpGptRagChatAdmin.ajaxUrl, {
+                action: 'wp_gpt_rag_chat_process_queue',
+                nonce: wpGptRagChatAdmin.nonce,
+                batch_size: batchSize,
+                post_type: postType
+            }, function(response) {
+                if (response.success) {
+                    processed += response.data.processed || 0;
+                    var progress = totalItems > 0 ? (processed / totalItems) * 100 : 0;
+                    
+                    // Update progress bar
+                    $('#global-progress-container .progress-fill').css('width', progress + '%');
+                    
+                    // Calculate current batch number more reliably
+                    var currentBatchNumber = Math.ceil(processed / batchSize);
+                    if (currentBatchNumber === 0) currentBatchNumber = 1; // Ensure at least batch 1
+                    
+                    console.log('Progress update: processed=' + processed + ', batchSize=' + batchSize + ', currentBatchNumber=' + currentBatchNumber);
+                    
+                    $('#global-progress-container .progress-text').text(
+                        '<?php esc_html_e('Processing', 'wp-gpt-rag-chat'); ?>: ' + processed + ' / ' + totalItems + 
+                        ' (<?php esc_html_e('Batch', 'wp-gpt-rag-chat'); ?>: ' + currentBatchNumber + ')'
+                    );
+                    
+                    // Refresh table to show updated statuses
+                    updateIndexedItemsTable();
+                    
+                    // Update summary statistics in real-time
+                    updateSummaryStatistics();
+                    
+                    // Check if current batch is complete
+                    console.log('Batch processing check: remaining=' + response.data.remaining + ', hasMore=' + hasMore + ', processed=' + processed + ', total=' + totalItems);
+                    
+                    if (response.data.remaining === 0) {
+                        // Current batch is complete, check if we've processed all items
+                        console.log('Current batch complete. Checking if more batches needed...');
+                        console.log('Processed:', processed, 'Total:', totalItems, 'HasMore:', hasMore);
+                        
+                        if (processed >= totalItems) {
+                            console.log('All items processed, finishing...');
+                            // All items complete
+                            completeQueueProcessing(button, processed);
+                        } else {
+                            // Check if we need to add more batches
+                            var expectedBatches = Math.ceil(totalItems / batchSize);
+                            var currentBatch = Math.ceil(processed / batchSize);
+                            
+                            console.log('=== BATCH COMPLETION CHECK ===');
+                            console.log('Total items:', totalItems);
+                            console.log('Batch size:', batchSize);
+                            console.log('Processed so far:', processed);
+                            console.log('Expected batches:', expectedBatches);
+                            console.log('Current batch:', currentBatch);
+                            console.log('HasMore flag:', hasMore);
+                            
+                            // More robust check: if we haven't processed all items, continue
+                            if (processed < totalItems) {
+                                console.log('Still have items to process (' + processed + ' < ' + totalItems + '), adding next batch...');
+                                // Add next batch
+                                addNextBatch();
+                            } else {
+                                console.log('All items processed (' + processed + ' >= ' + totalItems + '), finishing...');
+                                // All items complete
+                                completeQueueProcessing(button, processed);
+                            }
+                        }
+                    } else {
+                        console.log('Continuing to process current batch...');
+                        // Continue processing current batch
+                        setTimeout(processCurrentBatch, 1000);
+                    }
+                } else {
+                    // Error occurred
+                    completeQueueProcessing(button, processed, response.data.message);
+                }
+            }).fail(function() {
+                completeQueueProcessing(button, processed, '<?php esc_html_e('Connection error', 'wp-gpt-rag-chat'); ?>');
+            });
+        }
+        
+        function addNextBatch() {
+            if (!isProcessing) return;
+            
+            var nextOffset = currentOffset + batchSize;
+            
+            console.log('=== ADDING NEXT BATCH ===');
+            console.log('Current offset:', currentOffset);
+            console.log('Next offset:', nextOffset);
+            console.log('Batch size:', batchSize);
+            console.log('Total items:', totalItems);
+            console.log('HasMore flag:', hasMore);
+            
+            $.post(wpGptRagChatAdmin.ajaxUrl, {
+                action: 'wp_gpt_rag_chat_bulk_index',
+                nonce: wpGptRagChatAdmin.nonce,
+                bulk_action: 'index_all',
+                post_type: postType,
+                batch_size: batchSize,
+                offset: nextOffset
+            }, function(response) {
+                if (response.success) {
+                    currentOffset = response.data.current_offset;
+                    hasMore = response.data.has_more;
+                    
+                    console.log('=== NEXT BATCH ADDED ===');
+                    console.log('Response data:', response.data);
+                    console.log('New currentOffset:', currentOffset);
+                    console.log('New hasMore:', hasMore);
+                    console.log('Total items:', totalItems);
+                    
+                    // Update progress text
+                    var currentBatchNumber = Math.floor(currentOffset / batchSize) + 1;
+                    $('#global-progress-container .progress-text').text(
+                        '<?php esc_html_e('Added batch', 'wp-gpt-rag-chat'); ?> ' + currentBatchNumber + 
+                        ', <?php esc_html_e('processing...', 'wp-gpt-rag-chat'); ?>'
+                    );
+                    
+                    // Refresh table to show new pending items
+                    updateIndexedItemsTable();
+                    
+                    // Start processing the new batch
+                    setTimeout(processCurrentBatch, 1000);
+                } else {
+                    completeQueueProcessing(button, processed, response.data.message);
+                }
+            }).fail(function() {
+                completeQueueProcessing(button, processed, '<?php esc_html_e('Connection error', 'wp-gpt-rag-chat'); ?>');
+            });
+        }
+        
+        // Start processing the first batch
+        processCurrentBatch();
+        
+        // Store processing state for cancellation
+        window.currentBatchProcessing = {
+            isProcessing: function() { return isProcessing; },
+            stop: function() { isProcessing = false; }
+        };
+    }
+    
     function startQueueProcessing(button, postType, totalItems) {
         var processed = 0;
         var batchSize = 5;
@@ -6196,6 +6416,9 @@ jQuery(document).ready(function($) {
                     // Refresh table to show updated statuses
                     updateIndexedItemsTable();
                     
+                    // Update summary statistics in real-time
+                    updateSummaryStatistics();
+                    
                     // Check if there are more items to process
                     if (response.data.remaining > 0 && isProcessing) {
                         setTimeout(processNextBatch, 1000); // Process next batch after 1 second
@@ -6218,6 +6441,9 @@ jQuery(document).ready(function($) {
         // Handle cancel button
         $('#cancel-sync-all').off('click').on('click', function() {
             isProcessing = false;
+            if (window.currentBatchProcessing && window.currentBatchProcessing.isProcessing()) {
+                window.currentBatchProcessing.stop();
+            }
             completeQueueProcessing(button, processed, '<?php esc_html_e('Cancelled by user', 'wp-gpt-rag-chat'); ?>');
         });
     }
@@ -6246,6 +6472,9 @@ jQuery(document).ready(function($) {
         
         // Final refresh of the table
         updateIndexedItemsTable();
+        
+        // Update summary statistics one final time
+        updateSummaryStatistics();
     }
     
     /**
@@ -6300,6 +6529,9 @@ jQuery(document).ready(function($) {
     
     // Load indexed items table on page load
     updateIndexedItemsTable();
+    
+    // Load summary statistics on page load
+    updateSummaryStatistics();
     
     // Check if there are pending items and show process button
     $.post(wpGptRagChatAdmin.ajaxUrl, {

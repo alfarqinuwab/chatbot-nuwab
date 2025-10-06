@@ -1345,46 +1345,57 @@ class Plugin {
         // Get allowed post types from settings
         $settings = Settings::get_settings();
         $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
-        
-        // Get ALL eligible posts, not just a batch
-        $query_args = [
-            'numberposts' => -1, // Get all posts
+
+        // Base query args for eligible posts
+        $base_query_args = [
             'post_status' => ['publish', 'private']
         ];
-        
+
         // Add post type filter if specified
         if ($post_type && $post_type !== 'all') {
-            $query_args['post_type'] = $post_type;
+            $base_query_args['post_type'] = $post_type;
         } else {
-            $query_args['post_type'] = $allowed_post_types;
+            $base_query_args['post_type'] = $allowed_post_types;
         }
-        
-        $posts = get_posts($query_args);
-        
+
+        // Get total eligible posts count (ids only for efficiency)
+        $count_args = $base_query_args;
+        $count_args['numberposts'] = -1;
+        $count_args['fields'] = 'ids';
+        $eligible_ids = get_posts($count_args);
+        $eligible_total = is_array($eligible_ids) ? count($eligible_ids) : 0;
+
+        // Get only the next batch based on offset and batch size
+        $batch_args = $base_query_args;
+        $batch_args['numberposts'] = $batch_size;
+        $batch_args['offset'] = $offset;
+        $batch_posts = get_posts($batch_args);
+
+        // Filter out posts already pending or processing to avoid duplicates
+        $filtered_posts = [];
+        foreach ($batch_posts as $post) {
+            $status_row = Indexing_Queue::get_post_queue_status($post->ID);
+            if ($status_row && in_array($status_row->status, ['pending','processing','completed'], true)) {
+                continue;
+            }
+            $filtered_posts[] = $post;
+        }
+
         $added_count = 0;
         $post_ids = [];
-        
-        error_log('WP GPT RAG Chat: Found ' . count($posts) . ' total posts to add to queue');
-        
-        foreach ($posts as $post) {
-            error_log('WP GPT RAG Chat: Attempting to add post ' . $post->ID . ' (' . $post->post_title . ') to queue');
+
+        error_log('WP GPT RAG Chat: Enqueuing batch - size ' . $batch_size . ', offset ' . $offset . ', eligible total ' . $eligible_total);
+
+        foreach ($filtered_posts as $post) {
             if (Indexing_Queue::add_to_queue($post->ID)) {
                 $added_count++;
                 $post_ids[] = $post->ID;
-                error_log('WP GPT RAG Chat: Successfully added post ' . $post->ID . ' to queue');
-            } else {
-                error_log('WP GPT RAG Chat: Failed to add post ' . $post->ID . ' to queue');
             }
         }
-        
-        // Log the addition (processing will be handled by frontend)
-        if ($added_count > 0) {
-            error_log('WP GPT RAG Chat: Added ' . $added_count . ' posts to queue for processing');
-        }
-        
+
         return [
             'processed' => $added_count,
-            'total' => count($posts),
+            'total' => $eligible_total,
             'errors' => [],
             'indexed_post_ids' => $post_ids,
             'message' => sprintf(__('Added %d posts to indexing queue.', 'wp-gpt-rag-chat'), $added_count)
@@ -1887,7 +1898,7 @@ class Plugin {
     public function cron_process_queue_batch() {
         try {
             // Get next batch of pending items from queue
-            $queue_items = Indexing_Queue::get_next_batch(5); // Process 5 items at a time
+            $queue_items = Indexing_Queue::get_next_batch(3); // Process 3 items at a time
             
             if (empty($queue_items)) {
                 return; // No items to process
@@ -2228,15 +2239,22 @@ class Plugin {
         
         $vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
         
-        // Get posts that are already indexed (from vectors table)
-        $indexed_posts = $wpdb->get_results($wpdb->prepare("
-            SELECT DISTINCT p.ID, p.post_title, p.post_type, p.post_modified, v.updated_at as indexed_at
+        // Get posts that are already indexed (aggregate to one row per post using latest updated_at)
+        $indexed_posts = $wpdb->get_results($wpdb->prepare(
+            "
+            SELECT p.ID, p.post_title, p.post_type, p.post_modified, lv.indexed_at
             FROM {$wpdb->posts} p
-            INNER JOIN {$vectors_table} v ON p.ID = v.post_id
+            INNER JOIN (
+                SELECT post_id, MAX(updated_at) AS indexed_at
+                FROM {$vectors_table}
+                GROUP BY post_id
+            ) lv ON p.ID = lv.post_id
             WHERE p.post_status IN ('publish', 'private')
             AND p.post_type IN ($post_type_placeholders)
-            ORDER BY v.updated_at DESC
-        ", $allowed_post_types));
+            ORDER BY lv.indexed_at DESC
+            ",
+            $allowed_post_types
+        ));
         
         $items = [];
         $indexed_post_ids = [];
@@ -3403,7 +3421,7 @@ class Plugin {
                 wp_send_json_error(['message' => __('Export failed. Please try again.', 'wp-gpt-rag-chat')]);
             }
             
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
         }
     }
@@ -3541,7 +3559,7 @@ class Plugin {
         $file_path = $upload_dir['path'] . '/' . $filename;
         
         if (file_put_contents($file_path, $csv_content) === false) {
-            throw new Exception(__('Failed to create export file.', 'wp-gpt-rag-chat'));
+            throw new \Exception(__('Failed to create export file.', 'wp-gpt-rag-chat'));
         }
         
         return [
@@ -3589,13 +3607,13 @@ class Plugin {
         $file_path = $upload_dir['path'] . '/' . $filename;
         
         if (file_put_contents($file_path, $csv_content) === false) {
-            throw new Exception(__('Failed to create export file.', 'wp-gpt-rag-chat'));
+            throw new \Exception(__('Failed to create export file.', 'wp-gpt-rag-chat'));
         }
         
         return [
             'file_url' => $upload_dir['url'] . '/' . $filename,
             'file_path' => $file_path,
-            'record_count' => count($indexed_posts)
+            'record_count' => count($posts)
         ];
     }
     
@@ -3625,7 +3643,7 @@ class Plugin {
         $file_path = $upload_dir['path'] . '/' . $filename;
         
         if (file_put_contents($file_path, $csv_content) === false) {
-            throw new Exception(__('Failed to create export file.', 'wp-gpt-rag-chat'));
+            throw new \Exception(__('Failed to create export file.', 'wp-gpt-rag-chat'));
         }
         
         return [
@@ -3694,7 +3712,7 @@ class Plugin {
                 'indexed_content' => intval($indexed_content)
             ]);
             
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
         }
     }
@@ -3738,7 +3756,7 @@ class Plugin {
                 ]
             ]);
             
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
         }
     }
@@ -4049,7 +4067,7 @@ class Plugin {
             wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
         }
         
-        $batch_size = intval($_POST['batch_size'] ?? 5);
+        $batch_size = intval($_POST['batch_size'] ?? 3);
         $post_type = sanitize_text_field($_POST['post_type'] ?? '');
         
         try {

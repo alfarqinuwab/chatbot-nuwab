@@ -35,23 +35,29 @@ class Indexing_Queue {
         ));
         
         if ($existing) {
-            // Update existing entry if it's not completed
-            if ($existing->status !== 'completed') {
-                $wpdb->update(
-                    $table,
-                    [
-                        'status' => 'pending',
-                        'priority' => $priority,
-                        'attempts' => 0,
-                        'error_message' => null,
-                        'scheduled_at' => current_time('mysql'),
-                        'updated_at' => current_time('mysql')
-                    ],
-                    ['post_id' => $post_id],
-                    ['%s', '%d', '%d', '%s', '%s', '%s'],
-                    ['%d']
-                );
+            // If already completed, don't re-enqueue by default
+            if ($existing->status === 'completed') {
+                return $existing->id;
             }
+            // If already pending or processing, keep as-is (avoid duplicating work)
+            if (in_array($existing->status, ['pending', 'processing'], true)) {
+                return $existing->id;
+            }
+            // If previously failed, reset and retry
+            $wpdb->update(
+                $table,
+                [
+                    'status' => 'pending',
+                    'priority' => $priority,
+                    'attempts' => 0,
+                    'error_message' => null,
+                    'scheduled_at' => current_time('mysql'),
+                    'updated_at' => current_time('mysql')
+                ],
+                ['post_id' => $post_id],
+                ['%s', '%d', '%d', '%s', '%s', '%s'],
+                ['%d']
+            );
             return $existing->id;
         }
         

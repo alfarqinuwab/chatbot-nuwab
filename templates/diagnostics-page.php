@@ -1,6 +1,6 @@
 <?php
 /**
- * Enhanced Diagnostics Page - Live monitoring, connection tests, and system status
+ * WordPress-Style Diagnostics Page with Proper Styling
  */
 
 if (!defined('ABSPATH')) {
@@ -14,851 +14,747 @@ if (!current_user_can('manage_options')) {
 
 global $wpdb;
 $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
+$vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
+$queue_table = $wpdb->prefix . 'wp_gpt_rag_indexing_queue';
 $errors_table = $wpdb->prefix . 'wp_gpt_rag_chat_errors';
 $usage_table = $wpdb->prefix . 'wp_gpt_rag_chat_api_usage';
-$export_history_table = $wpdb->prefix . 'wp_gpt_rag_chat_export_history';
 
 // Get settings
 $settings = \WP_GPT_RAG_Chat\Settings::get_settings();
 
+// Get system statistics
+$total_logs = $wpdb->get_var("SELECT COUNT(*) FROM {$logs_table}");
+$total_vectors = $wpdb->get_var("SELECT COUNT(*) FROM {$vectors_table}");
+$total_posts = $wpdb->get_var("SELECT COUNT(DISTINCT post_id) FROM {$vectors_table}");
+$queue_stats = $wpdb->get_row("SELECT 
+    COUNT(*) as total,
+    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+    SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) as processing,
+    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+    FROM {$queue_table}", ARRAY_A);
+
+$recent_logs = $wpdb->get_results("SELECT * FROM {$logs_table} ORDER BY created_at DESC LIMIT 10");
+$recent_errors = $wpdb->get_results("SELECT * FROM {$errors_table} ORDER BY created_at DESC LIMIT 5");
+
+// Get WordPress info
+$wp_version = get_bloginfo('version');
+$php_version = PHP_VERSION;
+$memory_limit = ini_get('memory_limit');
+$max_execution_time = ini_get('max_execution_time');
+
 ?>
-<div class="wrap cornuwab-admin-wrap">
-    <h1><?php _e('Nuwab AI Assistant - System Diagnostics', 'wp-gpt-rag-chat'); ?>
-        <button type="button" id="refresh-all" class="button button-secondary refresh-btn">
-            <span class="dashicons dashicons-update"></span> <?php _e('Refresh All', 'wp-gpt-rag-chat'); ?>
-        </button>
-    </h1>
+<style>
+/* FontAwesome Icons */
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
+
+/* WordPress Admin Exact Styling */
+.wp-admin .diagnostics-page {
+    margin: 20px 20px 0 2px;
+}
+
+.wp-admin .diagnostics-page h1 {
+    font-size: 23px;
+    font-weight: 400;
+    margin: 0;
+    padding: 9px 0 4px 0;
+    line-height: 1.3;
+}
+
+.wp-admin .diagnostics-page .description {
+    color: #646970;
+    font-style: italic;
+    margin: 0 0 20px 0;
+}
+
+/* WordPress Postbox Styling */
+.wp-admin .postbox {
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  box-shadow: 0 1px 1px rgba(0,0,0,.04);
+  margin: 0;
+}
+
+.wp-admin .postbox-header {
+    background: #f6f7f7;
+    border-bottom: 1px solid #c3c4c7;
+    padding: 0;
+    position: relative;
+}
+
+.wp-admin .postbox-header h2,
+.wp-admin .postbox-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    margin: 0;
+    padding: 12px 20px;
+    color: #1d2327;
+    border: none;
+    background: none;
+}
+
+.wp-admin .postbox .inside {
+    margin: 0;
+    padding: 20px;
+}
+
+.wp-admin .postbox .inside p {
+    margin: 0 0 1em 0;
+    line-height: 1.5;
+}
+
+/* WordPress Table Styling */
+.wp-admin .widefat {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+    margin: 0;
+}
+
+.wp-admin .widefat th,
+.wp-admin .widefat td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid #c3c4c7;
+    vertical-align: top;
+}
+
+.wp-admin .widefat th {
+    background: #f6f7f7;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.wp-admin .widefat tbody tr:hover {
+    background-color: #f6f7f7;
+}
+
+/* WordPress Button Styling */
+.wp-admin .button {
+    display: inline-block;
+    text-decoration: none;
+    font-size: 13px;
+    line-height: 2.15384615;
+    min-height: 30px;
+    margin: 0;
+    padding: 0 10px;
+    cursor: pointer;
+    border-width: 1px;
+    border-style: solid;
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 3px;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.wp-admin .button-primary {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+    text-decoration: none;
+    text-shadow: none;
+}
+
+.wp-admin .button-primary:hover {
+    background: #135e96;
+    border-color: #135e96;
+    color: #fff;
+}
+
+.wp-admin .button-secondary {
+    background: #f6f7f7;
+    border-color: #dcdcde;
+    color: #50575e;
+}
+
+.wp-admin .button-secondary:hover {
+    background: #f0f0f1;
+    border-color: #8c8f94;
+    color: #1d2327;
+}
+
+/* WordPress Notice Styling */
+.wp-admin .notice {
+    background: #fff;
+    border-left: 4px solid #fff;
+    box-shadow: 0 1px 1px 0 rgba(0,0,0,.1);
+    margin: 5px 15px 2px;
+    padding: 1px 12px;
+}
+
+.wp-admin .notice-success {
+    border-left-color: #00a32a;
+}
+
+.wp-admin .notice-error {
+    border-left-color: #d63638;
+}
+
+.wp-admin .notice p {
+    margin: 12px 0;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* Custom Grid Layout */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.queue-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+
+/* Status Icons */
+.status-icon {
+    margin-right: 8px;
+    font-size: 16px;
+}
+
+.status-success { color: #00a32a; }
+.status-error { color: #d63638; }
+.status-warning { color: #dba617; }
+.status-info { color: #2271b1; }
+
+/* Progress Bar */
+.progress-container {
+    background: #f0f0f1;
+    border-radius: 3px;
+    height: 20px;
+    margin: 10px 0;
+    overflow: hidden;
+}
+
+.progress-fill {
+    background: linear-gradient(90deg, #2271b1, #00a32a);
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 3px;
+}
+
+/* Log Display */
+.logs-container {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+}
+
+.log-entry {
+    padding: 12px;
+    border-bottom: 1px solid #f0f0f1;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-time {
+    font-size: 12px;
+    color: #646970;
+    margin-bottom: 4px;
+}
+
+.log-content {
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
     
-    <!-- Live System Monitor -->
-    <div class="diagnostic-section">
-        <h2>📡 Live System Monitor
-            <label class="auto-refresh">
-                <input type="checkbox" id="auto-refresh" checked> <?php _e('Auto-refresh (30s)', 'wp-gpt-rag-chat'); ?>
-            </label>
-        </h2>
-        
-        <div class="live-monitor">
-            <div class="monitor-grid">
-                <div class="monitor-card">
-                    <h4><?php _e('Active Chats', 'wp-gpt-rag-chat'); ?></h4>
-                    <div class="monitor-value" id="active-chats">-</div>
-                    <small><?php _e('Last 24 hours', 'wp-gpt-rag-chat'); ?></small>
-                </div>
-                
-                <div class="monitor-card">
-                    <h4><?php _e('API Calls Today', 'wp-gpt-rag-chat'); ?></h4>
-                    <div class="monitor-value" id="api-calls-today">-</div>
-                    <small><?php _e('OpenAI + Pinecone', 'wp-gpt-rag-chat'); ?></small>
-                </div>
-                
-                <div class="monitor-card">
-                    <h4><?php _e('Error Rate', 'wp-gpt-rag-chat'); ?></h4>
-                    <div class="monitor-value" id="error-rate">-</div>
-                    <small><?php _e('Last 24 hours', 'wp-gpt-rag-chat'); ?></small>
-                </div>
-                
-                <div class="monitor-card">
-                    <h4><?php _e('Avg Response Time', 'wp-gpt-rag-chat'); ?></h4>
-                    <div class="monitor-value" id="avg-response-time">-</div>
-                    <small><?php _e('Milliseconds', 'wp-gpt-rag-chat'); ?></small>
-                </div>
-                
-                <div class="monitor-card">
-                    <h4><?php _e('Indexed Content', 'wp-gpt-rag-chat'); ?></h4>
-                    <div class="monitor-value" id="indexed-content">-</div>
-                    <small><?php _e('Total items', 'wp-gpt-rag-chat'); ?></small>
-                </div>
-                
-                <div class="monitor-card">
-                    <h4><?php _e('System Status', 'wp-gpt-rag-chat'); ?></h4>
-                    <div class="monitor-value" id="system-status">-</div>
-                    <small><?php _e('Overall health', 'wp-gpt-rag-chat'); ?></small>
-                </div>
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .queue-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
+
+<div class="wrap diagnostics-page">
+    <h1><i class="fas fa-tools"></i> System Diagnostics</h1>
+    <p class="description">Comprehensive system health monitoring and diagnostics for Nuwab AI Assistant</p>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid">
+        <div class="postbox">
+            <div class="postbox-header">
+                <h3><i class="fas fa-chart-bar status-icon status-info"></i>Total Logs</h3>
             </div>
-        </div>
-    </div>
-    
-    <!-- Connection Tests -->
-    <div class="diagnostic-section">
-        <h2>🔗 Connection Tests</h2>
-        
-        <div style="margin: 15px 0;">
-            <button type="button" class="connection-test" id="test-openai">
-                <span class="dashicons dashicons-admin-site"></span> <?php _e('Test OpenAI', 'wp-gpt-rag-chat'); ?>
-            </button>
-            
-            <button type="button" class="connection-test" id="test-pinecone">
-                <span class="dashicons dashicons-database"></span> <?php _e('Test Pinecone', 'wp-gpt-rag-chat'); ?>
-            </button>
-            
-            <button type="button" class="connection-test" id="test-wordpress">
-                <span class="dashicons dashicons-wordpress"></span> <?php _e('Test WordPress', 'wp-gpt-rag-chat'); ?>
-            </button>
-            
-            <button type="button" class="connection-test" id="test-all-connections">
-                <span class="dashicons dashicons-admin-tools"></span> <?php _e('Test All', 'wp-gpt-rag-chat'); ?>
-            </button>
-        </div>
-        
-        <div id="connection-results" style="margin-top: 15px;"></div>
-    </div>
-    
-    <!-- Current Running Processes -->
-    <div class="diagnostic-section">
-        <h2>⚙️ Current Running Processes</h2>
-        
-        <div class="process-status">
-            <div class="process-item">
-                <span class="process-name"><?php _e('Content Indexing', 'wp-gpt-rag-chat'); ?></span>
-                <span class="process-status-badge" id="indexing-status"><?php _e('Checking...', 'wp-gpt-rag-chat'); ?></span>
-            </div>
-            
-            <div class="process-item">
-                <span class="process-name"><?php _e('Log Cleanup', 'wp-gpt-rag-chat'); ?></span>
-                <span class="process-status-badge" id="cleanup-status"><?php _e('Checking...', 'wp-gpt-rag-chat'); ?></span>
-            </div>
-            
-            <div class="process-item">
-                <span class="process-name"><?php _e('Emergency Stop', 'wp-gpt-rag-chat'); ?></span>
-                <span class="process-status-badge" id="emergency-status"><?php _e('Checking...', 'wp-gpt-rag-chat'); ?></span>
-            </div>
-            
-            <div class="process-item">
-                <span class="process-name"><?php _e('Background Tasks', 'wp-gpt-rag-chat'); ?></span>
-                <span class="process-status-badge" id="background-status"><?php _e('Checking...', 'wp-gpt-rag-chat'); ?></span>
-            </div>
-        </div>
-    </div>
-    
-    <style>
-        .diagnostic-section { 
-            background: white; 
-            padding: 20px; 
-            margin: 20px 0; 
-            border-left: 4px solid #0073aa; 
-            border-radius: 4px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .diagnostic-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-        }
-        .diagnostic-table th, 
-        .diagnostic-table td { 
-            padding: 10px; 
-            border: 1px solid #ddd; 
-            text-align: left; 
-        }
-        .diagnostic-table th { 
-            background: #f4f4f4; 
-        }
-        .status-ok { color: #00a32a; font-weight: bold; }
-        .status-error { color: #d63638; font-weight: bold; }
-        .status-warning { color: #dba617; font-weight: bold; }
-        .status-info { color: #2271b1; font-weight: bold; }
-        
-        /* Live monitoring styles */
-        .live-monitor {
-            background: #f8f9fa;
-            border: 1px solid #e1e5e9;
-            border-radius: 4px;
-            padding: 15px;
-            margin: 10px 0;
-        }
-        
-        .monitor-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin: 15px 0;
-        }
-        
-        .monitor-card {
-            background: white;
-            border: 1px solid #e1e5e9;
-            border-radius: 4px;
-            padding: 15px;
-            text-align: center;
-        }
-        
-        .monitor-card h4 {
-            margin: 0 0 10px 0;
-            color: #1d2327;
-            font-size: 14px;
-        }
-        
-        .monitor-value {
-            font-size: 24px;
-            font-weight: bold;
-            margin: 5px 0;
-        }
-        
-        .monitor-value.online { color: #00a32a; }
-        .monitor-value.offline { color: #d63638; }
-        .monitor-value.warning { color: #dba617; }
-        
-        .connection-test {
-            display: inline-block;
-            padding: 8px 16px;
-            background: #2271b1;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            text-decoration: none;
-            margin: 5px;
-        }
-        
-        .connection-test:hover {
-            background: #135e96;
-            color: white;
-        }
-        
-        .connection-test.testing {
-            background: #dba617;
-            cursor: not-allowed;
-        }
-        
-        .connection-test.success {
-            background: #00a32a;
-        }
-        
-        .connection-test.error {
-            background: #d63638;
-        }
-        
-        .process-status {
-            background: #f0f6fc;
-            border: 1px solid #c3c4c7;
-            border-radius: 4px;
-            padding: 10px;
-            margin: 10px 0;
-        }
-        
-        .process-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid #e1e5e9;
-        }
-        
-        .process-item:last-child {
-            border-bottom: none;
-        }
-        
-        .process-name {
-            font-weight: 500;
-        }
-        
-        .process-status-badge {
-            padding: 4px 8px;
-            border-radius: 3px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        
-        .process-status-badge.running {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-        
-        .process-status-badge.stopped {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .process-status-badge.idle {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .refresh-btn {
-            float: right;
-            margin-top: -5px;
-        }
-        
-        .auto-refresh {
-            display: inline-block;
-            margin-left: 10px;
-        }
-        
-        .auto-refresh input[type="checkbox"] {
-            margin-right: 5px;
-        }
-    </style>
-    
-    <!-- Database Status -->
-    <div class="diagnostic-section">
-        <h2>📊 Database Status</h2>
-        <?php
-        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$logs_table}'");
-        
-        if ($table_exists) {
-            echo "<p class='status-ok'>✅ Table '{$logs_table}' exists</p>";
-            
-            // Show columns
-            $columns = $wpdb->get_results("SHOW COLUMNS FROM {$logs_table}");
-            echo "<h3>Table Structure:</h3>";
-            echo "<table class='diagnostic-table'>";
-            echo "<tr><th>Column Name</th><th>Type</th><th>Null</th><th>Default</th></tr>";
-            foreach ($columns as $column) {
-                echo "<tr>";
-                echo "<td>{$column->Field}</td>";
-                echo "<td>{$column->Type}</td>";
-                echo "<td>{$column->Null}</td>";
-                echo "<td>" . ($column->Default ?? 'NULL') . "</td>";
-                echo "</tr>";
-            }
-            echo "</table>";
-            
-            // Check for required columns
-            $column_names = wp_list_pluck($columns, 'Field');
-            $required_columns = [
-                'id', 'chat_id', 'turn_number', 'role', 'user_id', 'ip_address', 
-                'content', 'response_latency', 'sources_count', 'rag_sources', 
-                'rating', 'tags', 'model_used', 'tokens_used', 'rag_metadata', 'created_at'
-            ];
-            
-            echo "<h3>Required Columns Check:</h3>";
-            $missing_columns = [];
-            foreach ($required_columns as $req_col) {
-                if (!in_array($req_col, $column_names)) {
-                    $missing_columns[] = $req_col;
-                }
-            }
-            
-            if (empty($missing_columns)) {
-                echo "<p class='status-ok'>✅ All required columns exist</p>";
-            } else {
-                echo "<p class='status-error'>❌ Missing columns: " . implode(', ', $missing_columns) . "</p>";
-                echo "<p><strong>Action needed:</strong> Run database migration</p>";
-                echo "<form method='post'>";
-                echo "<input type='hidden' name='run_migration' value='1'>";
-                wp_nonce_field('run_migration', 'migration_nonce');
-                echo "<button type='submit' class='button button-primary'>Run Migration Now</button>";
-                echo "</form>";
-            }
-        } else {
-            echo "<p class='status-error'>❌ Table '{$logs_table}' does NOT exist!</p>";
-            echo "<p>Please deactivate and reactivate the plugin to create the table.</p>";
-        }
-        ?>
-    </div>
-    
-    <!-- Database Version -->
-    <div class="diagnostic-section">
-        <h2>🔢 Database Version</h2>
-        <?php
-        $db_version = get_option('wp_gpt_rag_chat_db_version', 'Not set');
-        echo "<p>Current version: <strong>{$db_version}</strong></p>";
-        echo "<p>Required version: <strong>2.1.0</strong></p>";
-        
-        if (version_compare($db_version, '2.1.0', '<')) {
-            echo "<p class='status-warning'>⚠️ Database needs migration!</p>";
-        } else {
-            echo "<p class='status-ok'>✅ Database is up to date</p>";
-        }
-        ?>
-    </div>
-    
-    <!-- Recent Logs -->
-    <div class="diagnostic-section">
-        <h2>📝 Recent Log Entries</h2>
-        <?php
-        $recent_logs = $wpdb->get_results("SELECT * FROM {$logs_table} ORDER BY created_at DESC LIMIT 10");
-        
-        if ($recent_logs) {
-            echo "<p>Found " . count($recent_logs) . " recent entries:</p>";
-            echo "<table class='diagnostic-table'>";
-            echo "<tr><th>ID</th><th>Chat ID</th><th>Turn</th><th>Role</th><th>Content (100 chars)</th><th>Created</th></tr>";
-            foreach ($recent_logs as $log) {
-                echo "<tr>";
-                echo "<td>{$log->id}</td>";
-                echo "<td>" . substr($log->chat_id, 0, 25) . "...</td>";
-                echo "<td>{$log->turn_number}</td>";
-                echo "<td>{$log->role}</td>";
-                echo "<td>" . esc_html(substr($log->content, 0, 100)) . "...</td>";
-                echo "<td>{$log->created_at}</td>";
-                echo "</tr>";
-            }
-            echo "</table>";
-        } else {
-            echo "<p class='status-warning'>⚠️ No log entries found. Try asking a question in the chat.</p>";
-        }
-        ?>
-    </div>
-    
-    <!-- Test Logging -->
-    <div class="diagnostic-section">
-        <h2>🧪 Test Logging</h2>
-        <p>Click the button below to test if logging is working:</p>
-        <form method="post">
-            <input type="hidden" name="test_logging" value="1">
-            <?php wp_nonce_field('test_logging', 'test_nonce'); ?>
-            <button type="submit" class="button button-secondary">Run Test Insert</button>
-        </form>
-        
-        <?php
-        if (isset($_POST['test_logging']) && wp_verify_nonce($_POST['test_nonce'], 'test_logging')) {
-            $analytics = new WP_GPT_RAG_Chat\Analytics();
-            $test_chat_id = $analytics->generate_chat_id();
-            
-            $test_data = [
-                'chat_id' => $test_chat_id,
-                'turn_number' => 1,
-                'role' => 'user',
-                'content' => 'Test message from diagnostics',
-                'user_id' => get_current_user_id()
-            ];
-            
-            $result = $analytics->log_interaction($test_data);
-            
-            if ($result) {
-                echo "<p class='status-ok'>✅ Test insert successful! Log ID: {$result}</p>";
-            } else {
-                echo "<p class='status-error'>❌ Test insert failed!</p>";
-                echo "<p>Error: " . $wpdb->last_error . "</p>";
-            }
-        }
-        ?>
-    </div>
-    
-    <!-- Sitemap Indexing -->
-    <div class="diagnostic-section">
-        <h2>🗺️ Sitemap Fallback Index</h2>
-        <?php
-        $sitemap = new WP_GPT_RAG_Chat\Sitemap();
-        $indexed_count = $sitemap->get_indexed_count();
-        $settings = WP_GPT_RAG_Chat\Settings::get_settings();
-        $sitemap_url = $settings['sitemap_url'] ?? 'sitemap.xml';
-        ?>
-        
-        <p><?php _e('Sitemap fallback allows the chatbot to suggest relevant pages when no answers are found in the knowledge base.', 'wp-gpt-rag-chat'); ?></p>
-        
-        <table class="diagnostic-table">
-            <tr>
-                <th><?php _e('Status', 'wp-gpt-rag-chat'); ?></th>
-                <td>
-                    <?php if ($settings['enable_sitemap_fallback'] ?? true): ?>
-                        <span class="status-ok">✅ <?php _e('Enabled', 'wp-gpt-rag-chat'); ?></span>
-                    <?php else: ?>
-                        <span class="status-warning">⚠️ <?php _e('Disabled', 'wp-gpt-rag-chat'); ?></span>
-                    <?php endif; ?>
-                </td>
-            </tr>
-            <tr>
-                <th><?php _e('Sitemap URL', 'wp-gpt-rag-chat'); ?></th>
-                <td><code><?php echo esc_html($sitemap_url); ?></code></td>
-            </tr>
-            <tr>
-                <th><?php _e('Indexed URLs', 'wp-gpt-rag-chat'); ?></th>
-                <td><strong><?php echo esc_html($indexed_count); ?></strong> pages</td>
-            </tr>
-        </table>
-        
-        <div style="margin-top: 20px;">
-            <button type="button" id="index-sitemap-btn" class="button button-primary">
-                <span class="dashicons dashicons-update" style="margin-top: 3px;"></span>
-                <?php _e('Index Sitemap Now', 'wp-gpt-rag-chat'); ?>
-            </button>
-            
-            <button type="button" id="clear-sitemap-btn" class="button button-secondary" style="margin-left: 10px;">
-                <span class="dashicons dashicons-trash" style="margin-top: 3px;"></span>
-                <?php _e('Clear Sitemap Index', 'wp-gpt-rag-chat'); ?>
-            </button>
-            
-            <button type="button" id="cancel-sitemap-indexing" class="button button-secondary" style="display: none; margin-left: 10px; background: #d63638; color: white; border-color: #d63638;">
-                <span class="dashicons dashicons-no" style="margin-top: 3px;"></span>
-                <?php _e('Cancel', 'wp-gpt-rag-chat'); ?>
-            </button>
-        </div>
-        
-        <div id="sitemap-indexing-progress" style="display: none; margin-top: 15px;">
-            <div style="background: #f0f0f0; border-radius: 4px; height: 30px; position: relative; overflow: hidden;">
-                <div id="sitemap-progress-fill" style="background: linear-gradient(90deg, #2271b1, #135e96); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
-            </div>
-            <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
-                <span id="sitemap-progress-message"><?php _e('Preparing...', 'wp-gpt-rag-chat'); ?></span>
-                <span id="sitemap-progress-stats"></span>
+            <div class="inside">
+                <div style="font-size: 2.5em; font-weight: 600; color: #2271b1; margin: 15px 0;">
+                    <?php echo number_format($total_logs); ?>
+                </div>
+                <p class="description">Chat interactions logged</p>
             </div>
         </div>
         
-        <div id="sitemap-indexing-status" style="margin-top: 15px;"></div>
+        <div class="postbox">
+            <div class="postbox-header">
+                <h3><i class="fas fa-folder-open status-icon status-info"></i>Indexed Content</h3>
+            </div>
+            <div class="inside">
+                <div style="font-size: 2.5em; font-weight: 600; color: #2271b1; margin: 15px 0;">
+                    <?php echo number_format($total_posts); ?>
+                </div>
+                <p class="description">Posts indexed</p>
+            </div>
+        </div>
         
-        <script>
-        jQuery(document).ready(function($) {
-            var sitemapIndexingCancelled = false;
-            var currentSitemapOffset = 0;
-            var totalSitemapUrls = 0;
-            
-            $('#index-sitemap-btn').on('click', function() {
-                sitemapIndexingCancelled = false;
-                currentSitemapOffset = 0;
-                totalSitemapUrls = 0;
+        <div class="postbox">
+            <div class="postbox-header">
+                <h3><i class="fas fa-link status-icon status-info"></i>Vector Chunks</h3>
+            </div>
+            <div class="inside">
+                <div style="font-size: 2.5em; font-weight: 600; color: #2271b1; margin: 15px 0;">
+                    <?php echo number_format($total_vectors); ?>
+                </div>
+                <p class="description">Content chunks</p>
+            </div>
+        </div>
+        
+        <div class="postbox">
+            <div class="postbox-header">
+                <h3><i class="fas fa-clock status-icon status-warning"></i>Queue Status</h3>
+            </div>
+            <div class="inside">
+                <div style="font-size: 2.5em; font-weight: 600; color: #dba617; margin: 15px 0;">
+                    <?php echo $queue_stats['pending'] ?? 0; ?>
+                </div>
+                <p class="description">Pending items</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="content-grid">
+        
+        <!-- Connection Tests -->
+        <div class="postbox">
+            <div class="postbox-header">
+                <h3><i class="fas fa-plug status-icon status-info"></i>Connection Tests</h3>
+            </div>
+            <div class="inside">
+                <p>Test connections to external services and APIs:</p>
                 
-                $('#index-sitemap-btn').prop('disabled', true);
-                $('#cancel-sitemap-indexing').show();
-                $('#sitemap-indexing-progress').fadeIn();
-                $('#sitemap-indexing-status').empty();
-                $('#sitemap-progress-fill').css('width', '0%');
-                $('#sitemap-progress-message').text('<?php _e('Starting...', 'wp-gpt-rag-chat'); ?>');
-                
-                indexSitemapNextBatch();
-            });
-            
-            $('#cancel-sitemap-indexing').on('click', function() {
-                if (confirm('<?php _e('Are you sure you want to cancel sitemap indexing?', 'wp-gpt-rag-chat'); ?>')) {
-                    sitemapIndexingCancelled = true;
-                    $(this).prop('disabled', true).text('<?php _e('Cancelling...', 'wp-gpt-rag-chat'); ?>');
-                }
-            });
-            
-            function indexSitemapNextBatch() {
-                if (sitemapIndexingCancelled) {
-                    $('#index-sitemap-btn').prop('disabled', false);
-                    $('#cancel-sitemap-indexing').hide().prop('disabled', false).html('<span class="dashicons dashicons-no"></span> <?php _e('Cancel', 'wp-gpt-rag-chat'); ?>');
-                    $('#sitemap-progress-message').text('<?php _e('Cancelled by user', 'wp-gpt-rag-chat'); ?>');
-                    $('#sitemap-indexing-status').html('<div class="notice notice-warning"><p>⚠️ <?php _e('Indexing cancelled. Processed: ', 'wp-gpt-rag-chat'); ?>' + currentSitemapOffset + ' <?php _e('URLs', 'wp-gpt-rag-chat'); ?></p></div>');
+                <div style="margin: 15px 0;">
+                    <button type="button" class="button button-primary" id="test-openai" style="margin: 5px;">
+                        <i class="fas fa-globe"></i> Test OpenAI
+                    </button>
                     
-                    setTimeout(function() {
-                        $('#sitemap-indexing-progress').fadeOut();
-                    }, 2000);
-                    return;
+                    <button type="button" class="button button-primary" id="test-pinecone" style="margin: 5px;">
+                        <i class="fas fa-database"></i> Test Pinecone
+                    </button>
+                    
+                    <button type="button" class="button button-primary" id="test-wordpress" style="margin: 5px;">
+                        <i class="fas fa-wordpress"></i> Test WordPress
+                    </button>
+                    
+                    <button type="button" class="button button-secondary" id="test-all" style="margin: 5px;">
+                        <i class="fas fa-sync-alt"></i> Test All
+                    </button>
+                </div>
+                
+                <div id="test-results"></div>
+            </div>
+        </div>
+
+        <!-- System Configuration -->
+        <div class="postbox">
+            <div class="postbox-header">
+                <h3><i class="fas fa-cog status-icon status-info"></i>System Configuration</h3>
+            </div>
+            <div class="inside">
+                <table class="widefat">
+                    <tbody>
+                        <tr>
+                            <td style="width: 40%;"><strong>Chatbot Status</strong></td>
+                            <td>
+                                <?php if (!empty($settings['enable_chatbot'])): ?>
+                                    <i class="fas fa-check-circle status-icon status-success"></i>Enabled
+                                <?php else: ?>
+                                    <i class="fas fa-times-circle status-icon status-error"></i>Disabled
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>OpenAI API</strong></td>
+                            <td>
+                                <?php if (!empty($settings['openai_api_key'])): ?>
+                                    <i class="fas fa-check-circle status-icon status-success"></i>Configured
+                                <?php else: ?>
+                                    <i class="fas fa-times-circle status-icon status-error"></i>Not configured
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Pinecone API</strong></td>
+                            <td>
+                                <?php if (!empty($settings['pinecone_api_key'])): ?>
+                                    <i class="fas fa-check-circle status-icon status-success"></i>Configured
+                                <?php else: ?>
+                                    <i class="fas fa-times-circle status-icon status-error"></i>Not configured
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>GPT Model</strong></td>
+                            <td><?php echo esc_html($settings['gpt_model'] ?? 'Not set'); ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Chat Visibility</strong></td>
+                            <td><?php echo esc_html($settings['chat_visibility'] ?? 'Not set'); ?></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Database Status -->
+        <div class="postbox">
+            <div class="postbox-header">
+                <h3><i class="fas fa-database status-icon status-info"></i>Database Status</h3>
+            </div>
+            <div class="inside">
+                <?php
+                $current_version = get_option('wp_gpt_rag_chat_db_version', '1.0.0');
+                $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$logs_table}'");
+                $rag_metadata_exists = false;
+                
+                if ($table_exists) {
+                    $columns = $wpdb->get_results("SHOW COLUMNS FROM {$logs_table}");
+                    $column_names = wp_list_pluck($columns, 'Field');
+                    $rag_metadata_exists = in_array('rag_metadata', $column_names);
                 }
+                ?>
                 
-                $.ajax({
-                    url: ajaxurl,
-                    method: 'POST',
-                    data: {
-                        action: 'wp_gpt_rag_chat_index_sitemap_batch',
-                        nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>',
-                        sitemap_url: '<?php echo esc_js($sitemap_url); ?>',
-                        offset: currentSitemapOffset
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            var data = response.data;
-                            
-                            // Set total on first batch
-                            if (totalSitemapUrls === 0) {
-                                totalSitemapUrls = data.total;
-                            }
-                            
-                            currentSitemapOffset += data.processed;
-                            
-                            // Update progress
-                            var percentage = totalSitemapUrls > 0 ? Math.min((currentSitemapOffset / totalSitemapUrls) * 100, 100) : 0;
-                            $('#sitemap-progress-fill').css('width', percentage + '%');
-                            $('#sitemap-progress-message').text('<?php _e('Indexing...', 'wp-gpt-rag-chat'); ?>');
-                            $('#sitemap-progress-stats').text(currentSitemapOffset + ' / ' + totalSitemapUrls);
-                            
-                            // Check if more to process
-                            if (data.has_more) {
-                                indexSitemapNextBatch();
-                            } else {
-                                // Complete!
-                                $('#index-sitemap-btn').prop('disabled', false);
-                                $('#cancel-sitemap-indexing').hide();
-                                $('#sitemap-progress-message').text('<?php _e('Completed!', 'wp-gpt-rag-chat'); ?>');
-                                $('#sitemap-progress-fill').css('width', '100%');
-                                $('#sitemap-indexing-status').html('<div class="notice notice-success"><p>✅ <?php _e('Successfully indexed ', 'wp-gpt-rag-chat'); ?>' + currentSitemapOffset + ' <?php _e('URLs from sitemap.', 'wp-gpt-rag-chat'); ?></p></div>');
-                                
-                                setTimeout(function() {
-                                    location.reload();
-                                }, 2000);
-                            }
-                        } else {
-                            $('#index-sitemap-btn').prop('disabled', false);
-                            $('#cancel-sitemap-indexing').hide();
-                            $('#sitemap-indexing-status').html('<div class="notice notice-error"><p>❌ ' + response.data.message + '</p></div>');
-                            $('#sitemap-indexing-progress').fadeOut();
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        $('#index-sitemap-btn').prop('disabled', false);
-                        $('#cancel-sitemap-indexing').hide();
-                        $('#sitemap-indexing-status').html('<div class="notice notice-error"><p>❌ Error: ' + error + '</p></div>');
-                        $('#sitemap-indexing-progress').fadeOut();
-                    }
-                });
-            }
-            
-            $('#clear-sitemap-btn').on('click', function() {
-                if (!confirm('<?php _e('Are you sure you want to clear the sitemap index?', 'wp-gpt-rag-chat'); ?>')) {
-                    return;
-                }
+                <table class="widefat">
+                    <tbody>
+                        <tr>
+                            <td style="width: 40%;"><strong>Database Version</strong></td>
+                            <td><?php echo esc_html($current_version); ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Logs Table</strong></td>
+                            <td>
+                                <?php if ($table_exists): ?>
+                                    <i class="fas fa-check-circle status-icon status-success"></i>Exists
+                                <?php else: ?>
+                                    <i class="fas fa-times-circle status-icon status-error"></i>Missing
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Vectors Table</strong></td>
+                            <td>
+                                <?php if ($wpdb->get_var("SHOW TABLES LIKE '{$vectors_table}'")): ?>
+                                    <i class="fas fa-check-circle status-icon status-success"></i>Exists
+                                <?php else: ?>
+                                    <i class="fas fa-times-circle status-icon status-error"></i>Missing
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Queue Table</strong></td>
+                            <td>
+                                <?php if ($wpdb->get_var("SHOW TABLES LIKE '{$queue_table}'")): ?>
+                                    <i class="fas fa-check-circle status-icon status-success"></i>Exists
+                                <?php else: ?>
+                                    <i class="fas fa-times-circle status-icon status-error"></i>Missing
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Schema Status</strong></td>
+                            <td>
+                                <?php if ($rag_metadata_exists): ?>
+                                    <i class="fas fa-check-circle status-icon status-success"></i>Up to date
+                                <?php else: ?>
+                                    <i class="fas fa-exclamation-triangle status-icon status-warning"></i>Needs migration
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
                 
-                var $btn = $(this);
-                var $status = $('#sitemap-indexing-status');
-                
-                $btn.prop('disabled', true);
-                
-                $.ajax({
-                    url: ajaxurl,
-                    method: 'POST',
-                    data: {
-                        action: 'wp_gpt_rag_chat_clear_sitemap',
-                        nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            $status.html('<div class="notice notice-success"><p>✅ ' + response.data.message + '</p></div>');
-                            setTimeout(function() { location.reload(); }, 1500);
-                        } else {
-                            $status.html('<div class="notice notice-error"><p>❌ ' + response.data.message + '</p></div>');
-                            $btn.prop('disabled', false);
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        $status.html('<div class="notice notice-error"><p>❌ Error: ' + error + '</p></div>');
-                        $btn.prop('disabled', false);
-                    }
-                });
-            });
-        });
-        </script>
+                <?php if (!$rag_metadata_exists): ?>
+                    <div style="margin-top: 15px;">
+                        <form method="post" style="display: inline;">
+                            <input type="hidden" name="run_migration" value="1">
+                            <?php wp_nonce_field('run_migration', 'migration_nonce'); ?>
+                            <button type="submit" class="button button-primary">
+                                <i class="fas fa-sync-alt"></i> Run Migration
+                            </button>
+                        </form>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Server Information -->
+        <div class="postbox">
+            <div class="postbox-header">
+                <h3><i class="fas fa-server status-icon status-info"></i>Server Information</h3>
+            </div>
+            <div class="inside">
+                <table class="widefat">
+                    <tbody>
+                        <tr>
+                            <td style="width: 40%;"><strong>WordPress Version</strong></td>
+                            <td><?php echo esc_html($wp_version); ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>PHP Version</strong></td>
+                            <td><?php echo esc_html($php_version); ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Memory Limit</strong></td>
+                            <td><?php echo esc_html($memory_limit); ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Max Execution Time</strong></td>
+                            <td><?php echo esc_html($max_execution_time); ?>s</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Plugin Version</strong></td>
+                            <td><?php echo defined('WP_GPT_RAG_CHAT_VERSION') ? WP_GPT_RAG_CHAT_VERSION : 'Unknown'; ?></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
-    
-    <!-- System Information -->
-    <div class="diagnostic-section">
-        <h2>💻 System Information</h2>
+
+    <!-- Indexing Queue Status -->
+    <div class="postbox">
+        <div class="postbox-header">
+            <h3><i class="fas fa-list-alt status-icon status-info"></i>Indexing Queue Status</h3>
+        </div>
+        <div class="inside">
+            <?php if ($queue_stats): ?>
+                <div class="queue-grid">
+                    <div class="postbox" style="margin: 0;">
+                        <div class="postbox-header">
+                            <h4><i class="fas fa-list status-icon status-info"></i>Total Items</h4>
+                        </div>
+                        <div class="inside">
+                            <div style="font-size: 1.8em; font-weight: 600; color: #2271b1;">
+                                <?php echo number_format($queue_stats['total']); ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="postbox" style="margin: 0;">
+                        <div class="postbox-header">
+                            <h4><i class="fas fa-clock status-icon status-warning"></i>Pending</h4>
+                        </div>
+                        <div class="inside">
+                            <div style="font-size: 1.8em; font-weight: 600; color: #dba617;">
+                                <?php echo number_format($queue_stats['pending']); ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="postbox" style="margin: 0;">
+                        <div class="postbox-header">
+                            <h4><i class="fas fa-sync-alt status-icon status-info"></i>Processing</h4>
+                        </div>
+                        <div class="inside">
+                            <div style="font-size: 1.8em; font-weight: 600; color: #2271b1;">
+                                <?php echo number_format($queue_stats['processing']); ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="postbox" style="margin: 0;">
+                        <div class="postbox-header">
+                            <h4><i class="fas fa-check-circle status-icon status-success"></i>Completed</h4>
+                        </div>
+                        <div class="inside">
+                            <div style="font-size: 1.8em; font-weight: 600; color: #00a32a;">
+                                <?php echo number_format($queue_stats['completed']); ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="postbox" style="margin: 0;">
+                        <div class="postbox-header">
+                            <h4><i class="fas fa-times-circle status-icon status-error"></i>Failed</h4>
+                        </div>
+                        <div class="inside">
+                            <div style="font-size: 1.8em; font-weight: 600; color: #d63638;">
+                                <?php echo number_format($queue_stats['failed']); ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <?php if ($queue_stats['total'] > 0): ?>
+                    <div class="progress-container">
+                        <div class="progress-fill" style="width: <?php echo ($queue_stats['completed'] / $queue_stats['total']) * 100; ?>%;"></div>
+                    </div>
+                    <p style="text-align: center; margin: 10px 0; font-weight: 600;">
+                        <?php echo round(($queue_stats['completed'] / $queue_stats['total']) * 100, 1); ?>% Complete
+                    </p>
+                <?php endif; ?>
+            <?php else: ?>
+                <p>No queue data available.</p>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="content-grid">
         
-        <table class="diagnostic-table">
-            <tr>
-                <th><?php _e('WordPress Version', 'wp-gpt-rag-chat'); ?></th>
-                <td><?php echo get_bloginfo('version'); ?></td>
-            </tr>
-            <tr>
-                <th><?php _e('PHP Version', 'wp-gpt-rag-chat'); ?></th>
-                <td><?php echo PHP_VERSION; ?></td>
-            </tr>
-            <tr>
-                <th><?php _e('Plugin Version', 'wp-gpt-rag-chat'); ?></th>
-                <td><?php echo defined('WP_GPT_RAG_CHAT_VERSION') ? WP_GPT_RAG_CHAT_VERSION : 'Unknown'; ?></td>
-            </tr>
-            <tr>
-                <th><?php _e('Database Version', 'wp-gpt-rag-chat'); ?></th>
-                <td><?php echo get_option('wp_gpt_rag_chat_db_version', 'Not set'); ?></td>
-            </tr>
-            <tr>
-                <th><?php _e('Memory Limit', 'wp-gpt-rag-chat'); ?></th>
-                <td><?php echo ini_get('memory_limit'); ?></td>
-            </tr>
-            <tr>
-                <th><?php _e('Max Execution Time', 'wp-gpt-rag-chat'); ?></th>
-                <td><?php echo ini_get('max_execution_time'); ?>s</td>
-            </tr>
-            <tr>
-                <th><?php _e('Upload Max Filesize', 'wp-gpt-rag-chat'); ?></th>
-                <td><?php echo ini_get('upload_max_filesize'); ?></td>
-            </tr>
-            <tr>
-                <th><?php _e('OpenAI API Key', 'wp-gpt-rag-chat'); ?></th>
-                <td>
-                    <?php 
-                    $openai_key = $settings['openai_api_key'] ?? '';
-                    if ($openai_key) {
-                        echo '<span class="status-ok">✅ ' . substr($openai_key, 0, 8) . '...' . substr($openai_key, -4) . '</span>';
+        <!-- Recent Logs -->
+        <div class="postbox">
+            <div class="postbox-header">
+                <h3><i class="fas fa-file-alt status-icon status-info"></i>Recent Chat Logs</h3>
+            </div>
+            <div class="inside">
+                <?php if (!empty($recent_logs)): ?>
+                    <div class="logs-container">
+                        <?php foreach ($recent_logs as $log): ?>
+                            <div class="log-entry">
+                                <div class="log-time">
+                                    <?php echo date('Y-m-d H:i:s', strtotime($log->created_at)); ?>
+                                </div>
+                                <div class="log-content">
+                                    <strong><?php echo esc_html($log->role); ?>:</strong> 
+                                    <?php echo esc_html(substr($log->content, 0, 100)); ?>
+                                    <?php if (strlen($log->content) > 100): ?>...<?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <p>No recent logs found. Try using the chat widget or run a test below.</p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Test Logging -->
+        <div class="postbox">
+            <div class="postbox-header">
+                <h3><i class="fas fa-flask status-icon status-info"></i>Test Logging System</h3>
+            </div>
+            <div class="inside">
+                <p>Test if the logging system is working properly:</p>
+                
+                <form method="post" style="margin: 15px 0;">
+                    <input type="hidden" name="test_logging" value="1">
+                    <?php wp_nonce_field('test_logging', 'test_nonce'); ?>
+                    <button type="submit" class="button button-primary">
+                        <i class="fas fa-file-plus"></i> Run Test Insert
+                    </button>
+                </form>
+                
+                <?php
+                if (isset($_POST['test_logging']) && wp_verify_nonce($_POST['test_nonce'], 'test_logging')) {
+                    $analytics = new WP_GPT_RAG_Chat\Analytics();
+                    $test_chat_id = $analytics->generate_chat_id();
+                    
+                    $test_data = [
+                        'chat_id' => $test_chat_id,
+                        'turn_number' => 1,
+                        'role' => 'user',
+                        'content' => 'Test message from diagnostics page - ' . date('Y-m-d H:i:s'),
+                        'user_id' => get_current_user_id()
+                    ];
+                    
+                    $result = $analytics->log_interaction($test_data);
+                    
+                    if ($result) {
+                        echo "<div class='notice notice-success is-dismissible'><p><i class='fas fa-check-circle'></i> Test insert successful! Log ID: {$result}</p></div>";
                     } else {
-                        echo '<span class="status-error">❌ Not configured</span>';
+                        echo "<div class='notice notice-error is-dismissible'><p><i class='fas fa-times-circle'></i> Test insert failed!</p></div>";
+                        echo "<p>Error: " . $wpdb->last_error . "</p>";
                     }
-                    ?>
-                </td>
-            </tr>
-            <tr>
-                <th><?php _e('Pinecone API Key', 'wp-gpt-rag-chat'); ?></th>
-                <td>
-                    <?php 
-                    $pinecone_key = $settings['pinecone_api_key'] ?? '';
-                    if ($pinecone_key) {
-                        echo '<span class="status-ok">✅ ' . substr($pinecone_key, 0, 8) . '...' . substr($pinecone_key, -4) . '</span>';
-                    } else {
-                        echo '<span class="status-error">❌ Not configured</span>';
-                    }
-                    ?>
-                </td>
-            </tr>
-            <tr>
-                <th><?php _e('Pinecone Environment', 'wp-gpt-rag-chat'); ?></th>
-                <td><?php echo esc_html($settings['pinecone_environment'] ?? 'Not set'); ?></td>
-            </tr>
-        </table>
-    </div>
-    
-    <!-- Recent Errors -->
-    <div class="diagnostic-section">
-        <h2>⚠️ Recent Error Log</h2>
-        <?php
-        $debug_log = WP_CONTENT_DIR . '/debug.log';
-        if (file_exists($debug_log) && is_readable($debug_log)) {
-            $log_lines = file($debug_log);
-            $recent_errors = array_slice($log_lines, -30); // Last 30 lines
-            
-            $chat_errors = array_filter($recent_errors, function($line) {
-                return stripos($line, 'WP GPT RAG Chat') !== false || 
-                       stripos($line, 'wp_gpt_rag_chat') !== false ||
-                       stripos($line, 'chatbot-nuwab') !== false;
-            });
-            
-            if (!empty($chat_errors)) {
-                echo "<pre style='background: #f4f4f4; padding: 10px; overflow-x: auto; max-height: 300px;'>";
-                echo esc_html(implode('', $chat_errors));
-                echo "</pre>";
-            } else {
-                echo "<p class='status-ok'>✅ No chat-related errors found in debug.log</p>";
-            }
-        } else {
-            echo "<p>Debug log not found or not readable.</p>";
-            echo "<p>To enable WordPress debug logging, add to wp-config.php:</p>";
-            echo "<pre>define('WP_DEBUG', true);\ndefine('WP_DEBUG_LOG', true);\ndefine('WP_DEBUG_DISPLAY', false);</pre>";
-        }
-        ?>
+                }
+                ?>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- Live Monitoring JavaScript -->
+<!-- WordPress-Style JavaScript -->
 <script>
+console.log('=== WORDPRESS DIAGNOSTICS PAGE LOADED ===');
+
+// Define ajaxurl for admin pages
+var ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
+
+// Test if jQuery is available
+if (typeof jQuery !== 'undefined') {
+    console.log('✅ jQuery is available, version:', jQuery.fn.jquery);
+} else {
+    console.log('❌ jQuery is NOT available');
+}
+
+// Wait for document ready
 jQuery(document).ready(function($) {
-    let autoRefreshInterval;
-    let isAutoRefreshEnabled = true;
+    console.log('✅ Document ready fired');
     
-    // Initialize
-    loadSystemData();
-    checkProcessStatus();
+    // Test button detection
+    var buttons = $('button[id^="test-"]');
+    console.log('✅ Found', buttons.length, 'test buttons');
     
-    // Auto-refresh toggle
-    $('#auto-refresh').on('change', function() {
-        isAutoRefreshEnabled = $(this).is(':checked');
-        if (isAutoRefreshEnabled) {
-            startAutoRefresh();
-        } else {
-            stopAutoRefresh();
-        }
-    });
-    
-    // Manual refresh
-    $('#refresh-all').on('click', function() {
-        loadSystemData();
-        checkProcessStatus();
-    });
-    
-    // Connection tests
+    // Add click handlers
     $('#test-openai').on('click', function() {
+        console.log('🔵 OpenAI button clicked');
         testConnection('openai', $(this));
     });
     
     $('#test-pinecone').on('click', function() {
+        console.log('🔵 Pinecone button clicked');
         testConnection('pinecone', $(this));
     });
     
     $('#test-wordpress').on('click', function() {
+        console.log('🔵 WordPress button clicked');
         testConnection('wordpress', $(this));
     });
     
-    $('#test-all-connections').on('click', function() {
+    $('#test-all').on('click', function() {
+        console.log('🔵 Test All button clicked');
         testAllConnections();
     });
     
-    function startAutoRefresh() {
-        if (autoRefreshInterval) {
-            clearInterval(autoRefreshInterval);
-        }
-        autoRefreshInterval = setInterval(function() {
-            if (isAutoRefreshEnabled) {
-                loadSystemData();
-                checkProcessStatus();
-            }
-        }, 30000); // 30 seconds
-    }
+    console.log('✅ All click handlers attached');
     
-    function stopAutoRefresh() {
-        if (autoRefreshInterval) {
-            clearInterval(autoRefreshInterval);
-            autoRefreshInterval = null;
-        }
-    }
-    
-    function loadSystemData() {
-        $.ajax({
-            url: ajaxurl,
-            method: 'POST',
-            data: {
-                action: 'wp_gpt_rag_chat_get_diagnostics_data',
-                nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
-            },
-            success: function(response) {
-                if (response.success) {
-                    const data = response.data;
-                    
-                    // Update monitor cards
-                    $('#active-chats').text(data.active_chats || 0);
-                    $('#api-calls-today').text(data.api_calls_today || 0);
-                    $('#error-rate').text((data.error_rate || 0) + '%');
-                    $('#avg-response-time').text(data.avg_response_time || 0 + 'ms');
-                    $('#indexed-content').text(data.indexed_content || 0);
-                    
-                    // System status
-                    let systemStatus = 'Healthy';
-                    let statusClass = 'online';
-                    
-                    if (data.error_rate > 10) {
-                        systemStatus = 'Warning';
-                        statusClass = 'warning';
-                    } else if (data.error_rate > 25) {
-                        systemStatus = 'Critical';
-                        statusClass = 'offline';
-                    }
-                    
-                    $('#system-status').text(systemStatus).removeClass('online warning offline').addClass(statusClass);
-                }
-            },
-            error: function() {
-                console.log('Failed to load system data');
-            }
-        });
-    }
-    
-    function checkProcessStatus() {
-        $.ajax({
-            url: ajaxurl,
-            method: 'POST',
-            data: {
-                action: 'wp_gpt_rag_chat_get_process_status',
-                nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
-            },
-            success: function(response) {
-                if (response.success) {
-                    const data = response.data;
-                    
-                    updateProcessStatus('indexing-status', data.indexing);
-                    updateProcessStatus('cleanup-status', data.cleanup);
-                    updateProcessStatus('emergency-status', data.emergency);
-                    updateProcessStatus('background-status', data.background);
-                }
-            },
-            error: function() {
-                console.log('Failed to load process status');
-            }
-        });
-    }
-    
-    function updateProcessStatus(elementId, status) {
-        const $element = $('#' + elementId);
-        $element.removeClass('running stopped idle').text(status.text);
-        
-        if (status.status === 'running') {
-            $element.addClass('running');
-        } else if (status.status === 'stopped') {
-            $element.addClass('stopped');
-        } else {
-            $element.addClass('idle');
-        }
-    }
-    
+    // WordPress-style test connection function
     function testConnection(type, $button) {
-        $button.addClass('testing').text('Testing...');
+        console.log('🔄 Testing connection:', type);
         
+        // Store original text
+        if (!$button.data('original-text')) {
+            $button.data('original-text', $button.html());
+        }
+        
+        // Update button with WordPress styling
+        $button.prop('disabled', true)
+               .removeClass('button-primary button-secondary')
+               .addClass('button-secondary')
+               .html('<i class="fas fa-sync-alt fa-spin"></i> Testing...');
+        
+        // Make AJAX request
         $.ajax({
             url: ajaxurl,
             method: 'POST',
@@ -868,57 +764,69 @@ jQuery(document).ready(function($) {
                 nonce: '<?php echo wp_create_nonce('wp_gpt_rag_chat_admin_nonce'); ?>'
             },
             success: function(response) {
+                console.log('✅ AJAX success for', type, response);
+                
                 if (response.success) {
-                    $button.removeClass('testing').addClass('success').text('✅ Success');
-                    showConnectionResult(type, response.data.message, 'success');
+                    $button.removeClass('button-secondary')
+                           .addClass('button-primary')
+                           .html('<i class="fas fa-check-circle"></i> Success');
+                    showResult(type, response.data.message, 'success');
                 } else {
-                    $button.removeClass('testing').addClass('error').text('❌ Failed');
-                    showConnectionResult(type, response.data.message, 'error');
+                    $button.removeClass('button-secondary')
+                           .addClass('button-secondary')
+                           .html('<i class="fas fa-times-circle"></i> Failed');
+                    showResult(type, response.data.message, 'error');
                 }
-                
-                setTimeout(function() {
-                    $button.removeClass('success error testing').text($button.data('original-text') || 'Test ' + type);
-                }, 3000);
             },
-            error: function() {
-                $button.removeClass('testing').addClass('error').text('❌ Error');
-                showConnectionResult(type, 'Connection test failed', 'error');
-                
+            error: function(xhr, status, error) {
+                console.log('❌ AJAX error for', type, status, error);
+                $button.removeClass('button-secondary')
+                       .addClass('button-secondary')
+                       .html('<i class="fas fa-exclamation-triangle"></i> Error');
+                showResult(type, 'Connection test failed: ' + error, 'error');
+            },
+            complete: function() {
+                // Re-enable button after 3 seconds
                 setTimeout(function() {
-                    $button.removeClass('success error testing').text($button.data('original-text') || 'Test ' + type);
+                    $button.prop('disabled', false)
+                           .removeClass('button-primary button-secondary')
+                           .addClass('button-primary')
+                           .html($button.data('original-text'));
                 }, 3000);
             }
         });
     }
     
+    // Test all connections
     function testAllConnections() {
-        const connections = ['openai', 'pinecone', 'wordpress'];
-        connections.forEach(function(type) {
-            const $button = $('#test-' + type);
-            $button.data('original-text', $button.text());
-            testConnection(type, $button);
+        console.log('🔄 Testing all connections');
+        $('#test-openai, #test-pinecone, #test-wordpress').each(function() {
+            testConnection($(this).attr('id').replace('test-', ''), $(this));
         });
     }
     
-    function showConnectionResult(type, message, status) {
-        const $results = $('#connection-results');
-        const statusClass = status === 'success' ? 'notice-success' : 'notice-error';
-        const icon = status === 'success' ? '✅' : '❌';
+    // WordPress-style result display
+    function showResult(type, message, status) {
+        var $results = $('#test-results');
+        var statusClass = status === 'success' ? 'notice-success' : 'notice-error';
+        var icon = status === 'success' ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-times-circle"></i>';
         
-        $results.append(
-            '<div class="notice ' + statusClass + ' is-dismissible" style="margin: 5px 0;">' +
-            '<p>' + icon + ' <strong>' + type.toUpperCase() + ':</strong> ' + message + '</p>' +
-            '</div>'
-        );
+        var resultHtml = '<div class="notice ' + statusClass + ' is-dismissible" style="margin: 10px 0;">' +
+            '<p style="margin: 0.5em 0;">' + icon + ' <strong>' + type.toUpperCase() + ':</strong> ' + message + '</p>' +
+            '</div>';
         
-        // Auto-dismiss after 5 seconds
+        $results.append(resultHtml);
+        
+        // Auto-dismiss after 8 seconds
         setTimeout(function() {
-            $results.find('.notice').last().fadeOut();
-        }, 5000);
+            $results.find('.notice').last().fadeOut(500, function() {
+                $(this).remove();
+            });
+        }, 8000);
     }
     
-    // Start auto-refresh
-    startAutoRefresh();
+    console.log('✅ All functions defined');
+    console.log('=== WORDPRESS DIAGNOSTICS PAGE READY ===');
 });
 </script>
 
@@ -927,7 +835,7 @@ jQuery(document).ready(function($) {
 if (isset($_POST['run_migration']) && wp_verify_nonce($_POST['migration_nonce'], 'run_migration')) {
     delete_option('wp_gpt_rag_chat_db_version');
     WP_GPT_RAG_Chat\Migration::run_migrations();
-    echo "<div class='notice notice-success'><p>Migration completed! Please refresh this page.</p></div>";
+    echo "<div class='notice notice-success is-dismissible'><p><i class='fas fa-check-circle'></i> Migration completed! Please refresh this page.</p></div>";
     echo "<script>setTimeout(function(){ location.reload(); }, 2000);</script>";
 }
-
+?>

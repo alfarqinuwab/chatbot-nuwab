@@ -48,6 +48,11 @@ class Plugin {
         add_action('wp_ajax_wp_gpt_rag_chat_test_chunking', [$this, 'handle_test_chunking']);
         add_action('wp_ajax_wp_gpt_rag_chat_bulk_index', [$this, 'handle_bulk_index']);
         add_action('wp_ajax_wp_gpt_rag_chat_clear_vectors', [$this, 'handle_clear_vectors']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_queue_status', [$this, 'handle_get_queue_status']);
+        add_action('wp_ajax_wp_gpt_rag_chat_clear_queue', [$this, 'handle_clear_queue']);
+        add_action('wp_ajax_wp_gpt_rag_chat_retry_failed', [$this, 'handle_retry_failed']);
+        add_action('wp_ajax_wp_gpt_rag_chat_get_queue_items', [$this, 'handle_get_queue_items']);
+        add_action('wp_ajax_wp_gpt_rag_chat_process_queue', [$this, 'handle_process_queue']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_post_status', [$this, 'handle_get_post_status']);
         add_action('wp_ajax_wp_gpt_rag_chat_cleanup_logs', [$this, 'handle_cleanup_logs']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_indexed_items', [$this, 'handle_get_indexed_items']);
@@ -97,6 +102,7 @@ class Plugin {
         // WP-Cron hooks
         add_action('wp_gpt_rag_chat_index_content', [$this, 'cron_index_content']);
         add_action('wp_gpt_rag_chat_cleanup_logs', [$this, 'cron_cleanup_logs']);
+        add_action('wp_gpt_rag_chat_process_queue_batch', [$this, 'cron_process_queue_batch']);
         
         // Post hooks
         add_action('save_post', [$this, 'handle_post_save'], 10, 2);
@@ -121,6 +127,7 @@ class Plugin {
             'includes/class-openai.php',
             'includes/class-pinecone.php',
             'includes/class-indexing.php',
+            'includes/class-indexing-queue.php',
             'includes/class-chat.php',
             'includes/class-privacy.php',
             'includes/class-logger.php',
@@ -175,7 +182,7 @@ class Plugin {
         $plugin_version = WP_GPT_RAG_CHAT_VERSION;
         
         // Run migrations if needed
-        if (version_compare($current_version, '2.2.0', '<')) {
+        if (version_compare($current_version, '2.4.0', '<')) {
             if (class_exists('\WP_GPT_RAG_Chat\Migration')) {
                 Migration::run_migrations();
             }
@@ -1304,19 +1311,14 @@ class Plugin {
             return;
         }
         
-        $include = get_post_meta($post_id, '_wp_gpt_rag_chat_include', true);
-        // ⚠️ REMOVED AUTO-FLAGGING BUG - Don't auto-set include flag
-        // Only proceed if explicitly set to true
-        if ($include !== '1' && $include !== 1 && $include !== true) {
-            return; // Don't auto-flag posts anymore
-        }
+        // Add post to indexing queue instead of using wp_postmeta
+        // Get indexing delay from settings
+        $delay = $settings['auto_index_delay'] ?? 30;
         
-        if ($include) {
-            // Get indexing delay from settings
-            $delay = $settings['auto_index_delay'] ?? 30;
-            
-            // Schedule indexing with configured delay
-            wp_schedule_single_event(time() + $delay, 'wp_gpt_rag_chat_index_content', [$post_id]);
+        // Add to queue with priority (higher priority for auto-indexing)
+        if (Indexing_Queue::add_to_queue($post_id, 10)) {
+            // Schedule queue processing with configured delay
+            wp_schedule_single_event(time() + $delay, 'wp_gpt_rag_chat_process_queue_batch');
         }
     }
     
@@ -1325,11 +1327,177 @@ class Plugin {
      */
     public function handle_post_delete($post_id) {
         try {
+            // Remove from indexing queue
+            Indexing_Queue::remove_from_queue($post_id);
+            
+            // Delete vectors
             $indexing = new Indexing();
             $indexing->delete_post_vectors($post_id);
         } catch (\Exception $e) {
             error_log('WP GPT RAG Chat: Error deleting vectors for post ' . $post_id . ': ' . $e->getMessage());
         }
+    }
+    
+    /**
+     * Add posts to indexing queue
+     */
+    private function add_posts_to_queue($post_type, $batch_size, $offset) {
+        // Get allowed post types from settings
+        $settings = Settings::get_settings();
+        $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
+        
+        // Simple query without wp_postmeta - just get all eligible posts
+        $query_args = [
+            'numberposts' => $batch_size,
+            'offset' => $offset,
+            'post_status' => ['publish', 'private']
+        ];
+        
+        // Add post type filter if specified
+        if ($post_type && $post_type !== 'all') {
+            $query_args['post_type'] = $post_type;
+        } else {
+            $query_args['post_type'] = $allowed_post_types;
+        }
+        
+        $posts = get_posts($query_args);
+        
+        $added_count = 0;
+        $post_ids = [];
+        
+        error_log('WP GPT RAG Chat: Found ' . count($posts) . ' posts to add to queue');
+        
+        foreach ($posts as $post) {
+            error_log('WP GPT RAG Chat: Attempting to add post ' . $post->ID . ' (' . $post->post_title . ') to queue');
+            if (Indexing_Queue::add_to_queue($post->ID)) {
+                $added_count++;
+                $post_ids[] = $post->ID;
+                error_log('WP GPT RAG Chat: Successfully added post ' . $post->ID . ' to queue');
+            } else {
+                error_log('WP GPT RAG Chat: Failed to add post ' . $post->ID . ' to queue');
+            }
+        }
+        
+        // Log the addition (processing will be handled by frontend)
+        if ($added_count > 0) {
+            error_log('WP GPT RAG Chat: Added ' . $added_count . ' posts to queue for processing');
+        }
+        
+        return [
+            'processed' => $added_count,
+            'total' => count($posts),
+            'errors' => [],
+            'indexed_post_ids' => $post_ids,
+            'message' => sprintf(__('Added %d posts to indexing queue.', 'wp-gpt-rag-chat'), $added_count)
+        ];
+    }
+    
+    /**
+     * Add single post to indexing queue
+     */
+    private function add_single_post_to_queue($post_type) {
+        // Get allowed post types from settings
+        $settings = Settings::get_settings();
+        $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
+        
+        $query_args = [
+            'numberposts' => 1,
+            'post_status' => ['publish', 'private'],
+            'meta_query' => [
+                'relation' => 'OR',
+                [
+                    'key' => '_wp_gpt_rag_chat_include',
+                    'value' => '1',
+                    'compare' => '='
+                ],
+                [
+                    'key' => '_wp_gpt_rag_chat_include',
+                    'compare' => 'NOT EXISTS'
+                ]
+            ]
+        ];
+        
+        // Add post type filter if specified
+        if ($post_type && $post_type !== 'all') {
+            $query_args['post_type'] = $post_type;
+        } else {
+            $query_args['post_type'] = $allowed_post_types;
+        }
+        
+        $posts = get_posts($query_args);
+        
+        if (!empty($posts)) {
+            $post = $posts[0];
+            if (Indexing_Queue::add_to_queue($post->ID)) {
+                return [
+                    'processed' => 1,
+                    'total' => 1,
+                    'errors' => [],
+                    'indexed_post_ids' => [$post->ID],
+                    'message' => sprintf(__('Added post "%s" to indexing queue.', 'wp-gpt-rag-chat'), $post->post_title)
+                ];
+            }
+        }
+        
+        return [
+            'processed' => 0,
+            'total' => 0,
+            'errors' => [__('No posts found to add to queue.', 'wp-gpt-rag-chat')],
+            'indexed_post_ids' => [],
+            'message' => __('No posts found to add to queue.', 'wp-gpt-rag-chat')
+        ];
+    }
+    
+    /**
+     * Add changed posts to indexing queue
+     */
+    private function add_changed_posts_to_queue($post_type, $batch_size, $offset) {
+        global $wpdb;
+        
+        // Get allowed post types from settings
+        $settings = Settings::get_settings();
+        $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
+        
+        $vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
+        
+        // Build post type filter
+        if ($post_type && $post_type !== 'all') {
+            $post_type_filter = "'" . esc_sql($post_type) . "'";
+        } else {
+            $post_type_filter = "'" . implode("','", $allowed_post_types) . "'";
+        }
+        
+        // Get posts that have been modified since last indexing
+        $posts = $wpdb->get_results($wpdb->prepare(
+            "SELECT DISTINCT p.ID, p.post_title, p.post_modified
+            FROM {$wpdb->posts} p
+            LEFT JOIN {$vectors_table} v ON p.ID = v.post_id
+            WHERE p.post_status IN ('publish', 'private')
+            AND p.post_type IN ($post_type_filter)
+            AND (v.post_id IS NULL OR p.post_modified > v.updated_at)
+            ORDER BY p.post_modified DESC
+            LIMIT %d OFFSET %d",
+            $batch_size,
+            $offset
+        ));
+        
+        $added_count = 0;
+        $post_ids = [];
+        
+        foreach ($posts as $post) {
+            if (Indexing_Queue::add_to_queue($post->ID)) {
+                $added_count++;
+                $post_ids[] = $post->ID;
+            }
+        }
+        
+        return [
+            'processed' => $added_count,
+            'total' => count($posts),
+            'errors' => [],
+            'indexed_post_ids' => $post_ids,
+            'message' => sprintf(__('Added %d changed posts to indexing queue.', 'wp-gpt-rag-chat'), $added_count)
+        ];
     }
     
     /**
@@ -1430,6 +1598,8 @@ class Plugin {
         ini_set('memory_limit', '512M');
         set_time_limit(300); // 5 minutes
         
+        error_log('WP GPT RAG Chat: handle_bulk_index called');
+        
         check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_options')) {
@@ -1455,18 +1625,22 @@ class Plugin {
         // Log the request for debugging
         error_log("WP GPT RAG Chat: Bulk index request - Action: {$action}, Offset: {$offset}, Post Type: {$post_type}, Batch Size: {$batch_size}");
         
+        // Initialize indexing class
+        $indexing = new Indexing();
+        
         try {
-            $indexing = new Indexing();
-            
             switch ($action) {
                 case 'index_all':
-                    $result = $indexing->index_all_content($batch_size, $offset, $post_type);
+                    // Add posts to queue instead of processing immediately
+                    $result = $this->add_posts_to_queue($post_type, $batch_size, $offset);
                     break;
                 case 'index_single':
-                    $result = $indexing->index_single_post($post_type);
+                    // Add single post to queue
+                    $result = $this->add_single_post_to_queue($post_type);
                     break;
                 case 'reindex_changed':
-                    $result = $indexing->reindex_changed_content($batch_size, $offset, $post_type);
+                    // Add changed posts to queue
+                    $result = $this->add_changed_posts_to_queue($post_type, $batch_size, $offset);
                     break;
                 default:
                     wp_send_json_error(['message' => __('Invalid action.', 'wp-gpt-rag-chat')]);
@@ -1527,7 +1701,13 @@ class Plugin {
                 'stats' => $stats
             ]);
         } catch (\Exception $e) {
+            error_log('WP GPT RAG Chat: Exception in handle_bulk_index: ' . $e->getMessage());
+            error_log('WP GPT RAG Chat: Exception trace: ' . $e->getTraceAsString());
             wp_send_json_error(['message' => $e->getMessage()]);
+        } catch (\Error $e) {
+            error_log('WP GPT RAG Chat: Fatal error in handle_bulk_index: ' . $e->getMessage());
+            error_log('WP GPT RAG Chat: Error trace: ' . $e->getTraceAsString());
+            wp_send_json_error(['message' => 'Fatal error: ' . $e->getMessage()]);
         }
     }
 
@@ -1707,6 +1887,45 @@ class Plugin {
             $logger->cleanup_old_logs();
         } catch (\Exception $e) {
             error_log('WP GPT RAG Chat: Error cleaning up logs: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Cron job to process indexing queue batch
+     */
+    public function cron_process_queue_batch() {
+        try {
+            // Get next batch of pending items from queue
+            $queue_items = Indexing_Queue::get_next_batch(5); // Process 5 items at a time
+            
+            if (empty($queue_items)) {
+                return; // No items to process
+            }
+            
+            $indexing = new Indexing();
+            
+            foreach ($queue_items as $item) {
+                // Mark as processing
+                Indexing_Queue::mark_processing($item->post_id);
+                
+                try {
+                    // Index the post
+                    $result = $indexing->index_single_post($item->post_id);
+                    
+                    if ($result['success']) {
+                        // Mark as completed
+                        Indexing_Queue::mark_completed($item->post_id);
+                    } else {
+                        // Mark as failed
+                        Indexing_Queue::mark_failed($item->post_id, $result['error'] ?? 'Unknown error');
+                    }
+                } catch (\Exception $e) {
+                    // Mark as failed
+                    Indexing_Queue::mark_failed($item->post_id, $e->getMessage());
+                }
+            }
+        } catch (\Exception $e) {
+            error_log('WP GPT RAG Chat: Error processing queue batch: ' . $e->getMessage());
         }
     }
     
@@ -1935,6 +2154,32 @@ class Plugin {
             KEY last_seen (last_seen)
         ) $charset_collate;";
         
+        // Indexing queue table
+        $queue_table = $wpdb->prefix . 'wp_gpt_rag_indexing_queue';
+        $queue_sql = "CREATE TABLE $queue_table (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            post_id bigint(20) NOT NULL,
+            post_type varchar(20) NOT NULL,
+            post_title varchar(500) NOT NULL,
+            status enum('pending','processing','completed','failed') DEFAULT 'pending',
+            priority int(11) DEFAULT 0,
+            attempts int(11) DEFAULT 0,
+            max_attempts int(11) DEFAULT 3,
+            error_message text DEFAULT NULL,
+            scheduled_at datetime DEFAULT CURRENT_TIMESTAMP,
+            started_at datetime DEFAULT NULL,
+            completed_at datetime DEFAULT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY post_id (post_id),
+            KEY status (status),
+            KEY post_type (post_type),
+            KEY priority (priority),
+            KEY scheduled_at (scheduled_at),
+            KEY created_at (created_at)
+        ) $charset_collate;";
+        
         if (file_exists(ABSPATH . 'wp-admin/includes/upgrade.php')) {
             require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
             if (function_exists('dbDelta')) {
@@ -1942,6 +2187,7 @@ class Plugin {
                 dbDelta($vectors_sql);
                 dbDelta($sitemap_sql);
                 dbDelta($gaps_sql);
+                dbDelta($queue_sql);
             }
         }
     }
@@ -1984,39 +2230,70 @@ class Plugin {
         
         global $wpdb;
         
-        // Get all public post types that can be indexed
-        $indexable_post_types = get_post_types(['public' => true], 'names');
-        $post_type_placeholders = implode(',', array_fill(0, count($indexable_post_types), '%s'));
+        // Get allowed post types from settings
+        $settings = Settings::get_settings();
+        $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
+        $post_type_placeholders = implode(',', array_fill(0, count($allowed_post_types), '%s'));
         
-        // Get posts that are in the index queue
+        $vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
+        
+        // Get posts that are already indexed (from vectors table)
         $indexed_posts = $wpdb->get_results($wpdb->prepare("
-            SELECT DISTINCT p.ID, p.post_title, p.post_type, p.post_modified
+            SELECT DISTINCT p.ID, p.post_title, p.post_type, p.post_modified, v.updated_at as indexed_at
             FROM {$wpdb->posts} p
-            INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
-            WHERE p.post_status = 'publish'
+            INNER JOIN {$vectors_table} v ON p.ID = v.post_id
+            WHERE p.post_status IN ('publish', 'private')
             AND p.post_type IN ($post_type_placeholders)
-            AND pm.meta_key = '_wp_gpt_rag_chat_indexed'
-            AND pm.meta_value = '1'
-            ORDER BY p.post_modified DESC
-        ", $indexable_post_types));
+            ORDER BY v.updated_at DESC
+        ", $allowed_post_types));
         
         $items = [];
+        $indexed_post_ids = [];
+        
+        // Add already indexed posts
         foreach ($indexed_posts as $post_data) {
-            $status = Admin::get_post_indexing_status($post_data->ID);
-            $post_modified = get_post_modified_time('Y/m/d H:i:s', false, $post_data);
-            $indexed_time = $status['last_updated'] ? date('Y/m/d H:i:s', strtotime($status['last_updated'])) : null;
+            $indexed_time = $post_data->indexed_at ? date('Y/m/d H:i:s', strtotime($post_data->indexed_at)) : null;
+            $indexed_post_ids[] = $post_data->ID;
             
             $items[] = [
                 'id' => $post_data->ID,
                 'title' => $post_data->post_title,
                 'type' => $post_data->post_type,
-                'modified' => $post_modified,
+                'modified' => $post_data->post_modified,
                 'indexed_time' => $indexed_time,
                 'edit_url' => get_edit_post_link($post_data->ID),
-                'vector_count' => $status['vector_count'],
-                'status' => $status
+                'pending' => false,
+                'status' => 'ok'
             ];
         }
+        
+        // Add pending items from queue (that aren't already indexed)
+        $queue_items = Indexing_Queue::get_queue_items(100, 0, 'pending'); // Get up to 100 pending items
+        
+        foreach ($queue_items as $queue_item) {
+            // Skip if already indexed
+            if (in_array($queue_item->post_id, $indexed_post_ids)) {
+                continue;
+            }
+            
+            $items[] = [
+                'id' => $queue_item->post_id,
+                'title' => $queue_item->post_title,
+                'type' => $queue_item->post_type,
+                'modified' => $queue_item->created_at,
+                'indexed_time' => null,
+                'edit_url' => get_edit_post_link($queue_item->post_id),
+                'pending' => true,
+                'status' => 'pending'
+            ];
+        }
+        
+        // Sort by created/updated time (newest first)
+        usort($items, function($a, $b) {
+            $time_a = $a['pending'] ? strtotime($a['modified']) : strtotime($a['indexed_time']);
+            $time_b = $b['pending'] ? strtotime($b['modified']) : strtotime($b['indexed_time']);
+            return $time_b - $time_a;
+        });
         
         wp_send_json_success(['items' => $items]);
     }
@@ -3616,13 +3893,18 @@ class Plugin {
             $offset = intval($_POST['offset'] ?? 0);
             $limit = intval($_POST['limit'] ?? 10);
             
-            // Check if Persistent_Indexing class exists
-            if (!class_exists('WP_GPT_RAG_Chat\Persistent_Indexing')) {
-                error_log('WP GPT RAG Chat: Persistent_Indexing class not found in pending posts method');
-                wp_send_json_error(['message' => __('Persistent indexing not available.', 'wp-gpt-rag-chat')]);
-            }
+            // Use the new indexing queue system instead of old persistent indexing
+            $queue_items = Indexing_Queue::get_queue_items($limit, $offset, 'pending', $post_type);
             
-            $items = Persistent_Indexing::get_next_batch_for_pending($limit, $offset, $post_type);
+            $items = [];
+            foreach ($queue_items as $item) {
+                $items[] = [
+                    'id' => $item->post_id,
+                    'title' => $item->post_title,
+                    'type' => $item->post_type,
+                    'edit_url' => get_edit_post_link($item->post_id)
+                ];
+            }
             
             wp_send_json_success([
                 'items' => $items,
@@ -3672,6 +3954,149 @@ class Plugin {
         } catch (\Error $e) {
             error_log('WP GPT RAG Chat: Fatal error in handle_clear_newly_indexed: ' . $e->getMessage());
             wp_send_json_error(['message' => 'Fatal error: ' . $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Handle get queue status AJAX request
+     */
+    public function handle_get_queue_status() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $post_type = sanitize_text_field($_POST['post_type'] ?? '');
+        $stats = Indexing_Queue::get_queue_stats($post_type);
+        
+        wp_send_json_success($stats);
+    }
+    
+    /**
+     * Handle clear queue AJAX request
+     */
+    public function handle_clear_queue() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $status = sanitize_text_field($_POST['status'] ?? 'all');
+        
+        if ($status === 'completed') {
+            $result = Indexing_Queue::clear_completed();
+            $message = __('Completed items cleared from queue.', 'wp-gpt-rag-chat');
+        } else {
+            $result = Indexing_Queue::clear_all();
+            $message = __('All items cleared from queue.', 'wp-gpt-rag-chat');
+        }
+        
+        wp_send_json_success(['message' => $message, 'cleared' => $result]);
+    }
+    
+    /**
+     * Handle retry failed AJAX request
+     */
+    public function handle_retry_failed() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        global $wpdb;
+        $table = Indexing_Queue::get_table_name();
+        
+        $result = $wpdb->update(
+            $table,
+            [
+                'status' => 'pending',
+                'attempts' => 0,
+                'error_message' => null,
+                'scheduled_at' => current_time('mysql')
+            ],
+            ['status' => 'failed'],
+            ['%s', '%d', '%s', '%s'],
+            ['%s']
+        );
+        
+        wp_send_json_success([
+            'message' => sprintf(__('Retried %d failed items.', 'wp-gpt-rag-chat'), $result),
+            'retried' => $result
+        ]);
+    }
+    
+    /**
+     * Handle get queue items AJAX request
+     */
+    public function handle_get_queue_items() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $limit = intval($_POST['limit'] ?? 20);
+        $offset = intval($_POST['offset'] ?? 0);
+        $status = sanitize_text_field($_POST['status'] ?? '');
+        $post_type = sanitize_text_field($_POST['post_type'] ?? '');
+        
+        $items = Indexing_Queue::get_queue_items($limit, $offset, $status, $post_type);
+        
+        wp_send_json_success($items);
+    }
+    
+    /**
+     * Handle process queue AJAX request
+     */
+    public function handle_process_queue() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        
+        $batch_size = intval($_POST['batch_size'] ?? 5);
+        $post_type = sanitize_text_field($_POST['post_type'] ?? '');
+        
+        try {
+            $indexing = new Indexing();
+            $processed = 0;
+            $errors = [];
+            
+            // Get next batch from queue
+            $queue_items = Indexing_Queue::get_next_batch($batch_size, $post_type);
+            
+            foreach ($queue_items as $item) {
+                try {
+                    // Mark as processing
+                    Indexing_Queue::mark_processing($item->post_id);
+                    
+                    // Process the post
+                    $result = $indexing->index_post($item->post_id, true);
+                    
+                    // Mark as completed
+                    Indexing_Queue::mark_completed($item->post_id);
+                    $processed++;
+                    
+                } catch (\Exception $e) {
+                    // Mark as failed
+                    Indexing_Queue::mark_failed($item->post_id, $e->getMessage());
+                    $errors[] = sprintf(__('Post %d: %s', 'wp-gpt-rag-chat'), $item->post_id, $e->getMessage());
+                }
+            }
+            
+            wp_send_json_success([
+                'message' => sprintf(__('Processed %d items from queue.', 'wp-gpt-rag-chat'), $processed),
+                'processed' => $processed,
+                'errors' => $errors,
+                'remaining' => Indexing_Queue::get_queue_stats($post_type)['pending']
+            ]);
+            
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
         }
     }
     

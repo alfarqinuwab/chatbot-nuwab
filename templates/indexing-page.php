@@ -111,8 +111,10 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         // Get posts that are in the index queue (have been indexed or are being processed)
         global $wpdb;
         
-        // Get all public post types that can be indexed
-        $indexable_post_types = get_post_types(['public' => true], 'names');
+        // Get allowed post types from settings that can be indexed
+        $settings = WP_GPT_RAG_Chat\Settings::get_settings();
+        $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
+        $indexable_post_types = $allowed_post_types;
         $post_type_placeholders = implode(',', array_fill(0, count($indexable_post_types), '%s'));
         
         $indexed_posts = $wpdb->get_results($wpdb->prepare("
@@ -276,10 +278,16 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     <label for="index-post-type"><?php esc_html_e('Select Post Type:', 'wp-gpt-rag-chat'); ?></label>
                     <select id="index-post-type" class="post-type-dropdown">
                         <?php
+                        // Get settings to filter allowed post types
+                        $settings = WP_GPT_RAG_Chat\Settings::get_settings();
+                        $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
+                        
                         $post_types = get_post_types(['public' => true], 'objects');
                         $total_initial_count = 0;
+                        
+                        // Calculate total count only for allowed post types
                         foreach ($post_types as $post_type) {
-                            if ($post_type->name !== 'attachment') {
+                            if ($post_type->name !== 'attachment' && in_array($post_type->name, $allowed_post_types)) {
                                 $count = wp_count_posts($post_type->name);
                                 $published_count = isset($count->publish) ? (int) $count->publish : 0;
                                 $private_count = isset($count->private) ? (int) $count->private : 0;
@@ -290,8 +298,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                         ?>
                         <option value="all" data-count="<?php echo esc_attr($total_initial_count); ?>"><?php esc_html_e('All Post Types', 'wp-gpt-rag-chat'); ?> (<span id="all-post-count"><?php echo esc_html($total_initial_count); ?></span>)</option>
                         <?php
+                        // Only show allowed post types in the dropdown
                         foreach ($post_types as $post_type) {
-                            if ($post_type->name !== 'attachment') {
+                            if ($post_type->name !== 'attachment' && in_array($post_type->name, $allowed_post_types)) {
                                 $count = wp_count_posts($post_type->name);
                                 $published_count = isset($count->publish) ? (int) $count->publish : 0;
                                 $private_count = isset($count->private) ? (int) $count->private : 0;
@@ -351,8 +360,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     <select id="sitemap-post-type" class="post-type-dropdown">
                         <option value="all"><?php esc_html_e('All Post Types', 'wp-gpt-rag-chat'); ?> (<span id="sitemap-all-post-count"><?php echo esc_html($total_initial_count); ?></span>)</option>
                         <?php
+                        // Only show allowed post types in the sitemap dropdown
                         foreach ($post_types as $post_type) {
-                            if ($post_type->name !== 'attachment') {
+                            if ($post_type->name !== 'attachment' && in_array($post_type->name, $allowed_post_types)) {
                                 $count = wp_count_posts($post_type->name);
                                 $published_count = isset($count->publish) ? (int) $count->publish : 0;
                                 $private_count = isset($count->private) ? (int) $count->private : 0;
@@ -3059,36 +3069,36 @@ jQuery(document).ready(function($) {
      */
     function startPersistentIndexing(button, postType) {
         $.post(wpGptRagChatAdmin.ajaxUrl, {
-            action: 'wp_gpt_rag_chat_start_persistent_indexing',
+            action: 'wp_gpt_rag_chat_bulk_index',
             nonce: wpGptRagChatAdmin.nonce,
-            action_type: 'index_all',
-            post_type: postType
+            bulk_action: 'index_all',
+            post_type: postType,
+            batch_size: 10,
+            offset: 0
         }, function(response) {
             if (response.success) {
-                // Show progress bar
+                // First, immediately refresh the table to show pending items
+                updateIndexedItemsTable();
+                
+                // Show progress bar and start processing
                 button.prop('disabled', true);
                 $('#cancel-sync-all').show();
                 $('#global-progress-container').show();
-                $('#global-progress-container .progress-text').text('<?php esc_html_e('Starting persistent indexing...', 'wp-gpt-rag-chat'); ?>');
+                $('#global-progress-container .progress-text').text('<?php esc_html_e('Posts added to queue, starting processing...', 'wp-gpt-rag-chat'); ?>');
                 $('#global-progress-container .progress-fill').css('width', '0%');
                 
-                // Get and display pending posts
-                getAndDisplayPendingPosts(postType);
+                // Start processing the queue after a short delay to show pending items first
+                setTimeout(function() {
+                    startQueueProcessing(button, postType, response.data.processed || 0);
+                }, 500);
                 
-                // Start monitoring progress
-                startProgressMonitoring();
-                
-                CORNUWB.showNotification(
-                    '<?php esc_html_e('Persistent Indexing Started', 'wp-gpt-rag-chat'); ?>',
-                    '<?php esc_html_e('Indexing will continue in the background even if you navigate away from this page.', 'wp-gpt-rag-chat'); ?>',
-                    'success'
-                );
             } else {
                 CORNUWB.showNotification(
                     '<?php esc_html_e('Error', 'wp-gpt-rag-chat'); ?>',
-                    response.data.message || '<?php esc_html_e('Failed to start persistent indexing.', 'wp-gpt-rag-chat'); ?>',
+                    response.data.message || '<?php esc_html_e('Failed to start indexing.', 'wp-gpt-rag-chat'); ?>',
                     'error'
                 );
+                button.prop('disabled', false);
             }
         }).fail(function() {
             CORNUWB.showNotification(
@@ -3096,6 +3106,7 @@ jQuery(document).ready(function($) {
                 '<?php esc_html_e('Failed to connect to the server. Please try again.', 'wp-gpt-rag-chat'); ?>',
                 'error'
             );
+            button.prop('disabled', false);
         });
     }
     
@@ -6137,8 +6148,168 @@ jQuery(document).ready(function($) {
     });
     
     // ============================================
+    // QUEUE PROCESSING FUNCTIONS
+    // ============================================
+    
+    /**
+     * Show process queue button
+     */
+    function showProcessQueueButton() {
+        if ($('#process-queue-btn').length === 0) {
+            var button = $('<button id="process-queue-btn" class="button button-primary" style="margin-top: 10px;"><?php esc_html_e('Process Queue', 'wp-gpt-rag-chat'); ?></button>');
+            button.insertAfter('#sync-all-content');
+            
+            button.on('click', function() {
+                processQueue();
+            });
+        }
+    }
+    
+    /**
+     * Start processing the queue with progress bar
+     */
+    function startQueueProcessing(button, postType, totalItems) {
+        var processed = 0;
+        var batchSize = 5;
+        var isProcessing = true;
+        
+        function processNextBatch() {
+            if (!isProcessing) return;
+            
+            $.post(wpGptRagChatAdmin.ajaxUrl, {
+                action: 'wp_gpt_rag_chat_process_queue',
+                nonce: wpGptRagChatAdmin.nonce,
+                batch_size: batchSize,
+                post_type: postType
+            }, function(response) {
+                if (response.success) {
+                    processed += response.data.processed || 0;
+                    var progress = totalItems > 0 ? (processed / totalItems) * 100 : 0;
+                    
+                    // Update progress bar
+                    $('#global-progress-container .progress-fill').css('width', progress + '%');
+                    $('#global-progress-container .progress-text').text(
+                        '<?php esc_html_e('Processing', 'wp-gpt-rag-chat'); ?>: ' + processed + ' / ' + totalItems + 
+                        ' (<?php esc_html_e('Remaining', 'wp-gpt-rag-chat'); ?>: ' + (response.data.remaining || 0) + ')'
+                    );
+                    
+                    // Refresh table to show updated statuses
+                    updateIndexedItemsTable();
+                    
+                    // Check if there are more items to process
+                    if (response.data.remaining > 0 && isProcessing) {
+                        setTimeout(processNextBatch, 1000); // Process next batch after 1 second
+                    } else {
+                        // Complete
+                        completeQueueProcessing(button, processed);
+                    }
+                } else {
+                    // Error occurred
+                    completeQueueProcessing(button, processed, response.data.message);
+                }
+            }).fail(function() {
+                completeQueueProcessing(button, processed, '<?php esc_html_e('Connection error', 'wp-gpt-rag-chat'); ?>');
+            });
+        }
+        
+        // Start processing
+        processNextBatch();
+        
+        // Handle cancel button
+        $('#cancel-sync-all').off('click').on('click', function() {
+            isProcessing = false;
+            completeQueueProcessing(button, processed, '<?php esc_html_e('Cancelled by user', 'wp-gpt-rag-chat'); ?>');
+        });
+    }
+    
+    /**
+     * Complete queue processing
+     */
+    function completeQueueProcessing(button, processed, errorMessage) {
+        $('#global-progress-container').fadeOut();
+        $('#cancel-sync-all').hide();
+        button.prop('disabled', false);
+        
+        if (errorMessage) {
+            CORNUWB.showNotification(
+                '<?php esc_html_e('Indexing Stopped', 'wp-gpt-rag-chat'); ?>',
+                errorMessage,
+                'warning'
+            );
+        } else {
+            CORNUWB.showNotification(
+                '<?php esc_html_e('Indexing Complete', 'wp-gpt-rag-chat'); ?>',
+                '<?php esc_html_e('Successfully processed', 'wp-gpt-rag-chat'); ?> ' + processed + ' <?php esc_html_e('items.', 'wp-gpt-rag-chat'); ?>',
+                'success'
+            );
+        }
+        
+        // Final refresh of the table
+        updateIndexedItemsTable();
+    }
+    
+    /**
+     * Process the indexing queue
+     */
+    function processQueue() {
+        var button = $('#process-queue-btn');
+        button.prop('disabled', true).text('<?php esc_html_e('Processing...', 'wp-gpt-rag-chat'); ?>');
+        
+        $.post(wpGptRagChatAdmin.ajaxUrl, {
+            action: 'wp_gpt_rag_chat_process_queue',
+            nonce: wpGptRagChatAdmin.nonce,
+            batch_size: 5
+        }, function(response) {
+            if (response.success) {
+                CORNUWB.showNotification(
+                    '<?php esc_html_e('Queue Processed', 'wp-gpt-rag-chat'); ?>',
+                    response.data.message,
+                    'success'
+                );
+                
+                // Refresh the table to show updated statuses
+                updateIndexedItemsTable();
+                
+                // Check if there are more items to process
+                if (response.data.remaining > 0) {
+                    button.prop('disabled', false).text('<?php esc_html_e('Process More', 'wp-gpt-rag-chat'); ?>');
+                } else {
+                    button.text('<?php esc_html_e('Queue Complete', 'wp-gpt-rag-chat'); ?>');
+                }
+            } else {
+                CORNUWB.showNotification(
+                    '<?php esc_html_e('Error', 'wp-gpt-rag-chat'); ?>',
+                    response.data.message,
+                    'error'
+                );
+                button.prop('disabled', false).text('<?php esc_html_e('Process Queue', 'wp-gpt-rag-chat'); ?>');
+            }
+        }).fail(function() {
+            CORNUWB.showNotification(
+                '<?php esc_html_e('Connection Error', 'wp-gpt-rag-chat'); ?>',
+                '<?php esc_html_e('Failed to process queue. Please try again.', 'wp-gpt-rag-chat'); ?>',
+                'error'
+            );
+            button.prop('disabled', false).text('<?php esc_html_e('Process Queue', 'wp-gpt-rag-chat'); ?>');
+        });
+    }
+    
+    // ============================================
     // PAGE LOAD: CHECK FOR PERSISTENT INDEXING
     // ============================================
+    
+    // Load indexed items table on page load
+    updateIndexedItemsTable();
+    
+    // Check if there are pending items and show process button
+    $.post(wpGptRagChatAdmin.ajaxUrl, {
+        action: 'wp_gpt_rag_chat_get_queue_status',
+        nonce: wpGptRagChatAdmin.nonce
+    }, function(response) {
+        if (response.success && response.data.pending > 0) {
+            showProcessQueueButton();
+        }
+    });
     
     // Check if persistent indexing is already running on page load
     $.post(wpGptRagChatAdmin.ajaxUrl, {

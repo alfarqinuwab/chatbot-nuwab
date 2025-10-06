@@ -37,6 +37,12 @@ class Migration {
             self::migrate_to_2_3_0();
             update_option('wp_gpt_rag_chat_db_version', '2.3.0');
         }
+        
+        // Migration to version 2.4.0 (Indexing queue table)
+        if (version_compare($current_version, '2.4.0', '<')) {
+            self::migrate_to_2_4_0();
+            update_option('wp_gpt_rag_chat_db_version', '2.4.0');
+        }
     }
     
     /**
@@ -269,6 +275,7 @@ class Migration {
         $errors_table = $wpdb->prefix . 'wp_gpt_rag_chat_errors';
         $usage_table = $wpdb->prefix . 'wp_gpt_rag_chat_api_usage';
         $export_history_table = $wpdb->prefix . 'wp_gpt_rag_chat_export_history';
+        $queue_table = $wpdb->prefix . 'wp_gpt_rag_indexing_queue';
         
         // Check if main logs table exists
         $logs_table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$logs_table}'") === $logs_table;
@@ -284,11 +291,12 @@ class Migration {
         $errors_table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$errors_table}'") === $errors_table;
         $usage_table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$usage_table}'") === $usage_table;
         $export_history_table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$export_history_table}'") === $export_history_table;
+        $queue_table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$queue_table}'") === $queue_table;
         
-        if (!$errors_table_exists || !$usage_table_exists || !$export_history_table_exists) {
+        if (!$errors_table_exists || !$usage_table_exists || !$export_history_table_exists || !$queue_table_exists) {
             return [
                 'status' => 'warning',
-                'message' => 'New analytics tables missing. Please run database migration.'
+                'message' => 'New tables missing. Please run database migration.'
             ];
         }
         
@@ -310,6 +318,51 @@ class Migration {
             'status' => 'ok',
             'message' => 'Database schema is up to date'
         ];
+    }
+    
+    /**
+     * Migrate to 2.4.0 - Add indexing queue table
+     */
+    public static function migrate_to_2_4_0() {
+        global $wpdb;
+        
+        $charset_collate = $wpdb->get_charset_collate();
+        
+        // Indexing queue table
+        $queue_table = $wpdb->prefix . 'wp_gpt_rag_indexing_queue';
+        $queue_sql = "CREATE TABLE $queue_table (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            post_id bigint(20) NOT NULL,
+            post_type varchar(20) NOT NULL,
+            post_title varchar(500) NOT NULL,
+            status enum('pending','processing','completed','failed') DEFAULT 'pending',
+            priority int(11) DEFAULT 0,
+            attempts int(11) DEFAULT 0,
+            max_attempts int(11) DEFAULT 3,
+            error_message text DEFAULT NULL,
+            scheduled_at datetime DEFAULT CURRENT_TIMESTAMP,
+            started_at datetime DEFAULT NULL,
+            completed_at datetime DEFAULT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY post_id (post_id),
+            KEY status (status),
+            KEY post_type (post_type),
+            KEY priority (priority),
+            KEY scheduled_at (scheduled_at),
+            KEY created_at (created_at)
+        ) $charset_collate;";
+        
+        if (file_exists(ABSPATH . 'wp-admin/includes/upgrade.php')) {
+            require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+            if (function_exists('dbDelta')) {
+                dbDelta($queue_sql);
+            }
+        }
+        
+        // Log the migration
+        error_log('WP GPT RAG Chat: Migration 2.4.0 completed - Indexing queue table created');
     }
 }
 

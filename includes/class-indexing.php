@@ -296,6 +296,9 @@ class Indexing {
             ['%d']
         );
         
+        // Also remove from indexing queue if it exists
+        Indexing_Queue::remove_from_queue($post_id);
+        
         return count($vector_ids);
     }
     
@@ -372,7 +375,10 @@ class Indexing {
         if ($post_type && $post_type !== 'all') {
             $query_args['post_type'] = $post_type;
         } else {
-            $query_args['post_type'] = get_post_types(['public' => true]);
+            // Get allowed post types from settings instead of all public post types
+            $settings = \WP_GPT_RAG_Chat\Settings::get_settings();
+            $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
+            $query_args['post_type'] = $allowed_post_types;
         }
         
         $posts = get_posts($query_args);
@@ -496,7 +502,10 @@ class Indexing {
         if ($post_type && $post_type !== 'all') {
             $query_args['post_type'] = $post_type;
         } else {
-            $query_args['post_type'] = get_post_types(['public' => true]);
+            // Get allowed post types from settings instead of all public post types
+            $settings = \WP_GPT_RAG_Chat\Settings::get_settings();
+            $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
+            $query_args['post_type'] = $allowed_post_types;
         }
         
         $posts = get_posts($query_args);
@@ -538,7 +547,10 @@ class Indexing {
         if ($post_type && $post_type !== 'all') {
             $post_type_filter = "'" . esc_sql($post_type) . "'";
         } else {
-            $post_type_filter = "'" . implode("','", get_post_types(['public' => true])) . "'";
+            // Get allowed post types from settings instead of all public post types
+            $settings = \WP_GPT_RAG_Chat\Settings::get_settings();
+            $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
+            $post_type_filter = "'" . implode("','", $allowed_post_types) . "'";
         }
         
         // Get posts that have been modified since last indexing
@@ -590,6 +602,7 @@ class Indexing {
         global $wpdb;
         
         $vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
+        $queue_table = $wpdb->prefix . 'wp_gpt_rag_indexing_queue';
         
         // Get all vector IDs
         $vector_ids = $wpdb->get_col("SELECT vector_id FROM {$vectors_table}");
@@ -599,8 +612,13 @@ class Indexing {
             $this->pinecone->delete_vectors($vector_ids);
         }
         
-        // Clear local database
+        // Clear local database tables
         $wpdb->query("TRUNCATE TABLE {$vectors_table}");
+        
+        // Clear indexing queue using the proper method
+        Indexing_Queue::clear_all();
+        
+        error_log('WP GPT RAG Chat: Cleared all vectors and queue items');
         
         return count($vector_ids);
     }
@@ -633,8 +651,10 @@ class Indexing {
      */
     public function generate_xml_sitemap($post_types = ['post', 'page']) {
         if ($post_types === 'all' || empty($post_types)) {
-            $post_types = get_post_types(['public' => true]);
-            unset($post_types['attachment']); // Exclude attachments
+            // Get allowed post types from settings instead of all public post types
+            $settings = \WP_GPT_RAG_Chat\Settings::get_settings();
+            $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
+            $post_types = $allowed_post_types;
         }
         
         $query_args = [
@@ -706,8 +726,9 @@ class Indexing {
      * Get all content URLs from sitemap structure
      */
     public function get_all_indexable_content() {
-        $post_types = get_post_types(['public' => true]);
-        unset($post_types['attachment']);
+        // Get allowed post types from settings instead of all public post types
+        $settings = \WP_GPT_RAG_Chat\Settings::get_settings();
+        $post_types = $settings['post_types'] ?? ['post', 'page'];
         
         $query_args = [
             'numberposts' => -1,
@@ -776,7 +797,10 @@ class Indexing {
         if ($post_type && $post_type !== 'all') {
             $query_args['post_type'] = $post_type;
         } else {
-            $query_args['post_type'] = get_post_types(['public' => true]);
+            // Get allowed post types from settings instead of all public post types
+            $settings = \WP_GPT_RAG_Chat\Settings::get_settings();
+            $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
+            $query_args['post_type'] = $allowed_post_types;
         }
         
         $posts = get_posts($query_args);

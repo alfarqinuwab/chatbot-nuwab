@@ -72,6 +72,24 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         <?php endif; ?>
     </div>
     
+    <!-- Manual Search & Reindex -->
+    <div class="postbox" style="margin-top:20px;">
+        <div class="postbox-header"><h2 class="hndle"><?php esc_html_e('Manual Search & Re-index', 'wp-gpt-rag-chat'); ?></h2></div>
+        <div class="inside">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <input type="text" id="manual-search-input" class="regular-text" placeholder="<?php esc_attr_e('Search by title or Post ID (e.g. 67855 or #67855)…', 'wp-gpt-rag-chat'); ?>" />
+                <select id="manual-search-post-type">
+                    <option value="any"><?php esc_html_e('Any type', 'wp-gpt-rag-chat'); ?></option>
+                    <?php foreach (get_post_types(['public'=>true],'objects') as $pt): if ($pt->name==='attachment') continue; ?>
+                        <option value="<?php echo esc_attr($pt->name); ?>"><?php echo esc_html($pt->labels->name); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="button" class="button" id="manual-search-btn"><?php esc_html_e('Search', 'wp-gpt-rag-chat'); ?></button>
+            </div>
+            <div id="manual-search-results" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
     <!-- Global Progress Bar (full width above all content) -->
     <div id="global-progress-container" style="display: none; margin-bottom: 20px;">
         <div class="progress-section">
@@ -2876,6 +2894,91 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 jQuery(document).ready(function($) {
     // Global variables for progress tracking
     var isIndexingInProgress = false;
+
+    // ==========================
+    // Manual Search & Re-index
+    // ==========================
+    (function manualSearchInit(){
+        var $results = $('#manual-search-results');
+        function renderResults(items){
+            if (!items || !items.length){
+                $results.html('<div class="notice notice-info"><p><?php echo esc_js(__('No results found.', 'wp-gpt-rag-chat')); ?></p></div>');
+                return;
+            }
+            var html = '<table class="widefat"><thead><tr><th><?php echo esc_js(__('ID','wp-gpt-rag-chat')); ?></th><th><?php echo esc_js(__('Title','wp-gpt-rag-chat')); ?></th><th><?php echo esc_js(__('Type','wp-gpt-rag-chat')); ?></th><th><?php echo esc_js(__('Indexed','wp-gpt-rag-chat')); ?></th><th><?php echo esc_js(__('Actions','wp-gpt-rag-chat')); ?></th></tr></thead><tbody>';
+            items.forEach(function(it){
+                html += '<tr>'+
+                    '<td>'+ it.id +'</td>'+
+                    '<td>'+ $('<div/>').text(it.title||'').html() +'</td>'+
+                    '<td>'+ (it.type||'') +'</td>'+
+                    '<td>' + (it.is_indexed ? '✅' : '❌') + '</td>'+
+                    '<td>'+
+                        '<button class="button enqueue-post" data-id="'+it.id+'"><?php echo esc_js(__('Add to Queue','wp-gpt-rag-chat')); ?></button> '+
+                        '<button class="button button-primary reindex-post" data-id="'+it.id+'"><?php echo esc_js(__('Re-index Now','wp-gpt-rag-chat')); ?></button>'+
+                    '</td>'+
+                '</tr>';
+            });
+            html += '</tbody></table>';
+            $results.html(html);
+        }
+
+        function doUnifiedSearch(){
+            var q = $('#manual-search-input').val().trim();
+            var pt = $('#manual-search-post-type').val();
+            if (!q){ $results.html(''); return; }
+            var m = q.match(/^#?(?:id:)?(\d+)$/i);
+            if (m){
+                var id = parseInt(m[1],10);
+                $results.html('<?php echo esc_js(__('Fetching…','wp-gpt-rag-chat')); ?>');
+                $.post(wpGptRagChatAdmin.ajaxUrl, {
+                    action: 'wp_gpt_rag_chat_get_post_by_id',
+                    nonce: wpGptRagChatAdmin.nonce,
+                    post_id: id
+                }, function(res){
+                    if (res.success){ renderResults([res.data]); } else { $results.html('<div class="notice notice-error"><p>'+ (res.data && res.data.message ? res.data.message : 'Error') +'</p></div>'); }
+                });
+                return;
+            }
+            $results.html('<?php echo esc_js(__('Searching…','wp-gpt-rag-chat')); ?>');
+            $.post(wpGptRagChatAdmin.ajaxUrl, {
+                action: 'wp_gpt_rag_chat_search_content',
+                nonce: wpGptRagChatAdmin.nonce,
+                search: q,
+                post_type: pt
+            }, function(res){
+                if (res.success){ renderResults(res.data.results||[]); } else { $results.html('<div class="notice notice-error"><p>'+ (res.data && res.data.message ? res.data.message : 'Error') +'</p></div>'); }
+            });
+        }
+
+        $('#manual-search-btn').on('click', doUnifiedSearch);
+        $('#manual-search-input').on('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); doUnifiedSearch(); }});
+
+        $results.on('click', '.enqueue-post', function(){
+            var id = $(this).data('id');
+            $(this).prop('disabled', true);
+            $.post(wpGptRagChatAdmin.ajaxUrl, {
+                action: 'wp_gpt_rag_chat_enqueue_post',
+                nonce: wpGptRagChatAdmin.nonce,
+                post_id: id
+            }, function(res){
+                CORNUWB.showNotification(res.success ? '<?php echo esc_js(__('Queued','wp-gpt-rag-chat')); ?>' : '<?php echo esc_js(__('Error','wp-gpt-rag-chat')); ?>', (res.data && res.data.message) || '', res.success ? 'success' : 'error');
+                updateIndexedItemsTable();
+            });
+        });
+
+        $results.on('click', '.reindex-post', function(){
+            var id = $(this).data('id');
+            $(this).prop('disabled', true);
+            $.post(wpGptRagChatAdmin.ajaxUrl, {
+                action: 'wp_gpt_rag_chat_reindex_post_now',
+                nonce: wpGptRagChatAdmin.nonce,
+                post_id: id
+            }, function(res){
+                CORNUWB.showNotification(res.success ? '<?php echo esc_js(__('Re-indexed','wp-gpt-rag-chat')); ?>' : '<?php echo esc_js(__('Error','wp-gpt-rag-chat')); ?>', (res.data && res.data.message) || '', res.success ? 'success' : 'error');
+                updateIndexedItemsTable();
+            });
+        });
+    })();
     var currentIndexingAction = null;
     var retryCount = 0;
     var maxRetries = 3;
@@ -3250,7 +3353,7 @@ jQuery(document).ready(function($) {
                         stopProgressMonitoring();
                         // Only call handleIndexingComplete if we're not using the new batched system
                         if (!localStorage.getItem('wpGptRagSyncState')) {
-                            handleIndexingComplete(response.data);
+                        handleIndexingComplete(response.data);
                         }
                     }
                 }
@@ -6331,10 +6434,10 @@ jQuery(document).ready(function($) {
                 method: 'POST',
                 timeout: 120000,
                 data: {
-                    action: 'wp_gpt_rag_chat_process_queue',
-                    nonce: wpGptRagChatAdmin.nonce,
-                    batch_size: batchSize,
-                    post_type: postType
+                action: 'wp_gpt_rag_chat_process_queue',
+                nonce: wpGptRagChatAdmin.nonce,
+                batch_size: batchSize,
+                post_type: postType
                 }
             }).done(function(response) {
                 if (response.success) {
@@ -6389,7 +6492,7 @@ jQuery(document).ready(function($) {
                         } else {
                             // All done
                             isTrulyComplete = true;
-                            completeQueueProcessing(button, processed);
+                        completeQueueProcessing(button, processed);
                         }
                     }
                 } else {
@@ -6405,7 +6508,7 @@ jQuery(document).ready(function($) {
                     setTimeout(processNextBatch, 3000);
                 } else {
                     // Only complete if user explicitly cancelled
-                    completeQueueProcessing(button, processed, '<?php esc_html_e('Connection error', 'wp-gpt-rag-chat'); ?>');
+                completeQueueProcessing(button, processed, '<?php esc_html_e('Connection error', 'wp-gpt-rag-chat'); ?>');
                 }
             });
         }
@@ -6436,9 +6539,9 @@ jQuery(document).ready(function($) {
                 return;
             } else {
                 // No pending items or there was an error, safe to hide progress bar
-                $('#global-progress-container').fadeOut();
-                $('#cancel-sync-all').hide();
-                button.prop('disabled', false);
+        $('#global-progress-container').fadeOut();
+        $('#cancel-sync-all').hide();
+        button.prop('disabled', false);
                 try { localStorage.removeItem('wpGptRagSyncState'); } catch (e) {}
                 // Clear any old monitoring intervals
                 if (window.progressMonitoringInterval) {
@@ -6446,20 +6549,20 @@ jQuery(document).ready(function($) {
                     window.progressMonitoringInterval = null;
                 }
                 console.log('CORNUWB: Batched indexing completed, cleared localStorage state and monitoring intervals');
-                
-                if (errorMessage) {
-                    CORNUWB.showNotification(
-                        '<?php esc_html_e('Indexing Stopped', 'wp-gpt-rag-chat'); ?>',
-                        errorMessage,
-                        'warning'
-                    );
-                } else {
-                    CORNUWB.showNotification(
-                        '<?php esc_html_e('Indexing Complete', 'wp-gpt-rag-chat'); ?>',
-                        '<?php esc_html_e('Successfully processed', 'wp-gpt-rag-chat'); ?> ' + processed + ' <?php esc_html_e('items.', 'wp-gpt-rag-chat'); ?>',
-                        'success'
-                    );
-                }
+        
+        if (errorMessage) {
+            CORNUWB.showNotification(
+                '<?php esc_html_e('Indexing Stopped', 'wp-gpt-rag-chat'); ?>',
+                errorMessage,
+                'warning'
+            );
+        } else {
+            CORNUWB.showNotification(
+                '<?php esc_html_e('Indexing Complete', 'wp-gpt-rag-chat'); ?>',
+                '<?php esc_html_e('Successfully processed', 'wp-gpt-rag-chat'); ?> ' + processed + ' <?php esc_html_e('items.', 'wp-gpt-rag-chat'); ?>',
+                'success'
+            );
+        }
             }
         }).fail(function() {
             // If status check fails, only hide if there was an error or it's truly complete
@@ -6559,7 +6662,7 @@ jQuery(document).ready(function($) {
         if (response.success) {
             if (response.data.pending > 0) {
                 console.log('CORNUWB: Found pending items:', response.data.pending);
-                showProcessQueueButton();
+            showProcessQueueButton();
                 // If we have a saved sync state, restore progress UI and resume processing
                 try {
                     var saved = localStorage.getItem('wpGptRagSyncState');
@@ -6788,20 +6891,20 @@ jQuery(document).ready(function($) {
     // Only do this if we're not using the new batched system
     if (!localStorage.getItem('wpGptRagSyncState')) {
         console.log('CORNUWB: No new batched system active, checking for old persistent indexing');
-        $.post(wpGptRagChatAdmin.ajaxUrl, {
-            action: 'wp_gpt_rag_chat_get_indexing_status',
-            nonce: wpGptRagChatAdmin.nonce
-        }, function(response) {
-            if (response.success && response.data.is_running) {
+    $.post(wpGptRagChatAdmin.ajaxUrl, {
+        action: 'wp_gpt_rag_chat_get_indexing_status',
+        nonce: wpGptRagChatAdmin.nonce
+    }, function(response) {
+        if (response.success && response.data.is_running) {
                 console.log('CORNUWB: Old persistent indexing detected on page load, restoring progress bar');
-                restoreProgressBarState(response.data);
+            restoreProgressBarState(response.data);
             } else {
                 console.log('CORNUWB: No old persistent indexing running');
-            }
-        }).fail(function(xhr) {
-            console.log('CORNUWB: Persistent indexing status check failed on page load, continuing normally');
-            // Don't show error to user, just continue normally
-        });
+        }
+    }).fail(function(xhr) {
+        console.log('CORNUWB: Persistent indexing status check failed on page load, continuing normally');
+        // Don't show error to user, just continue normally
+    });
     } else {
         console.log('CORNUWB: New batched system active, skipping old persistent indexing check');
     }

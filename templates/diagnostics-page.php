@@ -96,7 +96,7 @@ $max_execution_time = ini_get('max_execution_time');
 
 .wp-admin .postbox .inside {
     margin: 0;
-    padding: 20px;
+            padding: 20px; 
 }
 
 .wp-admin .postbox .inside p {
@@ -123,7 +123,7 @@ $max_execution_time = ini_get('max_execution_time');
 .wp-admin .widefat th {
     background: #f6f7f7;
     font-weight: 600;
-    color: #1d2327;
+            color: #1d2327;
 }
 
 .wp-admin .widefat tbody tr:hover {
@@ -132,14 +132,14 @@ $max_execution_time = ini_get('max_execution_time');
 
 /* WordPress Button Styling */
 .wp-admin .button {
-    display: inline-block;
+            display: inline-block;
     text-decoration: none;
     font-size: 13px;
     line-height: 2.15384615;
     min-height: 30px;
     margin: 0;
     padding: 0 10px;
-    cursor: pointer;
+            cursor: pointer;
     border-width: 1px;
     border-style: solid;
     -webkit-appearance: none;
@@ -153,12 +153,12 @@ $max_execution_time = ini_get('max_execution_time');
     background: #2271b1;
     border-color: #2271b1;
     color: #fff;
-    text-decoration: none;
+            text-decoration: none;
     text-shadow: none;
-}
-
+        }
+        
 .wp-admin .button-primary:hover {
-    background: #135e96;
+            background: #135e96;
     border-color: #135e96;
     color: #fff;
 }
@@ -308,8 +308,8 @@ $max_execution_time = ini_get('max_execution_time');
                 </div>
                 <p class="description">Chat interactions logged</p>
             </div>
-        </div>
-        
+    </div>
+    
         <div class="postbox">
             <div class="postbox-header">
                 <h3><i class="fas fa-folder-open status-icon status-info"></i>Indexed Content</h3>
@@ -332,8 +332,8 @@ $max_execution_time = ini_get('max_execution_time');
                 </div>
                 <p class="description">Content chunks</p>
             </div>
-        </div>
-        
+    </div>
+    
         <div class="postbox">
             <div class="postbox-header">
                 <h3><i class="fas fa-clock status-icon status-warning"></i>Queue Status</h3>
@@ -393,12 +393,12 @@ $max_execution_time = ini_get('max_execution_time');
                             <td>
                                 <?php if (!empty($settings['enable_chatbot'])): ?>
                                     <i class="fas fa-check-circle status-icon status-success"></i>Enabled
-                                <?php else: ?>
+                    <?php else: ?>
                                     <i class="fas fa-times-circle status-icon status-error"></i>Disabled
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <tr>
+                    <?php endif; ?>
+                </td>
+            </tr>
+            <tr>
                             <td><strong>OpenAI API</strong></td>
                             <td>
                                 <?php if (!empty($settings['openai_api_key'])): ?>
@@ -407,8 +407,8 @@ $max_execution_time = ini_get('max_execution_time');
                                     <i class="fas fa-times-circle status-icon status-error"></i>Not configured
                                 <?php endif; ?>
                             </td>
-                        </tr>
-                        <tr>
+            </tr>
+            <tr>
                             <td><strong>Pinecone API</strong></td>
                             <td>
                                 <?php if (!empty($settings['pinecone_api_key'])): ?>
@@ -417,7 +417,7 @@ $max_execution_time = ini_get('max_execution_time');
                                     <i class="fas fa-times-circle status-icon status-error"></i>Not configured
                                 <?php endif; ?>
                             </td>
-                        </tr>
+            </tr>
                         <tr>
                             <td><strong>GPT Model</strong></td>
                             <td><?php echo esc_html($settings['gpt_model'] ?? 'Not set'); ?></td>
@@ -427,10 +427,10 @@ $max_execution_time = ini_get('max_execution_time');
                             <td><?php echo esc_html($settings['chat_visibility'] ?? 'Not set'); ?></td>
                         </tr>
                     </tbody>
-                </table>
+        </table>
             </div>
         </div>
-
+        
         <!-- Database Status -->
         <div class="postbox">
             <div class="postbox-header">
@@ -454,8 +454,8 @@ $max_execution_time = ini_get('max_execution_time');
                         <tr>
                             <td style="width: 40%;"><strong>Database Version</strong></td>
                             <td><?php echo esc_html($current_version); ?></td>
-                        </tr>
-                        <tr>
+            </tr>
+            <tr>
                             <td><strong>Logs Table</strong></td>
                             <td>
                                 <?php if ($table_exists): ?>
@@ -464,8 +464,8 @@ $max_execution_time = ini_get('max_execution_time');
                                     <i class="fas fa-times-circle status-icon status-error"></i>Missing
                                 <?php endif; ?>
                             </td>
-                        </tr>
-                        <tr>
+            </tr>
+            <tr>
                             <td><strong>Vectors Table</strong></td>
                             <td>
                                 <?php if ($wpdb->get_var("SHOW TABLES LIKE '{$vectors_table}'")): ?>
@@ -474,8 +474,8 @@ $max_execution_time = ini_get('max_execution_time');
                                     <i class="fas fa-times-circle status-icon status-error"></i>Missing
                                 <?php endif; ?>
                             </td>
-                        </tr>
-                        <tr>
+            </tr>
+            <tr>
                             <td><strong>Queue Table</strong></td>
                             <td>
                                 <?php if ($wpdb->get_var("SHOW TABLES LIKE '{$queue_table}'")): ?>
@@ -484,8 +484,8 @@ $max_execution_time = ini_get('max_execution_time');
                                     <i class="fas fa-times-circle status-icon status-error"></i>Missing
                                 <?php endif; ?>
                             </td>
-                        </tr>
-                        <tr>
+            </tr>
+            <tr>
                             <td><strong>Schema Status</strong></td>
                             <td>
                                 <?php if ($rag_metadata_exists): ?>
@@ -494,7 +494,7 @@ $max_execution_time = ini_get('max_execution_time');
                                     <i class="fas fa-exclamation-triangle status-icon status-warning"></i>Needs migration
                                 <?php endif; ?>
                             </td>
-                        </tr>
+            </tr>
                     </tbody>
                 </table>
                 
@@ -523,29 +523,29 @@ $max_execution_time = ini_get('max_execution_time');
                         <tr>
                             <td style="width: 40%;"><strong>WordPress Version</strong></td>
                             <td><?php echo esc_html($wp_version); ?></td>
-                        </tr>
-                        <tr>
+            </tr>
+            <tr>
                             <td><strong>PHP Version</strong></td>
                             <td><?php echo esc_html($php_version); ?></td>
-                        </tr>
-                        <tr>
+            </tr>
+            <tr>
                             <td><strong>Memory Limit</strong></td>
                             <td><?php echo esc_html($memory_limit); ?></td>
-                        </tr>
-                        <tr>
+            </tr>
+            <tr>
                             <td><strong>Max Execution Time</strong></td>
                             <td><?php echo esc_html($max_execution_time); ?>s</td>
-                        </tr>
-                        <tr>
+            </tr>
+            <tr>
                             <td><strong>Plugin Version</strong></td>
                             <td><?php echo defined('WP_GPT_RAG_CHAT_VERSION') ? WP_GPT_RAG_CHAT_VERSION : 'Unknown'; ?></td>
-                        </tr>
+            </tr>
                     </tbody>
-                </table>
+        </table>
             </div>
         </div>
     </div>
-
+    
     <!-- Indexing Queue Status -->
     <div class="postbox">
         <div class="postbox-header">
@@ -666,7 +666,7 @@ $max_execution_time = ini_get('max_execution_time');
                     </button>
                 </form>
                 
-                <?php
+        <?php
                 if (isset($_POST['test_logging']) && wp_verify_nonce($_POST['test_nonce'], 'test_logging')) {
                     $analytics = new WP_GPT_RAG_Chat\Analytics();
                     $test_chat_id = $analytics->generate_chat_id();
@@ -683,12 +683,12 @@ $max_execution_time = ini_get('max_execution_time');
                     
                     if ($result) {
                         echo "<div class='notice notice-success is-dismissible'><p><i class='fas fa-check-circle'></i> Test insert successful! Log ID: {$result}</p></div>";
-                    } else {
+            } else {
                         echo "<div class='notice notice-error is-dismissible'><p><i class='fas fa-times-circle'></i> Test insert failed!</p></div>";
                         echo "<p>Error: " . $wpdb->last_error . "</p>";
-                    }
-                }
-                ?>
+            }
+        }
+        ?>
             </div>
         </div>
     </div>
@@ -704,7 +704,7 @@ var ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
 // Test if jQuery is available
 if (typeof jQuery !== 'undefined') {
     console.log('✅ jQuery is available, version:', jQuery.fn.jquery);
-} else {
+        } else {
     console.log('❌ jQuery is NOT available');
 }
 

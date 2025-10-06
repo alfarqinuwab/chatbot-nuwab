@@ -75,6 +75,10 @@ class Plugin {
         add_action('wp_ajax_wp_gpt_rag_chat_clear_sitemap', [$this, 'handle_clear_sitemap']);
         add_action('wp_ajax_wp_gpt_rag_chat_generate_sitemap', [$this, 'handle_generate_sitemap']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_indexable_content', [$this, 'handle_get_indexable_content']);
+        // Manual post search/indexing helpers
+        add_action('wp_ajax_wp_gpt_rag_chat_get_post_by_id', [$this, 'handle_get_post_by_id']);
+        add_action('wp_ajax_wp_gpt_rag_chat_enqueue_post', [$this, 'handle_enqueue_post']);
+        add_action('wp_ajax_wp_gpt_rag_chat_reindex_post_now', [$this, 'handle_reindex_post_now']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_user_sessions', [$this, 'handle_get_user_sessions']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_geographic_data', [$this, 'handle_get_geographic_data']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_user_activity', [$this, 'handle_get_user_activity']);
@@ -4109,4 +4113,74 @@ class Plugin {
         }
     }
     
+    /**
+     * Get post details by ID (admin helper)
+     */
+    public function handle_get_post_by_id() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        $post_id = intval($_POST['post_id'] ?? 0);
+        if (!$post_id) {
+            wp_send_json_error(['message' => __('Invalid post ID', 'wp-gpt-rag-chat')]);
+        }
+        $post = get_post($post_id);
+        if (!$post) {
+            wp_send_json_error(['message' => __('Post not found', 'wp-gpt-rag-chat')]);
+        }
+        wp_send_json_success([
+            'id' => $post->ID,
+            'title' => $post->post_title,
+            'type' => $post->post_type,
+            'status' => $post->post_status,
+            'url' => get_edit_post_link($post->ID),
+            'is_indexed' => $this->is_post_indexed($post->ID)
+        ]);
+    }
+
+    /**
+     * Enqueue a specific post to indexing queue
+     */
+    public function handle_enqueue_post() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        $post_id = intval($_POST['post_id'] ?? 0);
+        if (!$post_id) {
+            wp_send_json_error(['message' => __('Invalid post ID', 'wp-gpt-rag-chat')]);
+        }
+        $ok = Indexing_Queue::add_to_queue($post_id);
+        if ($ok) {
+            wp_send_json_success(['message' => sprintf(__('Post %d added to queue.', 'wp-gpt-rag-chat'), $post_id)]);
+        }
+        wp_send_json_error(['message' => __('Could not add to queue (maybe already pending/completed).', 'wp-gpt-rag-chat')]);
+    }
+
+    /**
+     * Reindex a specific post immediately (one-off)
+     */
+    public function handle_reindex_post_now() {
+        check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'wp-gpt-rag-chat')]);
+        }
+        $post_id = intval($_POST['post_id'] ?? 0);
+        if (!$post_id) {
+            wp_send_json_error(['message' => __('Invalid post ID', 'wp-gpt-rag-chat')]);
+        }
+        try {
+            $indexing = new Indexing();
+            $res = $indexing->reindex_post($post_id);
+            wp_send_json_success([
+                'message' => sprintf(__('Reindexed post %d. Added: %d, Updated: %d, Removed: %d, Skipped: %d', 'wp-gpt-rag-chat'),
+                    $post_id, intval($res['added'] ?? 0), intval($res['updated'] ?? 0), intval($res['removed'] ?? 0), intval($res['skipped'] ?? 0)
+                )
+            ]);
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+
 }

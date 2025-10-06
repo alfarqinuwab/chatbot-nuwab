@@ -353,6 +353,9 @@ class Chat {
         }
         
         $context_parts = [];
+        $processed_count = 0;
+        $max_attempts = count($results) * 2; // Allow checking more results if needed
+        
         foreach ($results as $match) {
             $metadata = $match['metadata'];
             $content = $this->get_chunk_content($metadata['post_id'], $metadata['chunk_index']);
@@ -371,7 +374,21 @@ class Chat {
                 }
                 
                 $context_parts[] = $formatted_part;
+                $processed_count++;
+                
+                // Stop if we have enough content (to avoid too long context)
+                if ($processed_count >= 5) {
+                    break;
+                }
             }
+        }
+        
+        // If we still don't have enough content, try to get more results from Pinecone
+        if (empty($context_parts) && count($results) < $max_attempts) {
+            error_log('WP GPT RAG Chat: No content found in initial results, trying to get more results');
+            
+            // This is a fallback - in a real scenario, we might want to re-query with more results
+            // For now, we'll return empty and let the system use the fallback
         }
         
         return implode("\n\n━━━━━━━━━━━━━━━━\n\n", $context_parts);

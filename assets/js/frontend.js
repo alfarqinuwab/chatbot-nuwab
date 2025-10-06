@@ -106,6 +106,10 @@
             
             if (this.isOpen) {
                 $('#cornuwab-wp-gpt-rag-chat-input').focus();
+                // Scroll to bottom when opening the widget
+                setTimeout(function() {
+                    this.scrollToBottom();
+                }.bind(this), 150);
             }
         },
         
@@ -131,6 +135,11 @@
                 $('.cornuwab-wp-gpt-rag-chat-expand i')
                     .removeClass('fa-down-left-and-up-right-to-center')
                     .addClass('fa-up-right-and-down-left-from-center');
+            } else {
+                // When expanding, scroll to bottom after a short delay
+                setTimeout(function() {
+                    this.scrollToBottom();
+                }.bind(this), 200);
             }
         },
 
@@ -491,6 +500,14 @@
         restoreState: function() {
             this.restoreOpenState();
             this.restoreChatHistory();
+            
+            // If chat is open after restoration, ensure it scrolls to bottom
+            if (this.isOpen) {
+                // Use setTimeout to ensure DOM is fully rendered
+                setTimeout(function() {
+                    this.scrollToBottom();
+                }.bind(this), 100);
+            }
         },
         
         scrollToBottom: function() {
@@ -541,13 +558,41 @@
             // First escape HTML to prevent XSS
             var escaped = this.escapeHtml(text);
             
-            // Convert markdown-style links [text](url) to HTML links (without icon)
-            escaped = escaped.replace(/🔗\s*\[([^\]]+)\]\(([^)]+)\)/g, function(match, linkText, url) {
-                return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="source-link">' + linkText + '</a>';
-            });
-            
-            // Convert separator lines to styled dividers BEFORE converting line breaks
+            // Convert separator lines to styled dividers BEFORE processing links
             escaped = escaped.replace(/━━━━━━━━━━━━━━━━/g, '<div class="content-separator"></div>');
+            
+            // Find and group consecutive links to create a list
+            // Look for patterns like: 🔗 [link1](url1) 🔗 [link2](url2) etc.
+            var linkPattern = /(🔗\s*\[([^\]]+)\]\(([^)]+)\)(?:\s*🔗\s*\[([^\]]+)\]\(([^)]+)\))*)/g;
+            
+            escaped = escaped.replace(linkPattern, function(match) {
+                // Extract all links from the match
+                var links = [];
+                var linkRegex = /🔗\s*\[([^\]]+)\]\(([^)]+)\)/g;
+                var linkMatch;
+                
+                while ((linkMatch = linkRegex.exec(match)) !== null) {
+                    links.push({
+                        text: linkMatch[1],
+                        url: linkMatch[2]
+                    });
+                }
+                
+                // If we have multiple links, create a list
+                if (links.length > 1) {
+                    var listHtml = '<ul class="source-links-list">';
+                    links.forEach(function(link) {
+                        listHtml += '<li><a href="' + link.url + '" target="_blank" rel="noopener noreferrer" class="source-link">' + link.text + '</a></li>';
+                    });
+                    listHtml += '</ul>';
+                    return listHtml;
+                } else if (links.length === 1) {
+                    // Single link - just return the link without list
+                    return '<a href="' + links[0].url + '" target="_blank" rel="noopener noreferrer" class="source-link">' + links[0].text + '</a>';
+                }
+                
+                return match; // Fallback
+            });
             
             // Convert line breaks to <br> tags
             escaped = escaped.replace(/\n/g, '<br>');
@@ -558,8 +603,13 @@
             // Remove <br> tags immediately before and after content separators
             escaped = escaped.replace(/<br>\s*<div class="content-separator"><\/div>\s*<br>/g, '<div class="content-separator"></div>');
             
-            // Remove multiple <br> tags before source links (max 1 <br> before link)
-            escaped = escaped.replace(/(<br>\s*){2,}(<a[^>]*class="source-link")/g, '<br>$2');
+            // Remove <br> tags immediately before and after source links lists
+            escaped = escaped.replace(/<br>\s*<ul class="source-links-list">/g, '<ul class="source-links-list">');
+            escaped = escaped.replace(/<\/ul>\s*<br>/g, '</ul>');
+            
+            // Remove <br> tags immediately before and after single source links
+            escaped = escaped.replace(/<br>\s*(<a[^>]*class="source-link")/g, '$1');
+            escaped = escaped.replace(/(<a[^>]*class="source-link"[^>]*><\/a>)\s*<br>/g, '$1');
             
             // Remove <br> tags at the very end
             escaped = escaped.replace(/(<br>\s*)+$/g, '');

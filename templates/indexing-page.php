@@ -2954,6 +2954,12 @@ jQuery(document).ready(function($) {
 
         $('#manual-search-btn').on('click', doUnifiedSearch);
         $('#manual-search-input').on('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); doUnifiedSearch(); }});
+        // If input cleared, reset results panel
+        $('#manual-search-input').on('input', function(){
+            if (!$(this).val().trim()) {
+                $results.html('');
+            }
+        });
 
         $results.on('click', '.enqueue-post', function(){
             var id = $(this).data('id');

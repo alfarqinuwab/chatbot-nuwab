@@ -1339,17 +1339,16 @@ class Plugin {
     }
     
     /**
-     * Add posts to indexing queue (batch by batch approach)
+     * Add posts to indexing queue
      */
     private function add_posts_to_queue($post_type, $batch_size, $offset) {
         // Get allowed post types from settings
         $settings = Settings::get_settings();
         $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
         
-        // Get only the current batch of posts
+        // Get ALL eligible posts, not just a batch
         $query_args = [
-            'numberposts' => $batch_size,
-            'offset' => $offset,
+            'numberposts' => -1, // Get all posts
             'post_status' => ['publish', 'private']
         ];
         
@@ -1365,7 +1364,7 @@ class Plugin {
         $added_count = 0;
         $post_ids = [];
         
-        error_log('WP GPT RAG Chat: Found ' . count($posts) . ' posts in batch (offset: ' . $offset . ', batch_size: ' . $batch_size . ')');
+        error_log('WP GPT RAG Chat: Found ' . count($posts) . ' total posts to add to queue');
         
         foreach ($posts as $post) {
             error_log('WP GPT RAG Chat: Attempting to add post ' . $post->ID . ' (' . $post->post_title . ') to queue');
@@ -1378,39 +1377,17 @@ class Plugin {
             }
         }
         
-        // Get total count for progress tracking
-        $total_query_args = [
-            'numberposts' => -1,
-            'post_status' => ['publish', 'private']
-        ];
-        
-        if ($post_type && $post_type !== 'all') {
-            $total_query_args['post_type'] = $post_type;
-        } else {
-            $total_query_args['post_type'] = $allowed_post_types;
-        }
-        
-        $total_posts = get_posts($total_query_args);
-        $total_count = count($total_posts);
-        
         // Log the addition (processing will be handled by frontend)
         if ($added_count > 0) {
-            error_log('WP GPT RAG Chat: Added ' . $added_count . ' posts to queue for processing (batch ' . (($offset / $batch_size) + 1) . ')');
+            error_log('WP GPT RAG Chat: Added ' . $added_count . ' posts to queue for processing');
         }
-        
-        $has_more = ($offset + $batch_size) < $total_count;
-        
-        error_log('WP GPT RAG Chat: Batch calculation - offset=' . $offset . ', batch_size=' . $batch_size . ', total_count=' . $total_count . ', has_more=' . ($has_more ? 'true' : 'false'));
         
         return [
             'processed' => $added_count,
-            'total' => $total_count,
-            'batch_size' => $batch_size,
-            'current_offset' => $offset,
-            'has_more' => $has_more,
+            'total' => count($posts),
             'errors' => [],
             'indexed_post_ids' => $post_ids,
-            'message' => sprintf(__('Added %d posts to indexing queue (batch %d).', 'wp-gpt-rag-chat'), $added_count, (($offset / $batch_size) + 1))
+            'message' => sprintf(__('Added %d posts to indexing queue.', 'wp-gpt-rag-chat'), $added_count)
         ];
     }
     

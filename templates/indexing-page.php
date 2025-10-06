@@ -3104,13 +3104,12 @@ jQuery(document).ready(function($) {
                 button.prop('disabled', true);
                 $('#cancel-sync-all').show();
                 $('#global-progress-container').show();
-                $('#global-progress-container .progress-text').text('<?php esc_html_e('Starting batch processing...', 'wp-gpt-rag-chat'); ?>');
+                $('#global-progress-container .progress-text').text('<?php esc_html_e('Posts added to queue, starting processing...', 'wp-gpt-rag-chat'); ?>');
                 $('#global-progress-container .progress-fill').css('width', '0%');
                 
-                // Start sequential batch processing
-                console.log('Starting sequential batch processing with data:', response.data);
+                // Start processing the queue after a short delay to show pending items first
                 setTimeout(function() {
-                    startSequentialBatchProcessing(button, postType, response.data);
+                    startQueueProcessing(button, postType, response.data.processed || 0);
                 }, 500);
                 
             } else {
@@ -6230,164 +6229,6 @@ jQuery(document).ready(function($) {
     /**
      * Start processing the queue with progress bar
      */
-    function startSequentialBatchProcessing(button, postType, batchData) {
-        var totalItems = batchData.total || 0;
-        var batchSize = batchData.batch_size || 10;
-        var currentOffset = batchData.current_offset || 0;
-        var hasMore = batchData.has_more || false;
-        var processed = 0;
-        var isProcessing = true;
-        
-        console.log('Sequential batch processing initialized:');
-        console.log('- totalItems:', totalItems);
-        console.log('- batchSize:', batchSize);
-        console.log('- currentOffset:', currentOffset);
-        console.log('- hasMore:', hasMore);
-        
-        function processCurrentBatch() {
-            if (!isProcessing) return;
-            
-            // Process the current batch of posts in the queue
-            $.post(wpGptRagChatAdmin.ajaxUrl, {
-                action: 'wp_gpt_rag_chat_process_queue',
-                nonce: wpGptRagChatAdmin.nonce,
-                batch_size: batchSize,
-                post_type: postType
-            }, function(response) {
-                if (response.success) {
-                    processed += response.data.processed || 0;
-                    var progress = totalItems > 0 ? (processed / totalItems) * 100 : 0;
-                    
-                    // Update progress bar
-                    $('#global-progress-container .progress-fill').css('width', progress + '%');
-                    
-                    // Calculate current batch number more reliably
-                    var currentBatchNumber = Math.ceil(processed / batchSize);
-                    if (currentBatchNumber === 0) currentBatchNumber = 1; // Ensure at least batch 1
-                    
-                    console.log('Progress update: processed=' + processed + ', batchSize=' + batchSize + ', currentBatchNumber=' + currentBatchNumber);
-                    
-                    $('#global-progress-container .progress-text').text(
-                        '<?php esc_html_e('Processing', 'wp-gpt-rag-chat'); ?>: ' + processed + ' / ' + totalItems + 
-                        ' (<?php esc_html_e('Batch', 'wp-gpt-rag-chat'); ?>: ' + currentBatchNumber + ')'
-                    );
-                    
-                    // Refresh table to show updated statuses
-                    updateIndexedItemsTable();
-                    
-                    // Update summary statistics in real-time
-                    updateSummaryStatistics();
-                    
-                    // Check if current batch is complete
-                    console.log('Batch processing check: remaining=' + response.data.remaining + ', hasMore=' + hasMore + ', processed=' + processed + ', total=' + totalItems);
-                    
-                    if (response.data.remaining === 0) {
-                        // Current batch is complete, check if we've processed all items
-                        console.log('Current batch complete. Checking if more batches needed...');
-                        console.log('Processed:', processed, 'Total:', totalItems, 'HasMore:', hasMore);
-                        
-                        if (processed >= totalItems) {
-                            console.log('All items processed, finishing...');
-                            // All items complete
-                            completeQueueProcessing(button, processed);
-                        } else {
-                            // Check if we need to add more batches
-                            var expectedBatches = Math.ceil(totalItems / batchSize);
-                            var currentBatch = Math.ceil(processed / batchSize);
-                            
-                            console.log('=== BATCH COMPLETION CHECK ===');
-                            console.log('Total items:', totalItems);
-                            console.log('Batch size:', batchSize);
-                            console.log('Processed so far:', processed);
-                            console.log('Expected batches:', expectedBatches);
-                            console.log('Current batch:', currentBatch);
-                            console.log('HasMore flag:', hasMore);
-                            
-                            // More robust check: if we haven't processed all items, continue
-                            if (processed < totalItems) {
-                                console.log('Still have items to process (' + processed + ' < ' + totalItems + '), adding next batch...');
-                                // Add next batch
-                                addNextBatch();
-                            } else {
-                                console.log('All items processed (' + processed + ' >= ' + totalItems + '), finishing...');
-                                // All items complete
-                                completeQueueProcessing(button, processed);
-                            }
-                        }
-                    } else {
-                        console.log('Continuing to process current batch...');
-                        // Continue processing current batch
-                        setTimeout(processCurrentBatch, 1000);
-                    }
-                } else {
-                    // Error occurred
-                    completeQueueProcessing(button, processed, response.data.message);
-                }
-            }).fail(function() {
-                completeQueueProcessing(button, processed, '<?php esc_html_e('Connection error', 'wp-gpt-rag-chat'); ?>');
-            });
-        }
-        
-        function addNextBatch() {
-            if (!isProcessing) return;
-            
-            var nextOffset = currentOffset + batchSize;
-            
-            console.log('=== ADDING NEXT BATCH ===');
-            console.log('Current offset:', currentOffset);
-            console.log('Next offset:', nextOffset);
-            console.log('Batch size:', batchSize);
-            console.log('Total items:', totalItems);
-            console.log('HasMore flag:', hasMore);
-            
-            $.post(wpGptRagChatAdmin.ajaxUrl, {
-                action: 'wp_gpt_rag_chat_bulk_index',
-                nonce: wpGptRagChatAdmin.nonce,
-                bulk_action: 'index_all',
-                post_type: postType,
-                batch_size: batchSize,
-                offset: nextOffset
-            }, function(response) {
-                if (response.success) {
-                    currentOffset = response.data.current_offset;
-                    hasMore = response.data.has_more;
-                    
-                    console.log('=== NEXT BATCH ADDED ===');
-                    console.log('Response data:', response.data);
-                    console.log('New currentOffset:', currentOffset);
-                    console.log('New hasMore:', hasMore);
-                    console.log('Total items:', totalItems);
-                    
-                    // Update progress text
-                    var currentBatchNumber = Math.floor(currentOffset / batchSize) + 1;
-                    $('#global-progress-container .progress-text').text(
-                        '<?php esc_html_e('Added batch', 'wp-gpt-rag-chat'); ?> ' + currentBatchNumber + 
-                        ', <?php esc_html_e('processing...', 'wp-gpt-rag-chat'); ?>'
-                    );
-                    
-                    // Refresh table to show new pending items
-                    updateIndexedItemsTable();
-                    
-                    // Start processing the new batch
-                    setTimeout(processCurrentBatch, 1000);
-                } else {
-                    completeQueueProcessing(button, processed, response.data.message);
-                }
-            }).fail(function() {
-                completeQueueProcessing(button, processed, '<?php esc_html_e('Connection error', 'wp-gpt-rag-chat'); ?>');
-            });
-        }
-        
-        // Start processing the first batch
-        processCurrentBatch();
-        
-        // Store processing state for cancellation
-        window.currentBatchProcessing = {
-            isProcessing: function() { return isProcessing; },
-            stop: function() { isProcessing = false; }
-        };
-    }
-    
     function startQueueProcessing(button, postType, totalItems) {
         var processed = 0;
         var batchSize = 5;
@@ -6441,9 +6282,6 @@ jQuery(document).ready(function($) {
         // Handle cancel button
         $('#cancel-sync-all').off('click').on('click', function() {
             isProcessing = false;
-            if (window.currentBatchProcessing && window.currentBatchProcessing.isProcessing()) {
-                window.currentBatchProcessing.stop();
-            }
             completeQueueProcessing(button, processed, '<?php esc_html_e('Cancelled by user', 'wp-gpt-rag-chat'); ?>');
         });
     }

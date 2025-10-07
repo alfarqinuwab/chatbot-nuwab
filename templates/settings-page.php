@@ -628,7 +628,6 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                                     <option value="everyone" <?php selected($settings['chat_visibility'] ?? 'everyone', 'everyone'); ?>><?php esc_html_e('Show to Everyone (Visitors & Logged-in Users)', 'wp-gpt-rag-chat'); ?></option>
                                     <option value="logged_in_only" <?php selected($settings['chat_visibility'] ?? '', 'logged_in_only'); ?>><?php esc_html_e('Show to Logged-in Users Only', 'wp-gpt-rag-chat'); ?></option>
                                     <option value="visitors_only" <?php selected($settings['chat_visibility'] ?? '', 'visitors_only'); ?>><?php esc_html_e('Show to Visitors Only (Not Logged-in)', 'wp-gpt-rag-chat'); ?></option>
-                                    <option value="private_link_only" <?php selected($settings['chat_visibility'] ?? '', 'private_link_only'); ?>><?php esc_html_e('Private (Link Only) - Show only on pages with shortcode', 'wp-gpt-rag-chat'); ?></option>
                                 </select>
                                 <p class="description"><?php esc_html_e('Control who can see and use the chat widget on your website.', 'wp-gpt-rag-chat'); ?></p>
                             </td>

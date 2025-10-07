@@ -63,26 +63,13 @@ function wp_gpt_rag_chat_autoloader($class) {
     }
     
     $relative_class = substr($class, $len);
-    
-    // Try the class- prefix first
-    $file = $base_dir . 'class-' . strtolower(str_replace('\\', '/', $relative_class)) . '.php';
+    $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
     
     if (file_exists($file)) {
         try {
             require $file;
         } catch (Exception $e) {
             error_log('WP GPT RAG Chat autoloader error: ' . $e->getMessage());
-        }
-    } else {
-        // Try without class- prefix (for main Plugin class)
-        $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
-        
-        if (file_exists($file)) {
-            try {
-                require $file;
-            } catch (Exception $e) {
-                error_log('WP GPT RAG Chat autoloader error: ' . $e->getMessage());
-            }
         }
     }
 }
@@ -101,12 +88,6 @@ function wp_gpt_rag_chat_init() {
         // Initialize main plugin class
         if (class_exists('WP_GPT_RAG_Chat\\Plugin')) {
             new WP_GPT_RAG_Chat\Plugin();
-        } else {
-            // Try to load the class using the autoloader
-            wp_gpt_rag_chat_autoloader('WP_GPT_RAG_Chat\\Plugin');
-            if (class_exists('WP_GPT_RAG_Chat\\Plugin')) {
-                new WP_GPT_RAG_Chat\Plugin();
-            }
         }
     } catch (Exception $e) {
         error_log('WP GPT RAG Chat initialization error: ' . $e->getMessage());

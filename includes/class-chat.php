@@ -360,14 +360,27 @@ class Chat {
             $metadata = $match['metadata'];
             $content = $this->get_chunk_content($metadata['post_id'], $metadata['chunk_index']);
             
-            if (!empty($content)) {
-                // Format: Content first, then link with source title at the end
-                $formatted_part = $content;
-                
-                // Add clickable link after content if URL exists
-                if (!empty($metadata['post_url']) && !empty($metadata['post_title'])) {
-                    $formatted_part .= sprintf(
-                        " 🔗 [%s](%s)",
+            // Check if we have content OR if we have source links
+            $has_content = !empty($content);
+            $has_source_link = !empty($metadata['post_url']) && !empty($metadata['post_title']);
+            
+            if ($has_content || $has_source_link) {
+                if ($has_content) {
+                    // Format: Content first, then link with source title at the end
+                    $formatted_part = $content;
+                    
+                    // Add clickable link after content if URL exists
+                    if ($has_source_link) {
+                        $formatted_part .= sprintf(
+                            " 🔗 [%s](%s)",
+                            $metadata['post_title'],
+                            $metadata['post_url']
+                        );
+                    }
+                } else {
+                    // No content but we have source link - just provide the link
+                    $formatted_part = sprintf(
+                        "🔗 [%s](%s)",
                         $metadata['post_title'],
                         $metadata['post_url']
                     );

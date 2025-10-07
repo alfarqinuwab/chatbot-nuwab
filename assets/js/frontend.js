@@ -230,6 +230,7 @@
                     chat_id: self.chatId,
                     turn_number: self.turnNumber,
                     detected_language: detectedLanguage,
+                    post_id: wpGptRagChat.postId || null,
                     nonce: wpGptRagChat.nonce
                 },
                 success: function(response) {

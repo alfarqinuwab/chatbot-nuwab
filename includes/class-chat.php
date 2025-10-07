@@ -31,9 +31,28 @@ class Chat {
      * Constructor
      */
     public function __construct() {
-        $this->openai = new OpenAI();
-        $this->pinecone = new Pinecone();
+        // Initialize dependencies lazily to avoid autoloader issues
         $this->settings = Settings::get_settings();
+    }
+    
+    /**
+     * Get OpenAI instance (lazy loading)
+     */
+    private function get_openai() {
+        if (!$this->openai) {
+            $this->openai = new OpenAI();
+        }
+        return $this->openai;
+    }
+    
+    /**
+     * Get Pinecone instance (lazy loading)
+     */
+    private function get_pinecone() {
+        if (!$this->pinecone) {
+            $this->pinecone = new Pinecone();
+        }
+        return $this->pinecone;
     }
     
     /**
@@ -574,7 +593,7 @@ class Chat {
     /**
      * Get chat widget HTML
      */
-    public function get_chat_widget_html() {
+    public function get_chat_widget_html($bypass_visibility_check = false) {
         $settings = $this->settings;
         
         // Check if chat is enabled
@@ -582,8 +601,8 @@ class Chat {
             return '';
         }
         
-        // Check visibility settings
-        if (!$this->should_display_chat()) {
+        // Check visibility settings (unless bypassed for shortcode)
+        if (!$bypass_visibility_check && !$this->should_display_chat()) {
             return '';
         }
         
@@ -676,6 +695,15 @@ class Chat {
                 // Show only to non-logged-in users (visitors)
                 return !$is_user_logged_in;
                 
+            case 'private_link_only':
+                // Show to logged-in users everywhere, or to visitors only on pages with shortcode
+                if ($is_user_logged_in) {
+                    return true;
+                } else {
+                    // For visitors, this will be handled by shortcode callback
+                    return false; // This will be overridden by shortcode callback
+                }
+                
             case 'everyone':
             default:
                 // Show to everyone
@@ -699,6 +727,13 @@ class Chat {
             if (!is_user_logged_in() || !current_user_can('manage_options')) {
                 return;
             }
+        }
+        
+        // Don't show floating widget if chat visibility is set to "private_link_only"
+        // UNLESS the user is logged in (admins and logged-in users can see it everywhere)
+        $chat_visibility = $settings['chat_visibility'] ?? 'everyone';
+        if ($chat_visibility === 'private_link_only' && !is_user_logged_in()) {
+            return;
         }
         
         // Output the chat widget
@@ -763,7 +798,9 @@ class Chat {
             return '';
         }
         
-        return $this->get_chat_widget_html();
+        // Always show chat when shortcode is used, regardless of visibility settings
+        // This allows the "private_link_only" mode to work properly
+        return $this->get_chat_widget_html(true); // Pass true to bypass visibility check
     }
     
     /**

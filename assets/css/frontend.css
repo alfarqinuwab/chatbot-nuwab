@@ -55,7 +55,7 @@
 
 .cornuwab-wp-gpt-rag-chat-fab-avatar {
     width: 54px;
-    height: 54px;
+    height: 54px !important;
     border-radius: 50%;
     object-fit: cover;
     
@@ -148,6 +148,8 @@
     font-weight: 700;
     letter-spacing: 0.3px;
     color: #fff;
+    padding-top: 0 !important;
+    border: 0 !important;
 }
 
 .cornuwab-wp-gpt-rag-chat-header-title {

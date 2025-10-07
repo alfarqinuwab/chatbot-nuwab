@@ -27,8 +27,8 @@ class Plugin {
      */
     public function __construct() {
         $this->init_hooks();
-        // Load dependencies only when needed
-        add_action('init', [$this, 'load_dependencies'], 1);
+        // Load dependencies immediately
+        $this->load_dependencies();
     }
     
     /**
@@ -166,16 +166,15 @@ class Plugin {
         // Initialize components
         new Admin();
         new Metabox();
-        new Chat();
         new Privacy();
+        
+        // Initialize chat widget (Chat class will be instantiated here)
+        $this->init_chat_widget();
         
         // Initialize settings for admin
         if (is_admin()) {
             new Settings();
         }
-        
-        // Initialize chat widget
-        $this->init_chat_widget();
     }
     
     /**
@@ -417,6 +416,7 @@ class Plugin {
         wp_localize_script('wp-gpt-rag-chat-frontend', 'wpGptRagChat', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('wp_gpt_rag_chat_nonce'),
+            'postId' => is_singular() ? get_the_ID() : null,
             'strings' => [
                 'loading' => __('Loading...', 'wp-gpt-rag-chat'),
                 'error' => __('An error occurred. Please try again.', 'wp-gpt-rag-chat'),
@@ -528,6 +528,44 @@ class Plugin {
     }
     
     /**
+     * Check if current page has the chat shortcode
+     */
+    private function page_has_chat_shortcode() {
+        // Get the current page/post ID from the referer or POST data
+        $post_id = null;
+        
+        // Try to get post ID from POST data first
+        if (isset($_POST['post_id'])) {
+            $post_id = intval($_POST['post_id']);
+        }
+        
+        // If not in POST, try to get from referer
+        if (!$post_id && isset($_SERVER['HTTP_REFERER'])) {
+            $referer = $_SERVER['HTTP_REFERER'];
+            $post_id = url_to_postid($referer);
+        }
+        
+        // If still no post ID, try to get current post
+        if (!$post_id && is_singular()) {
+            $post_id = get_the_ID();
+        }
+        
+        if (!$post_id) {
+            return false;
+        }
+        
+        // Get the post content
+        $post = get_post($post_id);
+        if (!$post) {
+            return false;
+        }
+        
+        // Check if the post content contains the shortcode
+        $content = $post->post_content;
+        return has_shortcode($content, 'wp_gpt_rag_chat');
+    }
+    
+    /**
      * Handle chat query AJAX request
      */
     public function handle_chat_query() {
@@ -546,6 +584,16 @@ class Plugin {
                 break;
             case 'visitors_only':
                 $can_use_chat = !$is_user_logged_in;
+                break;
+            case 'private_link_only':
+                // For private link only mode:
+                // - Admins and logged-in users can use chat on all pages
+                // - Visitors can only use chat on pages with shortcode
+                if ($is_user_logged_in) {
+                    $can_use_chat = true;
+                } else {
+                    $can_use_chat = $this->page_has_chat_shortcode();
+                }
                 break;
             case 'everyone':
             default:

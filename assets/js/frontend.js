@@ -29,15 +29,27 @@
                 self.toggleExpand(this);
             });
             
-            // Close expanded view when clicking overlay
+            // Close chat when clicking overlay
             $(document).on('click', '.cornuwab-wp-gpt-rag-chat-overlay', function() {
-                self.setExpanded(false);
+                if (self.isExpanded) {
+                    // If expanded, just collapse to small window
+                    self.setExpanded(false);
+                } else {
+                    // If in small window, close the chat entirely
+                    self.toggleWidget();
+                }
             });
             
-            // Handle escape key to close expanded view
+            // Handle escape key to close chat
             $(document).on('keydown', function(e) {
                 if (e.key === 'Escape') {
-                    self.setExpanded(false);
+                    if (self.isExpanded) {
+                        // If expanded, just collapse to small window
+                        self.setExpanded(false);
+                    } else if (self.isOpen) {
+                        // If in small window, close the chat entirely
+                        self.toggleWidget();
+                    }
                 }
             });
             

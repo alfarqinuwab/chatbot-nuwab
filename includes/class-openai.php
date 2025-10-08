@@ -265,44 +265,11 @@ CRITICAL RULES:
         
         if (!empty($context)) {
             $message .= "\n\n" . __('Context from the website (IMPORTANT - Extract page titles and URLs from here):', 'wp-gpt-rag-chat') . "\n\n" . $context;
-            
-            // Check if context contains only source links (no detailed content)
-            if ($this->has_only_source_links($context)) {
-                $message .= "\n\n" . __('IMPORTANT: The context contains only source links without detailed content. In this case, do NOT apologize for unavailable information. Instead, directly direct the user to the relevant page. Say something like: "يمكنك الاطلاع على صفحة [Page Title] للحصول على معلومات أكثر تفصيلاً." and provide the link.', 'wp-gpt-rag-chat');
-            }
         } else {
             $message .= "\n\n" . __('Note: No specific indexed content was found. Politely inform the visitor that you need more specific information to help them better, and encourage them to ask about specific topics.', 'wp-gpt-rag-chat');
         }
         
         return $message;
-    }
-    
-    /**
-     * Check if context contains only source links (no detailed content)
-     */
-    private function has_only_source_links($context) {
-        if (empty($context)) {
-            return false;
-        }
-        
-        // Remove link patterns to check if there's any other content
-        $context_without_links = $context;
-        $link_patterns = [
-            '/🔗\s*\[([^\]]+)\]\(([^)]+)\)/',  // 🔗 [Title](URL)
-            '/\[([^\]]+)\]\(([^)]+)\)/',       // [Title](URL)
-            '/https?:\/\/[^\s]+/',             // Direct URLs
-            '/━━━━━━━━━━━━━━━━/',              // Separator lines
-        ];
-        
-        foreach ($link_patterns as $pattern) {
-            $context_without_links = preg_replace($pattern, '', $context_without_links);
-        }
-        
-        // Remove whitespace and check if anything remains
-        $remaining_content = trim($context_without_links);
-        
-        // If there's no remaining content after removing links, it's only source links
-        return empty($remaining_content);
     }
     
     /**

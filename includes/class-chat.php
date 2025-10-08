@@ -61,6 +61,17 @@ class Chat {
                     $rag_sources = $linked_sources;
                     $rag_metadata['used_linked_sources'] = true;
                     $rag_metadata['linked_sources_count'] = count($linked_sources);
+                    
+                    // Store linked sources details for debugging
+                    $rag_metadata['linked_sources_details'] = array_map(function($source) {
+                        return [
+                            'post_id' => $source['id'] ?? 'unknown',
+                            'title' => $source['title'] ?? 'unknown',
+                            'url' => $source['url'] ?? 'unknown',
+                            'type' => $source['type'] ?? 'unknown',
+                            'linked_at' => $source['linked_at'] ?? 'unknown'
+                        ];
+                    }, $linked_sources);
                 } else {
                     // Step 1: Query Expansion
                     $query_variations = $rag_improvements->expand_query($query);
@@ -100,9 +111,33 @@ class Chat {
                     
                     $rag_metadata['total_results_found'] = count($all_results);
                     
+                    // Store detailed results for debugging
+                    $rag_metadata['raw_results'] = array_map(function($result) {
+                        return [
+                            'post_id' => $result['metadata']['post_id'] ?? 'unknown',
+                            'post_title' => $result['metadata']['post_title'] ?? 'unknown',
+                            'post_url' => $result['metadata']['post_url'] ?? 'unknown',
+                            'chunk_index' => $result['metadata']['chunk_index'] ?? 'unknown',
+                            'score' => $result['score'] ?? 0,
+                            'vector_id' => $result['id'] ?? 'unknown'
+                        ];
+                    }, $all_results);
+                    
                     // Remove duplicates based on post_id + chunk_index
                     $all_results = $this->deduplicate_results($all_results);
                     $rag_metadata['unique_results'] = count($all_results);
+                    
+                    // Store deduplicated results for debugging
+                    $rag_metadata['deduplicated_results'] = array_map(function($result) {
+                        return [
+                            'post_id' => $result['metadata']['post_id'] ?? 'unknown',
+                            'post_title' => $result['metadata']['post_title'] ?? 'unknown',
+                            'post_url' => $result['metadata']['post_url'] ?? 'unknown',
+                            'chunk_index' => $result['metadata']['chunk_index'] ?? 'unknown',
+                            'score' => $result['score'] ?? 0,
+                            'vector_id' => $result['id'] ?? 'unknown'
+                        ];
+                    }, $all_results);
                     
                     // Step 4: Re-rank results
                     $reranked_results = $rag_improvements->rerank_results($query, $all_results);
@@ -110,6 +145,18 @@ class Chat {
                     $final_limit = intval($this->settings['final_context_chunks'] ?? 6);
                     $reranked_results = array_slice($reranked_results, 0, max(1, $final_limit));
                     $rag_metadata['final_results_used'] = count($reranked_results);
+                    
+                    // Store final results for debugging
+                    $rag_metadata['final_results'] = array_map(function($result) {
+                        return [
+                            'post_id' => $result['metadata']['post_id'] ?? 'unknown',
+                            'post_title' => $result['metadata']['post_title'] ?? 'unknown',
+                            'post_url' => $result['metadata']['post_url'] ?? 'unknown',
+                            'chunk_index' => $result['metadata']['chunk_index'] ?? 'unknown',
+                            'score' => $result['score'] ?? 0,
+                            'vector_id' => $result['id'] ?? 'unknown'
+                        ];
+                    }, $reranked_results);
                     
                     // Step 5: Build context from top results
                     $context = $this->build_context_from_results($reranked_results);
@@ -360,27 +407,14 @@ class Chat {
             $metadata = $match['metadata'];
             $content = $this->get_chunk_content($metadata['post_id'], $metadata['chunk_index']);
             
-            // Check if we have content OR if we have source links
-            $has_content = !empty($content);
-            $has_source_link = !empty($metadata['post_url']) && !empty($metadata['post_title']);
-            
-            if ($has_content || $has_source_link) {
-                if ($has_content) {
-                    // Format: Content first, then link with source title at the end
-                    $formatted_part = $content;
-                    
-                    // Add clickable link after content if URL exists
-                    if ($has_source_link) {
-                        $formatted_part .= sprintf(
-                            " 🔗 [%s](%s)",
-                            $metadata['post_title'],
-                            $metadata['post_url']
-                        );
-                    }
-                } else {
-                    // No content but we have source link - just provide the link
-                    $formatted_part = sprintf(
-                        "🔗 [%s](%s)",
+            if (!empty($content)) {
+                // Format: Content first, then link with source title at the end
+                $formatted_part = $content;
+                
+                // Add clickable link after content if URL exists
+                if (!empty($metadata['post_url']) && !empty($metadata['post_title'])) {
+                    $formatted_part .= sprintf(
+                        " 🔗 [%s](%s)",
                         $metadata['post_title'],
                         $metadata['post_url']
                     );

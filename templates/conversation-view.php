@@ -130,6 +130,85 @@ $user_display = $first_message->user_id ? get_userdata($first_message->user_id)-
                                             <?php endif; ?>
                                         </div>
                                     </div>
+                                    
+                                    <?php if (!empty($metadata['used_linked_sources'])): ?>
+                                        <div class="rag-section rag-linked-sources">
+                                            <strong><?php _e('Manually Linked Sources Used:', 'wp-gpt-rag-chat'); ?></strong>
+                                            <div class="linked-sources-list">
+                                                <?php foreach ($metadata['linked_sources_details'] as $source): ?>
+                                                    <div class="linked-source-item">
+                                                        <strong><?php echo esc_html($source['title']); ?></strong>
+                                                        <br>
+                                                        <small>
+                                                            <?php _e('Post ID:', 'wp-gpt-rag-chat'); ?> <?php echo esc_html($source['post_id']); ?> | 
+                                                            <?php _e('Type:', 'wp-gpt-rag-chat'); ?> <?php echo esc_html($source['type']); ?> | 
+                                                            <?php _e('Linked:', 'wp-gpt-rag-chat'); ?> <?php echo esc_html($source['linked_at']); ?>
+                                                        </small>
+                                                        <br>
+                                                        <a href="<?php echo esc_url($source['url']); ?>" target="_blank" class="source-link">
+                                                            <?php echo esc_html($source['url']); ?>
+                                                        </a>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (!empty($metadata['raw_results'])): ?>
+                                        <div class="rag-section rag-raw-results">
+                                            <strong><?php _e('Raw Search Results (Before Deduplication):', 'wp-gpt-rag-chat'); ?></strong>
+                                            <div class="results-list">
+                                                <?php foreach ($metadata['raw_results'] as $i => $result): ?>
+                                                    <div class="result-item">
+                                                        <div class="result-header">
+                                                            <span class="result-number"><?php echo $i + 1; ?></span>
+                                                            <strong><?php echo esc_html($result['post_title']); ?></strong>
+                                                            <span class="result-score">Score: <?php echo number_format($result['score'], 3); ?></span>
+                                                        </div>
+                                                        <div class="result-details">
+                                                            <small>
+                                                                <?php _e('Post ID:', 'wp-gpt-rag-chat'); ?> <?php echo esc_html($result['post_id']); ?> | 
+                                                                <?php _e('Chunk:', 'wp-gpt-rag-chat'); ?> <?php echo esc_html($result['chunk_index']); ?> | 
+                                                                <?php _e('Vector ID:', 'wp-gpt-rag-chat'); ?> <?php echo esc_html($result['vector_id']); ?>
+                                                            </small>
+                                                            <br>
+                                                            <a href="<?php echo esc_url($result['post_url']); ?>" target="_blank" class="result-link">
+                                                                <?php echo esc_html($result['post_url']); ?>
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (!empty($metadata['final_results'])): ?>
+                                        <div class="rag-section rag-final-results">
+                                            <strong><?php _e('Final Results Used in Answer:', 'wp-gpt-rag-chat'); ?></strong>
+                                            <div class="results-list">
+                                                <?php foreach ($metadata['final_results'] as $i => $result): ?>
+                                                    <div class="result-item final-result">
+                                                        <div class="result-header">
+                                                            <span class="result-number"><?php echo $i + 1; ?></span>
+                                                            <strong><?php echo esc_html($result['post_title']); ?></strong>
+                                                            <span class="result-score">Score: <?php echo number_format($result['score'], 3); ?></span>
+                                                        </div>
+                                                        <div class="result-details">
+                                                            <small>
+                                                                <?php _e('Post ID:', 'wp-gpt-rag-chat'); ?> <?php echo esc_html($result['post_id']); ?> | 
+                                                                <?php _e('Chunk:', 'wp-gpt-rag-chat'); ?> <?php echo esc_html($result['chunk_index']); ?> | 
+                                                                <?php _e('Vector ID:', 'wp-gpt-rag-chat'); ?> <?php echo esc_html($result['vector_id']); ?>
+                                                            </small>
+                                                            <br>
+                                                            <a href="<?php echo esc_url($result['post_url']); ?>" target="_blank" class="result-link">
+                                                                <?php echo esc_html($result['post_url']); ?>
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                             </details>
                         </div>
@@ -472,9 +551,143 @@ $user_display = $first_message->user_id ? get_userdata($first_message->user_id)-
     font-size: 13px;
 }
 
+/* Linked Sources Styles */
+.linked-sources-list {
+    margin-top: 8px;
+}
+
+.linked-source-item {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+
+.linked-source-item strong {
+    color: #d1a85f;
+    font-size: 14px;
+}
+
+.linked-source-item small {
+    color: #666;
+    font-size: 11px;
+}
+
+.source-link {
+    color: #0073aa;
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.source-link:hover {
+    text-decoration: underline;
+}
+
+/* Results List Styles */
+.results-list {
+    margin-top: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.result-item {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: border-color 0.2s;
+}
+
+.result-item:hover {
+    border-color: #d1a85f;
+}
+
+.result-item.final-result {
+    border-color: #d1a85f;
+    background: #fff9e6;
+}
+
+.result-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.result-number {
+    background: #d1a85f;
+    color: #fff;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.result-item.final-result .result-number {
+    background: #b8941f;
+}
+
+.result-header strong {
+    flex: 1;
+    color: #1d2327;
+    font-size: 13px;
+}
+
+.result-score {
+    background: #f0f0f0;
+    color: #666;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.result-details {
+    color: #666;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.result-link {
+    color: #0073aa;
+    text-decoration: none;
+    font-size: 11px;
+    word-break: break-all;
+}
+
+.result-link:hover {
+    text-decoration: underline;
+}
+
 @media screen and (max-width: 782px) {
     .rag-stats {
         grid-template-columns: 1fr;
+    }
+    
+    .result-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .result-header strong {
+        order: 1;
+    }
+    
+    .result-number {
+        order: 2;
+    }
+    
+    .result-score {
+        order: 3;
     }
 }
 </style>

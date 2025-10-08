@@ -383,6 +383,7 @@ class Pinecone {
             'content_hash' => $chunk_data['content_hash'],
             'content_length' => strlen($chunk_data['content']),
             'indexed_at' => current_time('mysql')
+            // Note: Content is stored in local database, not in Pinecone metadata
         ];
     }
     

@@ -45,12 +45,18 @@ class RAG_Handler {
                 return [];
             }
             
-            // Convert to sources format
+            // Convert to sources format and fetch content from local database
             $sources = [];
             foreach ($search_result['matches'] as $match) {
+                $post_id = $match['metadata']['post_id'] ?? null;
+                $chunk_index = $match['metadata']['chunk_index'] ?? 0;
+                
+                // Fetch content from local database
+                $content = $this->get_content_from_local_db($post_id, $chunk_index);
+                
                 $sources[] = [
-                    'content' => $match['metadata']['content'] ?? '',
-                    'post_id' => $match['metadata']['post_id'] ?? null,
+                    'content' => $content,
+                    'post_id' => $post_id,
                     'score' => $match['score'] ?? 0,
                     'metadata' => $match['metadata'] ?? []
                 ];
@@ -62,6 +68,23 @@ class RAG_Handler {
             error_log('WP GPT RAG Chat: Error retrieving sources - ' . $e->getMessage());
             return [];
         }
+    }
+    
+    /**
+     * Get content from local database
+     */
+    private function get_content_from_local_db($post_id, $chunk_index) {
+        global $wpdb;
+        
+        $vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
+        
+        $result = $wpdb->get_var($wpdb->prepare("
+            SELECT content 
+            FROM $vectors_table 
+            WHERE post_id = %d AND chunk_index = %d
+        ", $post_id, $chunk_index));
+        
+        return $result ?: '';
     }
     
     /**

@@ -2228,7 +2228,7 @@ class Plugin {
     }
     
     /**
-     * Handle get indexed items AJAX request
+     * Handle get indexed items AJAX request with server-side pagination
      */
     public function handle_get_indexed_items() {
         check_ajax_referer('wp_gpt_rag_chat_admin_nonce', 'nonce');
@@ -2239,14 +2239,39 @@ class Plugin {
         
         global $wpdb;
         
+        // Get pagination parameters
+        $page = max(1, intval($_POST['page'] ?? 1));
+        $per_page = max(1, min(100, intval($_POST['per_page'] ?? 20))); // Limit to 100 max
+        $offset = ($page - 1) * $per_page;
+        
         // Get allowed post types from settings
         $settings = Settings::get_settings();
         $allowed_post_types = $settings['post_types'] ?? ['post', 'page'];
         $post_type_placeholders = implode(',', array_fill(0, count($allowed_post_types), '%s'));
         
         $vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
+        $queue_table = $wpdb->prefix . 'wp_gpt_rag_indexing_queue';
         
-        // Get posts that are already indexed (aggregate to one row per post using latest updated_at)
+        // First, get total count for pagination
+        $total_count = $wpdb->get_var($wpdb->prepare(
+            "
+            SELECT COUNT(DISTINCT p.ID) + (
+                SELECT COUNT(DISTINCT q.post_id) 
+                FROM {$queue_table} q 
+                WHERE q.status = 'pending'
+                AND q.post_id NOT IN (
+                    SELECT DISTINCT post_id FROM {$vectors_table}
+                )
+            )
+            FROM {$wpdb->posts} p
+            INNER JOIN {$vectors_table} lv ON p.ID = lv.post_id
+            WHERE p.post_status IN ('publish', 'private')
+            AND p.post_type IN ($post_type_placeholders)
+            ",
+            $allowed_post_types
+        ));
+        
+        // Get indexed posts with pagination
         $indexed_posts = $wpdb->get_results($wpdb->prepare(
             "
             SELECT p.ID, p.post_title, p.post_type, p.post_modified, lv.indexed_at
@@ -2259,8 +2284,9 @@ class Plugin {
             WHERE p.post_status IN ('publish', 'private')
             AND p.post_type IN ($post_type_placeholders)
             ORDER BY lv.indexed_at DESC
+            LIMIT %d OFFSET %d
             ",
-            $allowed_post_types
+            array_merge($allowed_post_types, [$per_page, $offset])
         ));
         
         $items = [];
@@ -2283,35 +2309,44 @@ class Plugin {
             ];
         }
         
-        // Add pending items from queue (that aren't already indexed)
-        $queue_items = Indexing_Queue::get_queue_items(100, 0, 'pending'); // Get up to 100 pending items
-        
-        foreach ($queue_items as $queue_item) {
-            // Skip if already indexed
-            if (in_array($queue_item->post_id, $indexed_post_ids)) {
-                continue;
-            }
+        // If we have space in this page, add pending items
+        $remaining_slots = $per_page - count($items);
+        if ($remaining_slots > 0) {
+            $queue_items = Indexing_Queue::get_queue_items($remaining_slots, 0, 'pending');
             
-            $items[] = [
-                'id' => $queue_item->post_id,
-                'title' => $queue_item->post_title,
-                'type' => $queue_item->post_type,
-                'modified' => $queue_item->created_at,
-                'indexed_time' => null,
-                'edit_url' => get_edit_post_link($queue_item->post_id),
-                'pending' => true,
-                'status' => 'pending'
-            ];
+            foreach ($queue_items as $queue_item) {
+                // Skip if already indexed
+                if (in_array($queue_item->post_id, $indexed_post_ids)) {
+                    continue;
+                }
+                
+                $items[] = [
+                    'id' => $queue_item->post_id,
+                    'title' => $queue_item->post_title,
+                    'type' => $queue_item->post_type,
+                    'modified' => $queue_item->created_at,
+                    'indexed_time' => null,
+                    'edit_url' => get_edit_post_link($queue_item->post_id),
+                    'pending' => true,
+                    'status' => 'pending'
+                ];
+            }
         }
         
-        // Sort by created/updated time (newest first)
-        usort($items, function($a, $b) {
-            $time_a = $a['pending'] ? strtotime($a['modified']) : strtotime($a['indexed_time']);
-            $time_b = $b['pending'] ? strtotime($b['modified']) : strtotime($b['indexed_time']);
-            return $time_b - $time_a;
-        });
+        // Calculate pagination info
+        $total_pages = ceil($total_count / $per_page);
         
-        wp_send_json_success(['items' => $items]);
+        wp_send_json_success([
+            'items' => $items,
+            'pagination' => [
+                'current_page' => $page,
+                'per_page' => $per_page,
+                'total_items' => $total_count,
+                'total_pages' => $total_pages,
+                'has_next' => $page < $total_pages,
+                'has_prev' => $page > 1
+            ]
+        ]);
     }
     
     /**

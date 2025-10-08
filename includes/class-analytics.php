@@ -192,7 +192,7 @@ class Analytics {
             'model' => null,
             'rating' => null,
             'user_id' => null,
-            'orderby' => 'created_at',
+            'orderby' => 'id',
             'order' => 'DESC'
         ];
         

@@ -89,7 +89,9 @@ class Pinecone {
             throw new \Exception(__('Invalid query vector.', 'wp-gpt-rag-chat'));
         }
         
-        $top_k = $top_k ?? $this->settings['top_k'];
+        // Get fresh settings to avoid caching issues
+        $current_settings = Settings::get_settings();
+        $top_k = $top_k ?? $current_settings['top_k'];
         
         $data = [
             'vector' => $query_vector,
@@ -108,8 +110,9 @@ class Pinecone {
             throw new \Exception(__('Invalid response from Pinecone API.', 'wp-gpt-rag-chat'));
         }
         
-        // Filter by similarity threshold
-        $threshold = $this->settings['similarity_threshold'];
+        // Filter by similarity threshold - get fresh settings to avoid caching issues
+        $current_settings = Settings::get_settings();
+        $threshold = $current_settings['similarity_threshold'];
         $filtered_matches = array_filter($response['matches'], function($match) use ($threshold) {
             return $match['score'] >= $threshold;
         });
@@ -124,7 +127,7 @@ class Pinecone {
                 'matches_returned' => count($response['matches']),
                 'filtered_matches' => count($filtered_matches),
                 'has_filter' => !empty($filter),
-                'similarity_threshold' => $threshold,
+                'similarity_threshold' => $current_settings['similarity_threshold'],
                 'index_name' => $this->settings['pinecone_index_name'] ?? 'unknown'
             ]
         );

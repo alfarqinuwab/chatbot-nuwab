@@ -395,6 +395,18 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                         <table class="cornuwab-form-table">
                             <tr>
                                 <th scope="row">
+                                    <label for="enable_rag"><?php esc_html_e('Enable RAG (Retrieval-Augmented Generation)', 'wp-gpt-rag-chat'); ?></label>
+                                </th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" id="enable_rag" name="wp_gpt_rag_chat_settings[enable_rag]" value="1" <?php checked($settings['enable_rag'] ?? true, 1); ?> />
+                                        <?php esc_html_e('Enable RAG to use your indexed content for AI responses', 'wp-gpt-rag-chat'); ?>
+                                    </label>
+                                    <p class="description"><?php esc_html_e('When enabled, the AI will search your indexed content first. When disabled, AI will use only its training data.', 'wp-gpt-rag-chat'); ?></p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
                                     <label for="enable_query_expansion"><?php esc_html_e('Query Expansion', 'wp-gpt-rag-chat'); ?></label>
                                 </th>
                                 <td>

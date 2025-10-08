@@ -139,6 +139,8 @@ class Plugin {
             'includes/class-migration.php',
             'includes/class-sitemap.php',
             'includes/RAG_Improvements.php',
+            'includes/class-rag-handler.php',
+            'includes/class-vector-db.php',
             'includes/class-emergency-stop.php',
             'includes/class-import-protection.php',
             'includes/class-error-logger.php',
@@ -1916,14 +1918,15 @@ class Plugin {
                 
                 try {
                     // Index the post
-                    $result = $indexing->index_single_post($item->post_id);
+                    $result = $indexing->index_post($item->post_id);
                     
-                    if ($result['success']) {
+                    // Check if indexing was successful (no exception thrown means success)
+                    if (isset($result['added']) || isset($result['updated']) || isset($result['message'])) {
                         // Mark as completed
                         Indexing_Queue::mark_completed($item->post_id);
                     } else {
                         // Mark as failed
-                        Indexing_Queue::mark_failed($item->post_id, $result['error'] ?? 'Unknown error');
+                        Indexing_Queue::mark_failed($item->post_id, 'Indexing failed - no result returned');
                     }
                 } catch (\Exception $e) {
                     // Mark as failed

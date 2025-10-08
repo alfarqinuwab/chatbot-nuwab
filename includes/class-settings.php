@@ -250,6 +250,19 @@ class Settings {
             'wp_gpt_rag_chat_retrieval',
             [ 'field' => 'final_context_chunks', 'min' => 3, 'max' => 12, 'step' => 1 ]
         );
+
+        // Main RAG toggle
+        add_settings_field(
+            'enable_rag',
+            __('Enable RAG (Retrieval-Augmented Generation)', 'wp-gpt-rag-chat'),
+            [$this, 'checkbox_field_callback'],
+            'wp_gpt_rag_chat_settings',
+            'wp_gpt_rag_chat_retrieval',
+            [ 
+                'field' => 'enable_rag',
+                'description' => __('Enable RAG to use your indexed content for AI responses. When disabled, AI will use only its training data.', 'wp-gpt-rag-chat')
+            ]
+        );
         
         // Chunking Settings Section
         add_settings_section(
@@ -675,6 +688,9 @@ class Settings {
      */
     public static function get_settings() {
         $defaults = [
+            // RAG settings
+            'enable_rag' => true,
+            
             // OpenAI settings
             'openai_api_key' => '',
             'openai_environment' => 'openai',

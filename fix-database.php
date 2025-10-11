@@ -95,3 +95,4 @@ echo "<hr>";
 echo "<p><a href='" . admin_url('admin.php?page=wp-gpt-rag-chat-diagnostics') . "'>Go to Diagnostics Page</a></p>";
 echo "<p><em>You can delete this file after running the fix.</em></p>";
 ?>
+

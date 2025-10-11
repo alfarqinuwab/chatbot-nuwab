@@ -34,6 +34,10 @@ class Chat {
         $this->openai = new OpenAI();
         $this->pinecone = new Pinecone();
         $this->settings = Settings::get_settings();
+        
+        // Add AJAX handlers
+        add_action('wp_ajax_wp_gpt_rag_chat_send_message', [$this, 'ajax_send_message']);
+        add_action('wp_ajax_nopriv_wp_gpt_rag_chat_send_message', [$this, 'ajax_send_message']);
     }
     
     /**
@@ -575,7 +579,7 @@ class Chat {
      * Get chat widget HTML
      */
     public function get_chat_widget_html() {
-        $settings = $this->settings;
+        $settings = Settings::get_settings();
         
         // Check if chat is enabled
         if (empty($settings['enable_chatbot'])) {
@@ -593,6 +597,95 @@ class Chat {
                    '</div>';
         }
         
+        // ChatGPT template is always available via shortcode
+        
+        ob_start();
+        ?>
+        <div id="cornuwab-wp-gpt-rag-chat-widget" class="cornuwab-wp-gpt-rag-chat-widget">
+            <!-- Floating Button (Collapsed State) -->
+            <div class="cornuwab-wp-gpt-rag-chat-fab">
+                <div class="cornuwab-wp-gpt-rag-chat-fab-bubble" aria-live="polite"></div>
+                <button type="button" class="cornuwab-wp-gpt-rag-chat-fab-button" aria-label="فتح المحادثة">
+                    <img src="<?php echo esc_url( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/avatar_small.png' ); ?>" alt="فتح المحادثة" class="cornuwab-wp-gpt-rag-chat-fab-avatar" />
+                </button>
+            </div>
+            
+            <!-- Chat Window (Expanded State) -->
+            <div class="cornuwab-wp-gpt-rag-chat-overlay" role="presentation"></div>
+            <div class="cornuwab-wp-gpt-rag-chat-window">
+                <div class="cornuwab-wp-gpt-rag-chat-header">
+                    <h3 class="cornuwab-wp-gpt-rag-chat-header-title">
+                        <img src="<?php echo esc_url( plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/avatar_small.png' ); ?>" alt="AI Avatar" class="cornuwab-wp-gpt-rag-chat-header-avatar" />
+                        مساعدك الذكي
+                    </h3>
+                    <div class="cornuwab-wp-gpt-rag-chat-header-actions">
+                        <button type="button" class="cornuwab-wp-gpt-rag-chat-refresh" aria-label="مسح المحادثة" title="مسح المحادثة">
+                            <i class="fas fa-rotate-right"></i>
+                        </button>
+                        <button type="button" class="cornuwab-wp-gpt-rag-chat-expand" aria-label="تكبير المحادثة" aria-expanded="false">
+                            <i class="fas fa-up-right-and-down-left-from-center"></i>
+                        </button>
+                        <button type="button" class="cornuwab-wp-gpt-rag-chat-toggle" aria-label="إغلاق المحادثة">
+                            <span class="cornuwab-wp-gpt-rag-chat-icon">×</span>
+                        </button>
+                    </div>
+                </div>
+            
+            <div class="cornuwab-wp-gpt-rag-chat-body">
+                <div class="cornuwab-wp-gpt-rag-chat-messages" id="cornuwab-wp-gpt-rag-chat-messages">
+                    <div class="cornuwab-wp-gpt-rag-chat-message cornuwab-wp-gpt-rag-chat-message-system">
+                        <div class="cornuwab-wp-gpt-rag-chat-message-content">
+                            مرحباً! يمكنني مساعدتك في إيجاد المعلومات من هذا الموقع. كيف يمكنني مساعدتك؟
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="cornuwab-wp-gpt-rag-chat-input-container">
+                    <div class="cornuwab-wp-gpt-rag-chat-input-wrapper">
+                        <input 
+                            type="text"
+                            id="cornuwab-wp-gpt-rag-chat-input" 
+                            placeholder="اكتب سؤالك هنا..."
+                        />
+                        <button type="button" id="cornuwab-wp-gpt-rag-chat-send" class="cornuwab-wp-gpt-rag-chat-send-button" aria-label="إرسال">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+                <div class="cornuwab-wp-gpt-rag-chat-footer">
+                    <small>
+                        هذه المنصة مدعومة بالذكاء الاصطناعي
+                    </small>
+                </div>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+    
+    /**
+     * Get ChatGPT template HTML
+     */
+    public function get_chatgpt_template_html() {
+        // Include the ChatGPT template
+        $template_path = plugin_dir_path(dirname(__FILE__)) . 'templates/chatgpt-arabic-template.php';
+        
+        if (file_exists($template_path)) {
+            ob_start();
+            include $template_path;
+            return ob_get_clean();
+        }
+        
+        // Fallback to default widget if template not found
+        return $this->get_default_chat_widget_html();
+    }
+    
+    /**
+     * Get default chat widget HTML (original implementation)
+     */
+    private function get_default_chat_widget_html() {
         ob_start();
         ?>
         <div id="cornuwab-wp-gpt-rag-chat-widget" class="cornuwab-wp-gpt-rag-chat-widget">
@@ -663,7 +756,7 @@ class Chat {
      * Check if chat should be displayed based on visibility settings
      */
     private function should_display_chat() {
-        $settings = $this->settings;
+        $settings = Settings::get_settings();
         $chat_visibility = $settings['chat_visibility'] ?? 'everyone';
         $is_user_logged_in = is_user_logged_in();
         
@@ -699,6 +792,13 @@ class Chat {
             if (!is_user_logged_in() || !current_user_can('manage_options')) {
                 return;
             }
+        }
+        
+        // Check if footer chat should be shown
+        if (empty($settings['show_chat_in_footer'])) {
+            // Debug: Log that footer chat is disabled
+            error_log('WP GPT RAG Chat: Footer chat is disabled. show_chat_in_footer = ' . ($settings['show_chat_in_footer'] ? 'true' : 'false'));
+            return;
         }
         
         // Output the chat widget
@@ -748,6 +848,7 @@ class Chat {
      */
     public function register_shortcode() {
         add_shortcode('wp_gpt_rag_chat', [$this, 'shortcode_callback']);
+        add_shortcode('wp_gpt_rag_chatgpt', [$this, 'chatgpt_shortcode_callback']);
     }
     
     /**
@@ -764,6 +865,42 @@ class Chat {
         }
         
         return $this->get_chat_widget_html();
+    }
+    
+    /**
+     * ChatGPT shortcode callback
+     */
+    public function chatgpt_shortcode_callback($atts) {
+        $atts = shortcode_atts([
+            'enabled' => '1',
+            'height' => '600px',
+            'width' => '100%'
+        ], $atts);
+        
+        if ($atts['enabled'] === '0') {
+            return '';
+        }
+        
+        // ChatGPT template is always available via shortcode
+        
+        // Return the ChatGPT template with custom styling
+        $template_html = $this->get_chatgpt_template_html();
+        
+        // Add custom styling for shortcode
+        $custom_style = '<style>
+            .chatgpt-container {
+                height: ' . esc_attr($atts['height']) . ';
+                width: ' . esc_attr($atts['width']) . ';
+                border-radius: 12px;
+                overflow: hidden;
+            }
+            /* Hide suggestion cards in shortcode */
+            .welcome-suggestions {
+                display: none !important;
+            }
+        </style>';
+        
+        return $custom_style . $template_html;
     }
     
     /**
@@ -822,5 +959,60 @@ class Chat {
             'queries_24h' => intval($stats->queries_24h ?? 0),
             'queries_7d' => intval($stats->queries_7d ?? 0)
         ];
+    }
+    
+    /**
+     * AJAX handler for sending messages
+     */
+    public function ajax_send_message() {
+        // Verify nonce for security
+        if (!wp_verify_nonce($_POST['nonce'], 'wp_gpt_rag_chat_nonce')) {
+            wp_send_json_error([
+                'message' => __('Security check failed. Please refresh the page and try again.', 'wp-gpt-rag-chat')
+            ]);
+        }
+        
+        $message = sanitize_text_field($_POST['message'] ?? '');
+        
+        if (empty($message)) {
+            wp_send_json_error([
+                'message' => __('Message cannot be empty.', 'wp-gpt-rag-chat')
+            ]);
+        }
+        
+        try {
+            // Get conversation history from session
+            $conversation_history = $this->get_conversation_history();
+            
+            // Process the query
+            $response = $this->process_query($message, $conversation_history);
+            
+            // Add to conversation history
+            $conversation_history[] = [
+                'role' => 'user',
+                'content' => $message,
+                'timestamp' => current_time('mysql')
+            ];
+            
+            $conversation_history[] = [
+                'role' => 'assistant',
+                'content' => $response,
+                'timestamp' => current_time('mysql')
+            ];
+            
+            // Save conversation history
+            $this->save_conversation_history($conversation_history);
+            
+            wp_send_json_success([
+                'response' => $response,
+                'metadata' => $this->get_last_rag_metadata()
+            ]);
+            
+        } catch (\Exception $e) {
+            error_log('WP GPT RAG Chat: ' . $e->getMessage());
+            wp_send_json_error([
+                'message' => __('Sorry, I encountered an error processing your request. Please try again.', 'wp-gpt-rag-chat')
+            ]);
+        }
     }
 }

@@ -434,6 +434,7 @@ class Plugin {
         // Enqueue for plugin pages
         if (strpos($hook, 'wp-gpt-rag-chat') !== false) {
             wp_enqueue_script('jquery');
+            wp_enqueue_media(); // Enable WordPress media library
             wp_enqueue_script(
                 'wp-gpt-rag-chat-admin',
                 WP_GPT_RAG_CHAT_PLUGIN_URL . 'assets/js/admin.js',

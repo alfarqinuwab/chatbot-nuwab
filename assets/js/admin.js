@@ -431,4 +431,35 @@
     // Make AdminInterface available globally for debugging
     window.WPGptRagChatAdmin = AdminInterface;
     
+    // Image upload functionality
+    window.wp_gpt_rag_chat_upload_image = function(fieldId) {
+        var frame = wp.media({
+            title: 'Select Chat Logo',
+            button: {
+                text: 'Use this image'
+            },
+            multiple: false
+        });
+        
+        frame.on('select', function() {
+            var attachment = frame.state().get('selection').first().toJSON();
+            $('#' + fieldId).val(attachment.url);
+            
+            // Update preview
+            var preview = $('#' + fieldId).siblings('.image-preview');
+            if (preview.length) {
+                preview.html('<img src="' + attachment.url + '" style="max-width: 100px; max-height: 100px; border: 1px solid #ddd;" /><br><a href="#" onclick="wp_gpt_rag_chat_remove_image(\'' + fieldId + '\'); return false;" style="color: #a00;">Remove</a>');
+            } else {
+                $('#' + fieldId).after('<div class="image-preview" style="margin-top: 10px;"><img src="' + attachment.url + '" style="max-width: 100px; max-height: 100px; border: 1px solid #ddd;" /><br><a href="#" onclick="wp_gpt_rag_chat_remove_image(\'' + fieldId + '\'); return false;" style="color: #a00;">Remove</a></div>');
+            }
+        });
+        
+        frame.open();
+    };
+    
+    window.wp_gpt_rag_chat_remove_image = function(fieldId) {
+        $('#' + fieldId).val('');
+        $('#' + fieldId).siblings('.image-preview').remove();
+    };
+    
 })(jQuery);

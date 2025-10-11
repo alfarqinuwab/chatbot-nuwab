@@ -713,6 +713,40 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                         </tr>
                     </table>
                 </div>
+                
+                <!-- Template Settings Section -->
+                <div class="cornuwab-settings-group">
+                    <h3><?php esc_html_e('Template Settings', 'wp-gpt-rag-chat'); ?></h3>
+                    <table class="cornuwab-form-table">
+                        <tr>
+                            <th scope="row"><?php esc_html_e('Chat Logo', 'wp-gpt-rag-chat'); ?></th>
+                            <td>
+                                <div class="image-upload-field">
+                                    <input type="url" id="chat_logo" name="wp_gpt_rag_chat_settings[chat_logo]" value="<?php echo esc_attr($settings['chat_logo'] ?? ''); ?>" class="regular-text" />
+                                    <input type="button" class="button button-secondary" value="<?php esc_attr_e('Select Image', 'wp-gpt-rag-chat'); ?>" onclick="wp_gpt_rag_chat_upload_image('chat_logo')" />
+                                    
+                                    <?php if (!empty($settings['chat_logo'])): ?>
+                                        <div class="image-preview" style="margin-top: 10px;">
+                                            <img src="<?php echo esc_url($settings['chat_logo']); ?>" style="max-width: 100px; max-height: 100px; border: 1px solid #ddd;" />
+                                            <br><a href="#" onclick="wp_gpt_rag_chat_remove_image('chat_logo'); return false;" style="color: #a00;"><?php esc_html_e('Remove', 'wp-gpt-rag-chat'); ?></a>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                <p class="description"><?php esc_html_e('Upload a logo to display in the chat header. Recommended size: 183x60px.', 'wp-gpt-rag-chat'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><?php esc_html_e('Show chat in footer', 'wp-gpt-rag-chat'); ?></th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" name="wp_gpt_rag_chat_settings[show_chat_in_footer]" value="1" <?php checked($settings['show_chat_in_footer'] ?? 1, 1); ?> />
+                                    <?php esc_html_e('Display the floating chat widget in the footer', 'wp-gpt-rag-chat'); ?>
+                                </label>
+                                <p class="description"><?php esc_html_e('Show the traditional floating chat widget in the footer of your website.', 'wp-gpt-rag-chat'); ?></p>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
             </div>
         </div>
 

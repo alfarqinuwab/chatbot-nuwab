@@ -89,39 +89,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             </div>
         </div>
         
-        <!-- Export Filters -->
-        <div class="export-filters">
-            <h2><?php esc_html_e('Export Filters', 'wp-gpt-rag-chat'); ?></h2>
-            <div class="filters-grid">
-                <div class="cor-nuwab-filter-group">
-                    <label for="date-from"><?php esc_html_e('From Date', 'wp-gpt-rag-chat'); ?></label>
-                    <input type="date" id="date-from" name="date_from" class="regular-text" />
-                </div>
-                
-                <div class="cor-nuwab-filter-group">
-                    <label for="date-to"><?php esc_html_e('To Date', 'wp-gpt-rag-chat'); ?></label>
-                    <input type="date" id="date-to" name="date_to" class="regular-text" />
-                </div>
-                
-                <div class="cor-nuwab-filter-group">
-                    <label for="user-type"><?php esc_html_e('User Type', 'wp-gpt-rag-chat'); ?></label>
-                    <select id="user-type" name="user_type" class="regular-text">
-                        <option value="all"><?php esc_html_e('All Users', 'wp-gpt-rag-chat'); ?></option>
-                        <option value="logged-in"><?php esc_html_e('Logged In Only', 'wp-gpt-rag-chat'); ?></option>
-                        <option value="anonymous"><?php esc_html_e('Anonymous Only', 'wp-gpt-rag-chat'); ?></option>
-                    </select>
-                </div>
-                
-                <div class="cor-nuwab-filter-group">
-                    <label for="export-format"><?php esc_html_e('Export Format', 'wp-gpt-rag-chat'); ?></label>
-                    <select id="export-format" name="export_format" class="regular-text">
-                        <option value="csv"><?php esc_html_e('CSV', 'wp-gpt-rag-chat'); ?></option>
-                        <option value="json"><?php esc_html_e('JSON', 'wp-gpt-rag-chat'); ?></option>
-                        <option value="xlsx"><?php esc_html_e('Excel (XLSX)', 'wp-gpt-rag-chat'); ?></option>
-                    </select>
-                </div>
-            </div>
-        </div>
+        <!-- Export Filters section removed -->
         
         <!-- Export History -->
         <div class="export-history">
@@ -254,26 +222,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     width: 100%;
 }
 
-.export-filters {
-    background: #fff;
-    border: 1px solid #e1e5e9;
-    border-radius: 8px;
-    padding: 24px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.export-filters h2 {
-    margin: 0 0 20px 0;
-    color: #1d2327;
-    font-size: 18px;
-}
-
-.filters-grid {
-    display: block;
-    overflow: hidden;
-    margin-bottom: 20px;
-}
+/* Export Filters CSS removed */
 
 /* Custom Filter Group Styles - Nuwab AI Assistant Only */
 .cor-nuwab-filter-group {

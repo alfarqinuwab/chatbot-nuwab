@@ -250,19 +250,6 @@ class Settings {
             'wp_gpt_rag_chat_retrieval',
             [ 'field' => 'final_context_chunks', 'min' => 3, 'max' => 12, 'step' => 1 ]
         );
-
-        // Main RAG toggle
-        add_settings_field(
-            'enable_rag',
-            __('Enable RAG (Retrieval-Augmented Generation)', 'wp-gpt-rag-chat'),
-            [$this, 'checkbox_field_callback'],
-            'wp_gpt_rag_chat_settings',
-            'wp_gpt_rag_chat_retrieval',
-            [ 
-                'field' => 'enable_rag',
-                'description' => __('Enable RAG to use your indexed content for AI responses. When disabled, AI will use only its training data.', 'wp-gpt-rag-chat')
-            ]
-        );
         
         // Chunking Settings Section
         add_settings_section(
@@ -414,40 +401,6 @@ class Settings {
                 ]
             ]
         );
-
-        // ChatGPT Template Settings Section
-        add_settings_section(
-            'wp_gpt_rag_chat_template',
-            '',
-            [$this, 'empty_section_callback'],
-            'wp_gpt_rag_chat_settings'
-        );
-
-
-        add_settings_field(
-            'chat_logo',
-            __('Chat Logo', 'wp-gpt-rag-chat'),
-            [$this, 'image_upload_field_callback'],
-            'wp_gpt_rag_chat_settings',
-            'wp_gpt_rag_chat_template',
-            [
-                'field' => 'chat_logo',
-                'description' => __('Upload a logo to display in the chat header. Recommended size: 183x60px.', 'wp-gpt-rag-chat')
-            ]
-        );
-
-        add_settings_field(
-            'show_chat_in_footer',
-            __('Show chat in footer', 'wp-gpt-rag-chat'),
-            [$this, 'checkbox_field_callback'],
-            'wp_gpt_rag_chat_settings',
-            'wp_gpt_rag_chat_template',
-            [
-                'field' => 'show_chat_in_footer',
-                'description' => __('Display the floating chat widget in the footer.', 'wp-gpt-rag-chat')
-            ]
-        );
-
     }
     
     /**
@@ -510,10 +463,6 @@ class Settings {
         $sanitized['anonymize_ips'] = isset($input['anonymize_ips']) ? (bool) $input['anonymize_ips'] : false;
         $sanitized['require_consent'] = isset($input['require_consent']) ? (bool) $input['require_consent'] : true;
         $sanitized['enable_pii_masking'] = isset($input['enable_pii_masking']) ? (bool) $input['enable_pii_masking'] : true;
-        
-        // Template settings
-        $sanitized['chat_logo'] = isset($input['chat_logo']) ? esc_url_raw($input['chat_logo']) : '';
-        $sanitized['show_chat_in_footer'] = isset($input['show_chat_in_footer']) ? (bool) $input['show_chat_in_footer'] : true;
 
         // RAG enhancements
         $sanitized['enable_query_expansion'] = isset($input['enable_query_expansion']) ? (bool) $input['enable_query_expansion'] : true;
@@ -726,9 +675,6 @@ class Settings {
      */
     public static function get_settings() {
         $defaults = [
-            // RAG settings
-            'enable_rag' => true,
-            
             // OpenAI settings
             'openai_api_key' => '',
             'openai_environment' => 'openai',
@@ -801,10 +747,6 @@ class Settings {
             'enable_auto_indexing' => true,
             'auto_index_post_types' => ['post', 'page'],
             'auto_index_delay' => 30,
-            
-        // Template settings
-        'chat_logo' => '',
-        'show_chat_in_footer' => true,
         ];
         
         $settings = get_option(self::OPTION_NAME, []);
@@ -919,27 +861,6 @@ class Settings {
             echo '</label>';
         }
         echo '</fieldset>';
-        
-        if (!empty($args['description'])) {
-            echo '<p class="description">' . esc_html($args['description']) . '</p>';
-        }
-    }
-
-    public function image_upload_field_callback($args) {
-        $settings = self::get_settings();
-        $value = $settings[$args['field']] ?? '';
-        
-        echo '<div class="image-upload-field">';
-        echo '<input type="url" id="' . esc_attr($args['field']) . '" name="' . self::OPTION_NAME . '[' . esc_attr($args['field']) . ']" value="' . esc_attr($value) . '" class="regular-text" />';
-        echo '<input type="button" class="button button-secondary" value="' . esc_attr__('Select Image', 'wp-gpt-rag-chat') . '" onclick="wp_gpt_rag_chat_upload_image(\'' . esc_attr($args['field']) . '\')" />';
-        
-        if (!empty($value)) {
-            echo '<div class="image-preview" style="margin-top: 10px;">';
-            echo '<img src="' . esc_url($value) . '" style="max-width: 100px; max-height: 100px; border: 1px solid #ddd;" />';
-            echo '<br><a href="#" onclick="wp_gpt_rag_chat_remove_image(\'' . esc_attr($args['field']) . '\'); return false;" style="color: #a00;">' . esc_html__('Remove', 'wp-gpt-rag-chat') . '</a>';
-            echo '</div>';
-        }
-        echo '</div>';
         
         if (!empty($args['description'])) {
             echo '<p class="description">' . esc_html($args['description']) . '</p>';

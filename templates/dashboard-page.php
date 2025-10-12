@@ -11,10 +11,28 @@ if (!defined('ABSPATH')) {
 $stats = WP_GPT_RAG_Chat\Admin::get_indexing_stats();
 $chat_stats = WP_GPT_RAG_Chat\Chat::get_chat_stats();
 $settings = WP_GPT_RAG_Chat\Settings::get_settings();
+$user_role = WP_GPT_RAG_Chat\RBAC::get_user_role_display();
+$is_aims_manager = WP_GPT_RAG_Chat\RBAC::is_aims_manager();
+$is_log_viewer = WP_GPT_RAG_Chat\RBAC::is_log_viewer();
 ?>
 
 <div class="wrap cornuwab-admin-wrap">
     <h1><?php esc_html_e('WP GPT RAG Chat Dashboard', 'wp-gpt-rag-chat'); ?></h1>
+    
+    <!-- Role Information -->
+    <div class="role-info">
+        <div class="role-badge <?php echo $is_aims_manager ? 'aims-manager' : 'log-viewer'; ?>">
+            <span class="role-label"><?php esc_html_e('Your Role:', 'wp-gpt-rag-chat'); ?></span>
+            <span class="role-name"><?php echo esc_html($user_role); ?></span>
+        </div>
+        <div class="role-description">
+            <?php if ($is_aims_manager): ?>
+                <p><?php esc_html_e('You have full access to all plugin features and settings.', 'wp-gpt-rag-chat'); ?></p>
+            <?php elseif ($is_log_viewer): ?>
+                <p><?php esc_html_e('You have read-only access to system logs and basic dashboard information.', 'wp-gpt-rag-chat'); ?></p>
+            <?php endif; ?>
+        </div>
+    </div>
     
     <div class="wp-gpt-rag-chat-dashboard">
         <!-- Overview Stats -->
@@ -46,7 +64,8 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             </div>
         </div>
         
-        <!-- Quick Actions -->
+        <!-- Quick Actions (Administrators only) -->
+        <?php if ($is_aims_manager): ?>
         <div class="dashboard-actions">
             <h2><?php esc_html_e('Quick Actions', 'wp-gpt-rag-chat'); ?></h2>
             
@@ -76,8 +95,10 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 </div>
             </div>
         </div>
+        <?php endif; ?>
         
-        <!-- Configuration Status -->
+        <!-- Configuration Status (Administrators only) -->
+        <?php if ($is_aims_manager): ?>
         <div class="dashboard-status">
             <h2><?php esc_html_e('Configuration Status', 'wp-gpt-rag-chat'); ?></h2>
             
@@ -143,6 +164,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 </div>
             </div>
         </div>
+        <?php endif; ?>
         
         <!-- Recent Activity -->
         <div class="dashboard-activity">
@@ -238,6 +260,61 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         </div>
     </div>
 </div>
+
+<style>
+.role-info {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+.role-badge.aims-manager {
+    background: #d1a85f;
+    color: #ffffff;
+}
+
+.role-badge.log-viewer {
+    background: #0073aa;
+    color: #ffffff;
+}
+
+.role-label {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.role-name {
+    font-size: 16px;
+}
+
+.role-description p {
+    margin: 0;
+    color: #646970;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+    .role-badge {
+        flex-direction: column;
+        text-align: center;
+        gap: 5px;
+    }
+}
+</style>
 
 <style>
 .wp-gpt-rag-chat-dashboard {

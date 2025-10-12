@@ -11,8 +11,15 @@ use WP_GPT_RAG_Chat\Analytics;
 use WP_GPT_RAG_Chat\Error_Logger;
 use WP_GPT_RAG_Chat\API_Usage_Tracker;
 use WP_GPT_RAG_Chat\Migration;
+use WP_GPT_RAG_Chat\RBAC;
 
 $analytics = new Analytics();
+
+// Determine the correct page parameter based on user role
+$current_page = 'wp-gpt-rag-chat-analytics'; // Default for administrators
+if (RBAC::is_log_viewer() && !RBAC::is_aims_manager()) {
+    $current_page = 'wp-gpt-rag-chat-analytics-editor'; // For editors
+}
 
 // Ensure database tables exist
 $current_version = get_option('wp_gpt_rag_chat_db_version', '1.0.0');
@@ -84,16 +91,16 @@ $total_pages = ceil($total_logs / $per_page);
     <h1><?php _e('Nuwab AI Assistant - Analytics & Logs', 'wp-gpt-rag-chat'); ?></h1>
     
     <div class="nav-tab-wrapper">
-        <a href="?page=wp-gpt-rag-chat-analytics&tab=logs" class="nav-tab <?php echo (!isset($_GET['tab']) || $_GET['tab'] === 'logs') ? 'nav-tab-active' : ''; ?>">
+        <a href="?page=<?php echo esc_attr($current_page); ?>&tab=logs" class="nav-tab <?php echo (!isset($_GET['tab']) || $_GET['tab'] === 'logs') ? 'nav-tab-active' : ''; ?>">
             <?php _e('Logs', 'wp-gpt-rag-chat'); ?>
         </a>
-        <a href="?page=wp-gpt-rag-chat-analytics&tab=dashboard" class="nav-tab <?php echo (isset($_GET['tab']) && $_GET['tab'] === 'dashboard') ? 'nav-tab-active' : ''; ?>">
+        <a href="?page=<?php echo esc_attr($current_page); ?>&tab=dashboard" class="nav-tab <?php echo (isset($_GET['tab']) && $_GET['tab'] === 'dashboard') ? 'nav-tab-active' : ''; ?>">
             <?php _e('Dashboard', 'wp-gpt-rag-chat'); ?>
         </a>
-        <a href="?page=wp-gpt-rag-chat-analytics&tab=error-logs" class="nav-tab <?php echo (isset($_GET['tab']) && $_GET['tab'] === 'error-logs') ? 'nav-tab-active' : ''; ?>">
+        <a href="?page=<?php echo esc_attr($current_page); ?>&tab=error-logs" class="nav-tab <?php echo (isset($_GET['tab']) && $_GET['tab'] === 'error-logs') ? 'nav-tab-active' : ''; ?>">
             <?php _e('Error Logs', 'wp-gpt-rag-chat'); ?>
         </a>
-        <a href="?page=wp-gpt-rag-chat-analytics&tab=api-usage" class="nav-tab <?php echo (isset($_GET['tab']) && $_GET['tab'] === 'api-usage') ? 'nav-tab-active' : ''; ?>">
+        <a href="?page=<?php echo esc_attr($current_page); ?>&tab=api-usage" class="nav-tab <?php echo (isset($_GET['tab']) && $_GET['tab'] === 'api-usage') ? 'nav-tab-active' : ''; ?>">
             <?php _e('API Usage', 'wp-gpt-rag-chat'); ?>
         </a>
     </div>
@@ -104,7 +111,7 @@ $total_pages = ceil($total_logs / $per_page);
             <h2><?php _e('Chat Logs', 'wp-gpt-rag-chat'); ?></h2>
             
             <form method="get" class="analytics-filters" id="analytics-filters" style="display: none;">
-                <input type="hidden" name="page" value="wp-gpt-rag-chat-analytics">
+                <input type="hidden" name="page" value="<?php echo esc_attr($current_page); ?>">
                 <input type="hidden" name="tab" value="logs">
                 
                 <div class="filter-row">
@@ -159,7 +166,7 @@ $total_pages = ceil($total_logs / $per_page);
                         <span class="dashicons dashicons-filter" style="vertical-align: middle; margin-top: 4px;"></span>
                         <?php _e('Apply Filters', 'wp-gpt-rag-chat'); ?>
                     </button>
-                    <a href="?page=wp-gpt-rag-chat-analytics&tab=logs" class="button">
+                    <a href="?page=<?php echo esc_attr($current_page); ?>&tab=logs" class="button">
                         <span class="dashicons dashicons-dismiss" style="vertical-align: middle; margin-top: 4px;"></span>
                         <?php _e('Clear Filters', 'wp-gpt-rag-chat'); ?>
                     </a>
@@ -580,7 +587,7 @@ $total_pages = ceil($total_logs / $per_page);
             
             <!-- Error Filters -->
             <form method="get" class="analytics-filters" id="error-filters" style="display: none;">
-                <input type="hidden" name="page" value="wp-gpt-rag-chat-analytics">
+                <input type="hidden" name="page" value="<?php echo esc_attr($current_page); ?>">
                 <input type="hidden" name="tab" value="error-logs">
                 
                 <div class="filter-row">
@@ -621,7 +628,7 @@ $total_pages = ceil($total_logs / $per_page);
                         <span class="dashicons dashicons-filter" style="vertical-align: middle; margin-top: 4px;"></span>
                         <?php _e('Apply Filters', 'wp-gpt-rag-chat'); ?>
                     </button>
-                    <a href="?page=wp-gpt-rag-chat-analytics&tab=error-logs" class="button">
+                    <a href="?page=<?php echo esc_attr($current_page); ?>&tab=error-logs" class="button">
                         <span class="dashicons dashicons-dismiss" style="vertical-align: middle; margin-top: 4px;"></span>
                         <?php _e('Clear Filters', 'wp-gpt-rag-chat'); ?>
                     </a>
@@ -846,7 +853,7 @@ $total_pages = ceil($total_logs / $per_page);
             
             <!-- Usage Filters -->
             <form method="get" class="analytics-filters" id="usage-filters" style="display: none;">
-                <input type="hidden" name="page" value="wp-gpt-rag-chat-analytics">
+                <input type="hidden" name="page" value="<?php echo esc_attr($current_page); ?>">
                 <input type="hidden" name="tab" value="api-usage">
                 
                 <div class="filter-row">
@@ -880,7 +887,7 @@ $total_pages = ceil($total_logs / $per_page);
                         <span class="dashicons dashicons-filter" style="vertical-align: middle; margin-top: 4px;"></span>
                         <?php _e('Apply Filters', 'wp-gpt-rag-chat'); ?>
                     </button>
-                    <a href="?page=wp-gpt-rag-chat-analytics&tab=api-usage" class="button">
+                    <a href="?page=<?php echo esc_attr($current_page); ?>&tab=api-usage" class="button">
                         <span class="dashicons dashicons-dismiss" style="vertical-align: middle; margin-top: 4px;"></span>
                         <?php _e('Clear Filters', 'wp-gpt-rag-chat'); ?>
                     </a>

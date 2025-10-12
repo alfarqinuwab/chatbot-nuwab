@@ -32,6 +32,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         body {
@@ -671,6 +672,165 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             color: #646970;
         }
 
+        /* Disabled input state during AI processing */
+        .chat-input:disabled {
+            background: #f5f5f5;
+            color: #999;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .chat-input:disabled::placeholder {
+            color: #ccc;
+        }
+
+        .chat-input-container.processing .chat-input {
+            background: #f5f5f5;
+            color: #999;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .chat-input-container.processing .chat-input::placeholder {
+            color: #ccc;
+        }
+
+        /* Sensitive input warning styles */
+        .sensitive-input-warning {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #fff;
+            border: 2px solid #dc3545;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            z-index: 10000;
+            text-align: center;
+            direction: rtl;
+            font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .sensitive-input-warning h3 {
+            color: #dc3545;
+            margin-bottom: 15px;
+            font-size: 18px;
+            font-weight: 600;
+            font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .sensitive-input-warning p {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.6;
+            font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .sensitive-input-warning .warning-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .sensitive-input-warning .warning-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .sensitive-input-warning .warning-btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .sensitive-input-warning .warning-btn-danger:hover {
+            background: #c82333;
+        }
+
+        .sensitive-input-warning .warning-btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .sensitive-input-warning .warning-btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .sensitive-input-warning .detected-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: right;
+            font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .sensitive-input-warning .detected-info strong {
+            color: #dc3545;
+            font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .sensitive-input-warning .detected-info small {
+            font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .sensitive-input-warning .warning-icon {
+            font-size: 48px;
+            color: #dc3545;
+            margin-bottom: 15px;
+        }
+
+        .sensitive-input-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+        }
+
+        /* Input validation styles */
+        .chat-input.sensitive-detected {
+            border-color: #dc3545;
+            background: #fff5f5;
+        }
+
+        .chat-input.sensitive-detected::placeholder {
+            color: #dc3545;
+        }
+
+        .welcome-input.sensitive-detected {
+            border-color: #dc3545;
+            background: #fff5f5;
+        }
+
+        .welcome-input.sensitive-detected::placeholder {
+            color: #dc3545;
+        }
+        
+        /* Enhanced sensitive content detection styles */
+        .chat-input.sensitive-detected:focus,
+        .welcome-input.sensitive-detected:focus {
+            border-color: #ff2222 !important;
+            box-shadow: 0 0 0 3px rgba(255, 68, 68, 0.3) !important;
+        }
+        
+        .chat-input.sensitive-detected::placeholder,
+        .welcome-input.sensitive-detected::placeholder {
+            color: #ff4444 !important;
+            font-weight: 500;
+        }
+
         .chat-input-actions {
             position: absolute;
             left: 12px;
@@ -776,6 +936,193 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             .message-text {
                 font-size: 14px;
                 padding: 12px 16px;
+            }
+        }
+
+        /* Usage modal styles */
+        .usage-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .usage-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .usage-modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90vw;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+        
+        .usage-modal.show .usage-modal-content {
+            transform: translate(-50%, -50%) scale(1);
+        }
+        
+        .usage-modal-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        
+        .usage-modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .usage-modal-text {
+            font-size: 16px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+        
+        .usage-modal-checkbox {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 25px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .usage-modal-checkbox:hover {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+        }
+        
+        .usage-modal-checkbox input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #007cba;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+            display: inline-block;
+            vertical-align: middle;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+        }
+        
+        .usage-modal-checkbox input[type="checkbox"]:hover {
+            border-color: #007cba;
+            background: white;
+        }
+        
+        .usage-modal-checkbox input[type="checkbox"]:checked {
+            background: #007cba;
+            border-color: #007cba;
+            position: relative;
+        }
+        
+        .usage-modal-checkbox input[type="checkbox"]:checked::after {
+            content: "✓";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .usage-modal-checkbox label {
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            margin: 0;
+            color: #333;
+        }
+        
+        .usage-modal-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        .usage-modal-button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .usage-modal-button.primary {
+            background: #ff6b6b;
+            color: white;
+        }
+        
+        .usage-modal-button.primary:hover {
+            background: #ff5252;
+        }
+        
+        .usage-modal-button.primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .usage-modal-button.secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .usage-modal-button.secondary:hover {
+            background: #5a6268;
+        }
+        
+        /* Responsive modal styles */
+        @media (max-width: 768px) {
+            .usage-modal-content {
+                padding: 20px;
+                max-width: 90%;
+            }
+            
+            .usage-modal-title {
+                font-size: 20px;
+            }
+            
+            .usage-modal-text {
+                font-size: 14px;
+            }
+            
+            .usage-modal-buttons {
+                flex-direction: column;
+            }
+            
+            .usage-modal-button {
+                width: 100%;
             }
         }
 
@@ -946,6 +1293,29 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     </style>
 </head>
 <body>
+    <!-- Usage Modal -->
+    <div class="usage-modal" id="usageModal">
+        <div class="usage-modal-content">
+            <div class="usage-modal-icon">⚠️</div>
+            <h2 class="usage-modal-title">تنبيه مهم</h2>
+            <p class="usage-modal-text">
+                هذا المساعد الذكي مخصص للاستخدام الداخلي فقط. يرجى التحقق من المخرجات قبل الاستخدام.
+            </p>
+            <div class="usage-modal-checkbox">
+                <input type="checkbox" id="usageCheckbox" />
+                <label for="usageCheckbox">أوافق على شروط الاستخدام</label>
+            </div>
+            <div class="usage-modal-buttons">
+                <button class="usage-modal-button primary" id="usageModalAgree" disabled>
+                    موافق
+                </button>
+                <button class="usage-modal-button secondary" id="usageModalCancel">
+                    إلغاء
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="chatgpt-container">
         <!-- Sidebar -->
         <div class="chatgpt-sidebar" id="sidebar">
@@ -1067,6 +1437,61 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Usage modal elements
+            const usageModal = document.getElementById('usageModal');
+            const usageCheckbox = document.getElementById('usageCheckbox');
+            const usageModalAgree = document.getElementById('usageModalAgree');
+            const usageModalCancel = document.getElementById('usageModalCancel');
+            
+            // Cookie functions
+            function setCookie(name, value, days) {
+                const expires = new Date();
+                expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+                document.cookie = name + '=' + value + ';expires=' + expires.toUTCString() + ';path=/';
+            }
+            
+            function getCookie(name) {
+                const nameEQ = name + '=';
+                const ca = document.cookie.split(';');
+                for (let i = 0; i < ca.length; i++) {
+                    let c = ca[i];
+                    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+                }
+                return null;
+            }
+            
+            // Check if user has already acknowledged
+            if (getCookie('nuwab_ai_usage_acknowledged') === 'true') {
+                usageModal.style.display = 'none';
+            } else {
+                // Show modal on first load
+                setTimeout(() => {
+                    usageModal.classList.add('show');
+                }, 500);
+            }
+            
+            // Handle checkbox change
+            usageCheckbox.addEventListener('change', function() {
+                usageModalAgree.disabled = !this.checked;
+            });
+            
+            // Handle agree button
+            usageModalAgree.addEventListener('click', function() {
+                if (usageCheckbox.checked) {
+                    usageModal.classList.remove('show');
+                    // Store acknowledgment in cookie for 30 days
+                    setCookie('nuwab_ai_usage_acknowledged', 'true', 30);
+                }
+            });
+            
+            // Handle cancel button
+            usageModalCancel.addEventListener('click', function() {
+                usageModal.classList.remove('show');
+                // Redirect to home page or close window
+                window.location.href = '/';
+            });
+            
             const chatInput = document.getElementById('chatInput');
             const sendBtn = document.getElementById('sendBtn');
             const chatMessages = document.getElementById('chatMessages');
@@ -1077,6 +1502,192 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             
             // Abort controller for cancelling requests
             let currentAbortController = null;
+            
+            // Sensitive input detection patterns
+            const sensitivePatterns = {
+                email: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
+                cpr: /(\d{6}-\d{4})|(\d{10})/g,
+                phone: /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g,
+                creditCard: /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
+                ssn: /\b\d{3}-\d{2}-\d{4}\b/g,
+                passport: /\b[A-Z]{1,2}\d{6,9}\b/g,
+                nationalId: /\b\d{9,14}\b/g,
+                password: /(?:password|كلمة المرور|كلمة السر|باسورد|باسوورد)\s*[:=]?\s*[^\s]+/gi,
+                apiKey: /(?:api[_-]?key|api[_-]?token|access[_-]?token|bearer[_-]?token|secret[_-]?key)\s*[:=]?\s*[a-zA-Z0-9_\-\.]{20,}/gi,
+                secretKey: /(?:secret[_-]?key|private[_-]?key|encryption[_-]?key)\s*[:=]?\s*[a-zA-Z0-9_\-\.]{20,}/gi,
+                token: /(?:token|رمز|توكين)\s*[:=]?\s*[a-zA-Z0-9_\-\.]{20,}/gi,
+                authToken: /(?:auth[_-]?token|authorization[_-]?token)\s*[:=]?\s*[a-zA-Z0-9_\-\.]{20,}/gi,
+                jwt: /eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+/g,
+                awsKey: /AKIA[0-9A-Z]{16}/g,
+                googleApiKey: /AIza[0-9A-Za-z_-]{35}/g,
+                openaiKey: /sk-[a-zA-Z0-9]{48}/g,
+                githubToken: /ghp_[a-zA-Z0-9]{36}/g,
+                slackToken: /xox[baprs]-[a-zA-Z0-9-]+/g,
+                discordToken: /[MN][A-Za-z\d]{23}\.[\w-]{6}\.[\w-]{27}/g
+            };
+            
+            // Sensitive input detection function
+            function detectSensitiveInput(text) {
+                const detected = [];
+                
+                for (const [type, pattern] of Object.entries(sensitivePatterns)) {
+                    const matches = text.match(pattern);
+                    if (matches) {
+                        detected.push({
+                            type: type,
+                            matches: matches,
+                            count: matches.length
+                        });
+                    }
+                }
+                
+                return detected;
+            }
+            
+            // Show sensitive input warning
+            function showSensitiveWarning(detectedItems) {
+                // Create overlay
+                const overlay = document.createElement('div');
+                overlay.className = 'sensitive-input-overlay';
+                overlay.id = 'sensitiveInputOverlay';
+                
+                // Create warning modal
+                const warning = document.createElement('div');
+                warning.className = 'sensitive-input-warning';
+                warning.id = 'sensitiveInputWarning';
+                
+                // Build detected items list
+                let detectedList = '';
+                detectedItems.forEach(item => {
+                    const typeNames = {
+                        email: 'البريد الإلكتروني',
+                        cpr: 'رقم الهوية الشخصية (CPR)',
+                        phone: 'رقم الهاتف',
+                        creditCard: 'رقم البطاقة الائتمانية',
+                        ssn: 'رقم الضمان الاجتماعي',
+                        passport: 'رقم جواز السفر',
+                        nationalId: 'رقم الهوية الوطنية',
+                        password: 'كلمة المرور',
+                        apiKey: 'مفتاح API',
+                        secretKey: 'المفتاح السري',
+                        token: 'الرمز المميز',
+                        authToken: 'رمز المصادقة',
+                        jwt: 'رمز JWT',
+                        awsKey: 'مفتاح AWS',
+                        googleApiKey: 'مفتاح Google API',
+                        openaiKey: 'مفتاح OpenAI',
+                        githubToken: 'رمز GitHub',
+                        slackToken: 'رمز Slack',
+                        discordToken: 'رمز Discord'
+                    };
+                    
+                    detectedList += `
+                        <div class="detected-info">
+                            <strong>${typeNames[item.type] || item.type}:</strong> ${item.count} ${item.count === 1 ? 'مطابقة' : 'مطابقات'}
+                            <br><small>${item.matches.slice(0, 3).join(', ')}${item.matches.length > 3 ? '...' : ''}</small>
+                        </div>
+                    `;
+                });
+                
+                warning.innerHTML = `
+                    <div class="warning-icon">⚠️</div>
+                    <h3>تحذير: معلومات حساسة مكتشفة</h3>
+                    <p>تم اكتشاف معلومات حساسة في رسالتك. يرجى عدم مشاركة المعلومات الشخصية في المحادثة.</p>
+                    ${detectedList}
+                    <div class="warning-buttons">
+                        <button class="warning-btn warning-btn-danger" onclick="removeSensitiveContent()">
+                            إزالة المحتوى الحساس
+                        </button>
+                        <button class="warning-btn warning-btn-secondary" onclick="closeSensitiveWarning()">
+                            إلغاء
+                        </button>
+                    </div>
+                `;
+                
+                // Add to page
+                document.body.appendChild(overlay);
+                document.body.appendChild(warning);
+                
+                // Prevent body scroll
+                document.body.style.overflow = 'hidden';
+            }
+            
+            // Remove sensitive content function
+            window.removeSensitiveContent = function() {
+                const chatInput = document.getElementById('chatInput');
+                const welcomeInput = document.getElementById('welcomeInput');
+                
+                let currentInput = chatInput && chatInput.style.display !== 'none' ? chatInput : welcomeInput;
+                
+                if (currentInput) {
+                    let text = currentInput.value;
+                    
+                    // Remove sensitive patterns
+                    for (const [type, pattern] of Object.entries(sensitivePatterns)) {
+                        text = text.replace(pattern, '[معلومات حساسة]');
+                    }
+                    
+                    currentInput.value = text;
+                    currentInput.classList.remove('sensitive-detected');
+                }
+                
+                closeSensitiveWarning();
+            };
+            
+            // Close sensitive warning function
+            window.closeSensitiveWarning = function() {
+                const overlay = document.getElementById('sensitiveInputOverlay');
+                const warning = document.getElementById('sensitiveInputWarning');
+                
+                if (overlay) overlay.remove();
+                if (warning) warning.remove();
+                
+                // Restore body scroll
+                document.body.style.overflow = '';
+            };
+            
+            // Validate input for sensitive content
+            function validateInput(input) {
+                const text = input.value.trim();
+                if (!text) return true;
+                
+                const detected = detectSensitiveInput(text);
+                if (detected.length > 0) {
+                    input.classList.add('sensitive-detected');
+                    showSensitiveWarning(detected);
+                    return false;
+                } else {
+                    input.classList.remove('sensitive-detected');
+                    return true;
+                }
+            }
+            
+            // Real-time validation on input change
+            function validateInputRealtime(input) {
+                const text = input.value.trim();
+                if (!text) {
+                    input.classList.remove('sensitive-detected');
+                    return true;
+                }
+                
+                const detected = detectSensitiveInput(text);
+                if (detected.length > 0) {
+                    input.classList.add('sensitive-detected');
+                    return false;
+                } else {
+                    input.classList.remove('sensitive-detected');
+                    return true;
+                }
+            }
+            
+            // Check if input has sensitive content (without showing warning)
+            function hasSensitiveContent(input) {
+                const text = input.value.trim();
+                if (!text) return false;
+                
+                const detected = detectSensitiveInput(text);
+                return detected.length > 0;
+            }
             
             // Load chat history from session storage
             loadChatHistory();
@@ -1092,6 +1703,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 } else {
                     this.classList.remove('extended');
                 }
+                
+                // Real-time sensitive content validation
+                validateInputRealtime(this);
             });
 
             // Auto-resize welcome textarea
@@ -1105,6 +1719,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 } else {
                     this.classList.remove('extended');
                 }
+                
+                // Real-time sensitive content validation
+                validateInputRealtime(this);
             });
 
             // Send message function
@@ -1121,6 +1738,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 
                 // Add user message
                 addMessage('user', message);
+                
+                // Disable input during processing
+                disableInput();
                 
                 // Show typing indicator
                 showTypingIndicator();
@@ -1303,6 +1923,75 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 }
             }
 
+            // Disable input during AI processing
+            function disableInput() {
+                const chatInput = document.getElementById('chatInput');
+                const welcomeInput = document.getElementById('welcomeInput');
+                const inputContainer = document.querySelector('.chat-input-container');
+                
+                // Disable chat input
+                if (chatInput) {
+                    chatInput.disabled = true;
+                    chatInput.placeholder = 'جاري المعالجة...';
+                }
+                
+                // Disable welcome input
+                if (welcomeInput) {
+                    welcomeInput.disabled = true;
+                    welcomeInput.placeholder = 'جاري المعالجة...';
+                }
+                
+                // Add processing class to container
+                if (inputContainer) {
+                    inputContainer.classList.add('processing');
+                }
+            }
+
+            // Enable input after AI processing
+            function enableInput() {
+                const chatInput = document.getElementById('chatInput');
+                const welcomeInput = document.getElementById('welcomeInput');
+                const inputContainer = document.querySelector('.chat-input-container');
+                
+                // Enable chat input
+                if (chatInput) {
+                    chatInput.disabled = false;
+                    chatInput.placeholder = 'اكتب رسالتك هنا...';
+                }
+                
+                // Enable welcome input
+                if (welcomeInput) {
+                    welcomeInput.disabled = false;
+                    welcomeInput.placeholder = 'اكتب رسالتك هنا...';
+                }
+                
+                // Remove processing class from container
+                if (inputContainer) {
+                    inputContainer.classList.remove('processing');
+                }
+            }
+
+            // Force stop AI processing (used when New Chat is clicked)
+            function forceStopAIProcessing() {
+                // Abort any ongoing request
+                if (currentAbortController) {
+                    currentAbortController.abort();
+                    currentAbortController = null;
+                }
+                
+                // Hide typing indicator immediately
+                hideTypingIndicator();
+                
+                // Enable input immediately
+                enableInput();
+                
+                // Change stop button back to send button
+                changeToSendButton();
+                
+                // Clear any pending AI response
+                console.log('AI processing force stopped by New Chat');
+            }
+
             // Send to backend
             // Change send button to stop button
             function changeToStopButton() {
@@ -1328,6 +2017,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 sendBtn.title = 'إرسال';
                 sendIcon.className = 'fas fa-paper-plane';
                 
+                // Enable input after processing
+                enableInput();
+                
                 // Remove existing event listeners and add send functionality
                 sendBtn.replaceWith(sendBtn.cloneNode(true));
                 const newSendBtn = document.getElementById('sendBtn');
@@ -1352,6 +2044,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 
                 // Hide typing indicator
                 hideTypingIndicator();
+                
+                // Enable input after stopping
+                enableInput();
                 
                 // Change back to send button
                 changeToSendButton();
@@ -1381,6 +2076,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     // Clear abort controller
                     currentAbortController = null;
                     
+                    // Enable input after processing
+                    enableInput();
+                    
                     // Change back to send button
                     changeToSendButton();
                     
@@ -1395,6 +2093,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     
                     // Clear abort controller
                     currentAbortController = null;
+                    
+                    // Enable input after error
+                    enableInput();
                     
                     // Change back to send button
                     changeToSendButton();
@@ -1413,8 +2114,21 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 
             // Event listeners
             sendBtn.addEventListener('click', function() {
+                // Don't send if input is disabled
+                if (chatInput.disabled) return;
+                
                 const message = chatInput.value.trim();
                 if (message) {
+                    // Check for sensitive content (block if present)
+                    if (hasSensitiveContent(chatInput)) {
+                        // Show warning if not already shown
+                        if (!document.querySelector('.sensitive-input-warning')) {
+                            const detected = detectSensitiveInput(message);
+                            showSensitiveWarning(detected);
+                        }
+                        return; // Block submission
+                    }
+                    
                     sendMessage(message);
                     chatInput.value = '';
                     chatInput.style.height = 'auto';
@@ -1423,10 +2137,23 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             });
 
             chatInput.addEventListener('keydown', function(e) {
+                // Don't send if input is disabled
+                if (this.disabled) return;
+                
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     const message = this.value.trim();
                     if (message) {
+                        // Check for sensitive content (block if present)
+                        if (hasSensitiveContent(this)) {
+                            // Show warning if not already shown
+                            if (!document.querySelector('.sensitive-input-warning')) {
+                                const detected = detectSensitiveInput(message);
+                                showSensitiveWarning(detected);
+                            }
+                            return; // Block submission
+                        }
+                        
                         sendMessage(message);
                         this.value = '';
                         this.style.height = 'auto';
@@ -1437,8 +2164,21 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 
             // Welcome input event listeners
             welcomeSendBtn.addEventListener('click', function() {
+                // Don't send if input is disabled
+                if (welcomeInput.disabled) return;
+                
                 const message = welcomeInput.value.trim();
                 if (message) {
+                    // Check for sensitive content (block if present)
+                    if (hasSensitiveContent(welcomeInput)) {
+                        // Show warning if not already shown
+                        if (!document.querySelector('.sensitive-input-warning')) {
+                            const detected = detectSensitiveInput(message);
+                            showSensitiveWarning(detected);
+                        }
+                        return; // Block submission
+                    }
+                    
                     // Hide welcome screen when chat starts
                     welcomeScreen.style.display = 'none';
                     welcomeScreen.style.visibility = 'hidden';
@@ -1455,10 +2195,23 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             });
 
             welcomeInput.addEventListener('keydown', function(e) {
+                // Don't send if input is disabled
+                if (this.disabled) return;
+                
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     const message = this.value.trim();
                     if (message) {
+                        // Check for sensitive content (block if present)
+                        if (hasSensitiveContent(this)) {
+                            // Show warning if not already shown
+                            if (!document.querySelector('.sensitive-input-warning')) {
+                                const detected = detectSensitiveInput(message);
+                                showSensitiveWarning(detected);
+                            }
+                            return; // Block submission
+                        }
+                        
                         // Hide welcome screen when chat starts
                         welcomeScreen.style.display = 'none';
                         welcomeScreen.style.visibility = 'hidden';
@@ -1476,6 +2229,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             });
 
             newChatBtn.addEventListener('click', function() {
+                // Force stop any ongoing AI processing
+                forceStopAIProcessing();
+                
                 // Clear only the chat messages, not the welcome screen
                 const existingMessages = chatMessages.querySelectorAll('.message');
                 existingMessages.forEach(msg => msg.remove());
@@ -1522,6 +2278,9 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             if (newChatHeaderBtn) {
                 newChatHeaderBtn.addEventListener('click', function() {
                     console.log('New chat button clicked'); // Debug log
+                    
+                    // Force stop any ongoing AI processing
+                    forceStopAIProcessing();
                     
                     // Clear only the chat messages, not the welcome screen
                     const existingMessages = chatMessages.querySelectorAll('.message');

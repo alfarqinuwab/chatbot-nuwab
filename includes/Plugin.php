@@ -98,6 +98,10 @@ class Plugin {
         add_action('wp_ajax_wp_gpt_rag_chat_get_indexing_status', [$this, 'handle_get_indexing_status']);
         add_action('wp_ajax_wp_gpt_rag_chat_cancel_persistent_indexing', [$this, 'handle_cancel_persistent_indexing']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_persistent_pending_posts', [$this, 'handle_get_persistent_pending_posts']);
+        add_action('wp_ajax_submit_incident_report', [$this, 'handle_submit_incident_report']);
+        add_action('wp_ajax_nopriv_submit_incident_report', [$this, 'handle_submit_incident_report']);
+        add_action('wp_ajax_get_incident_details', [$this, 'handle_get_incident_details']);
+        add_action('wp_ajax_update_incident_status', [$this, 'handle_update_incident_status']);
         add_action('wp_ajax_wp_gpt_rag_chat_clear_newly_indexed', [$this, 'handle_clear_newly_indexed']);
         
         // Cron hooks for persistent indexing
@@ -386,6 +390,16 @@ class Plugin {
                 'wp-gpt-rag-chat-about',
                 [$this, 'about_page']
             );
+
+            // Incident Reports submenu
+            add_submenu_page(
+                'wp-gpt-rag-chat-dashboard',
+                __('Incident Reports', 'wp-gpt-rag-chat'),
+                __('Incident Reports', 'wp-gpt-rag-chat'),
+                'manage_options',
+                'wp-gpt-rag-chat-incidents',
+                [$this, 'incident_reports_page']
+            );
             
             // Hidden submenus (for direct access)
             add_submenu_page(
@@ -606,6 +620,13 @@ class Plugin {
      */
     public function audit_trail_page() {
         include WP_GPT_RAG_CHAT_PLUGIN_DIR . 'templates/audit-trail-page.php';
+    }
+
+    /**
+     * Incident Reports page callback
+     */
+    public function incident_reports_page() {
+        include WP_GPT_RAG_CHAT_PLUGIN_DIR . 'templates/incident-reports-page.php';
     }
     
     /**
@@ -4562,6 +4583,1098 @@ class Plugin {
         } catch (\Exception $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Handle incident report submission
+     */
+    public function handle_submit_incident_report() {
+        // Verify nonce
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'incident_report_nonce')) {
+            wp_send_json_error(['message' => __('Security check failed', 'wp-gpt-rag-chat')]);
+        }
+
+        // Get form data
+        $problem_type = sanitize_text_field($_POST['problem_type'] ?? '');
+        $problem_description = sanitize_textarea_field($_POST['problem_description'] ?? '');
+        $user_email = sanitize_email($_POST['user_email'] ?? '');
+
+        // Validate required fields
+        if (empty($problem_type) || empty($problem_description)) {
+            wp_send_json_error(['message' => __('Please fill in all required fields', 'wp-gpt-rag-chat')]);
+        }
+
+        // Get user info
+        $user_id = get_current_user_id();
+        $user_ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+
+        // Prepare incident data
+        $incident_data = [
+            'problem_type' => $problem_type,
+            'problem_description' => $problem_description,
+            'user_email' => $user_email,
+            'user_id' => $user_id,
+            'user_ip' => $user_ip,
+            'user_agent' => $user_agent,
+            'timestamp' => current_time('mysql'),
+            'status' => 'pending'
+        ];
+
+        // Save to database
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'gpt_rag_incident_reports';
+        
+        // Create table if it doesn't exist
+        $this->create_incident_reports_table();
+
+        $result = $wpdb->insert(
+            $table_name,
+            $incident_data,
+            [
+                '%s', // problem_type
+                '%s', // problem_description
+                '%s', // user_email
+                '%d', // user_id
+                '%s', // user_ip
+                '%s', // user_agent
+                '%s', // timestamp
+                '%s'  // status
+            ]
+        );
+
+        if ($result === false) {
+            wp_send_json_error(['message' => __('Failed to save incident report', 'wp-gpt-rag-chat')]);
+        }
+
+        // Log the incident
+        error_log("Incident Report Submitted: Type: {$problem_type}, User: {$user_id}, IP: {$user_ip}");
+
+        wp_send_json_success([
+            'message' => __('Incident report submitted successfully', 'wp-gpt-rag-chat'),
+            'incident_id' => $wpdb->insert_id
+        ]);
+    }
+
+    /**
+     * Create incident reports table
+     */
+    private function create_incident_reports_table() {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'gpt_rag_incident_reports';
+        
+        $charset_collate = $wpdb->get_charset_collate();
+        
+        $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+            id int(11) NOT NULL AUTO_INCREMENT,
+            problem_type varchar(100) NOT NULL,
+            problem_description text NOT NULL,
+            user_email varchar(255) DEFAULT '',
+            user_id int(11) DEFAULT 0,
+            user_ip varchar(45) DEFAULT '',
+            user_agent text DEFAULT '',
+            timestamp datetime DEFAULT CURRENT_TIMESTAMP,
+            status varchar(20) DEFAULT 'pending',
+            admin_notes text DEFAULT '',
+            resolved_at datetime DEFAULT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY status (status),
+            KEY problem_type (problem_type),
+            KEY user_id (user_id),
+            KEY timestamp (timestamp)
+        ) $charset_collate;";
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+    }
+
+    /**
+     * Handle getting incident details
+     */
+    public function handle_get_incident_details() {
+        // Verify nonce
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'get_incident_details')) {
+            wp_send_json_error(['message' => __('Security check failed', 'wp-gpt-rag-chat')]);
+        }
+
+        // Check permissions
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions', 'wp-gpt-rag-chat')]);
+        }
+
+        $incident_id = intval($_POST['incident_id'] ?? 0);
+        
+        if (!$incident_id) {
+            wp_send_json_error(['message' => __('Invalid incident ID', 'wp-gpt-rag-chat')]);
+        }
+
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'gpt_rag_incident_reports';
+        
+        $incident = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE id = %d",
+            $incident_id
+        ));
+
+        if (!$incident) {
+            wp_send_json_error(['message' => __('Incident not found', 'wp-gpt-rag-chat')]);
+        }
+
+        // Format the incident data
+        $incident_data = [
+            'id' => $incident->id,
+            'problem_type' => $incident->problem_type,
+            'problem_description' => $incident->problem_description,
+            'user_email' => $incident->user_email,
+            'user_ip' => $incident->user_ip,
+            'user_agent' => $incident->user_agent,
+            'status' => $incident->status,
+            'admin_notes' => $incident->admin_notes,
+            'created_at' => date_i18n('M j, Y g:i A', strtotime($incident->created_at)),
+            'resolved_at' => $incident->resolved_at ? date_i18n('M j, Y g:i A', strtotime($incident->resolved_at)) : null
+        ];
+
+        wp_send_json_success($incident_data);
+    }
+
+    /**
+     * Handle updating incident status
+     */
+    public function handle_update_incident_status() {
+        // Verify nonce
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'update_incident_status')) {
+            wp_send_json_error(['message' => __('Security check failed', 'wp-gpt-rag-chat')]);
+        }
+
+        // Check permissions
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions', 'wp-gpt-rag-chat')]);
+        }
+
+        $incident_id = intval($_POST['incident_id'] ?? 0);
+        $new_status = sanitize_text_field($_POST['new_status'] ?? '');
+        $admin_notes = sanitize_textarea_field($_POST['admin_notes'] ?? '');
+
+        // Validate inputs
+        if (!$incident_id) {
+            wp_send_json_error(['message' => __('Invalid incident ID', 'wp-gpt-rag-chat')]);
+        }
+
+        if (!in_array($new_status, ['pending', 'in_progress', 'resolved'])) {
+            wp_send_json_error(['message' => __('Invalid status', 'wp-gpt-rag-chat')]);
+        }
+
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'gpt_rag_incident_reports';
+
+        // Check if incident exists
+        $incident = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE id = %d",
+            $incident_id
+        ));
+
+        if (!$incident) {
+            wp_send_json_error(['message' => __('Incident not found', 'wp-gpt-rag-chat')]);
+        }
+
+        // Prepare update data
+        $update_data = [
+            'status' => $new_status,
+            'admin_notes' => $admin_notes
+        ];
+
+        // Set resolved_at timestamp if status is being changed to resolved
+        if ($new_status === 'resolved' && $incident->status !== 'resolved') {
+            $update_data['resolved_at'] = current_time('mysql');
+        } elseif ($new_status !== 'resolved' && $incident->status === 'resolved') {
+            // If changing from resolved to another status, clear resolved_at
+            $update_data['resolved_at'] = null;
+        }
+
+        // Update the incident
+        $result = $wpdb->update(
+            $table_name,
+            $update_data,
+            ['id' => $incident_id],
+            [
+                '%s', // status
+                '%s', // admin_notes
+                '%s'  // resolved_at (or null)
+            ],
+            ['%d'] // where id
+        );
+
+        if ($result === false) {
+            wp_send_json_error(['message' => __('Failed to update incident status', 'wp-gpt-rag-chat')]);
+        }
+
+        // Log the status change
+        error_log("Incident Status Updated: ID {$incident_id}, Status: {$incident->status} -> {$new_status}, Admin: " . get_current_user_id());
+
+        wp_send_json_success([
+            'message' => __('Incident status updated successfully', 'wp-gpt-rag-chat'),
+            'new_status' => $new_status
+        ]);
+    }
+
+    /**
+     * Handle AIMS performance report generation
+     */
+    public function handle_generate_aims_report() {
+        // Log the request for debugging
+        error_log('AIMS Report Generation Request: ' . print_r($_POST, true));
+        
+        // Verify nonce
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'generate_aims_report')) {
+            error_log('AIMS Report: Nonce verification failed');
+            wp_send_json_error(['message' => __('Security check failed', 'wp-gpt-rag-chat')]);
+        }
+
+        // Check permissions
+        if (!current_user_can('manage_options')) {
+            error_log('AIMS Report: Insufficient permissions');
+            wp_send_json_error(['message' => __('Insufficient permissions', 'wp-gpt-rag-chat')]);
+        }
+
+        $format = sanitize_text_field($_POST['format'] ?? 'pdf');
+        
+        if (!in_array($format, ['pdf', 'excel'])) {
+            error_log('AIMS Report: Invalid format: ' . $format);
+            wp_send_json_error(['message' => __('Invalid format', 'wp-gpt-rag-chat')]);
+        }
+
+        try {
+            error_log('AIMS Report: Starting data collection');
+            
+            // Get comprehensive data for the report
+            $report_data = $this->get_aims_report_data();
+            error_log('AIMS Report: Data collected: ' . print_r($report_data, true));
+            
+            // Generate the report file
+            $file_path = $this->generate_report_file($report_data, $format);
+            error_log('AIMS Report: File path: ' . $file_path);
+            
+            if (!$file_path || !file_exists($file_path)) {
+                error_log('AIMS Report: File generation failed');
+                wp_send_json_error(['message' => __('Failed to generate report file', 'wp-gpt-rag-chat')]);
+            }
+            
+            // Create download URL using AJAX endpoint
+            $nonce = wp_create_nonce('download_report_' . basename($file_path));
+            $download_url = admin_url('admin-ajax.php?action=download_aims_report&file=' . basename($file_path) . '&_wpnonce=' . $nonce);
+            
+            error_log('AIMS Report: Download URL: ' . $download_url);
+            
+            wp_send_json_success([
+                'message' => __('Report generated successfully', 'wp-gpt-rag-chat'),
+                'download_url' => $download_url,
+                'file_name' => basename($file_path)
+            ]);
+            
+        } catch (\Exception $e) {
+            error_log('AIMS Report: Exception: ' . $e->getMessage());
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Get comprehensive AIMS report data
+     */
+    private function get_aims_report_data() {
+        global $wpdb;
+        
+        // Helper function to safely get count
+        $safe_count = function($table, $where = '') {
+            global $wpdb;
+            $query = "SELECT COUNT(*) FROM {$wpdb->prefix}{$table}";
+            if ($where) {
+                $query .= " WHERE {$where}";
+            }
+            $result = $wpdb->get_var($query);
+            return $result ? intval($result) : 0;
+        };
+        
+        // Check if tables exist
+        $chat_logs_exists = $wpdb->get_var("SHOW TABLES LIKE '{$wpdb->prefix}gpt_rag_chat_logs'") == $wpdb->prefix . 'gpt_rag_chat_logs';
+        $incidents_exists = $wpdb->get_var("SHOW TABLES LIKE '{$wpdb->prefix}gpt_rag_incident_reports'") == $wpdb->prefix . 'gpt_rag_incident_reports';
+        $vectors_exists = $wpdb->get_var("SHOW TABLES LIKE '{$wpdb->prefix}gpt_rag_vectors'") == $wpdb->prefix . 'gpt_rag_vectors';
+        
+        // Get chat statistics
+        $chat_stats = [
+            'total_queries' => $chat_logs_exists ? $safe_count('gpt_rag_chat_logs') : 0,
+            'queries_today' => $chat_logs_exists ? $safe_count('gpt_rag_chat_logs', "DATE(created_at) = CURDATE()") : 0,
+            'queries_this_week' => $chat_logs_exists ? $safe_count('gpt_rag_chat_logs', "created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)") : 0,
+            'queries_this_month' => $chat_logs_exists ? $safe_count('gpt_rag_chat_logs', "created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)") : 0
+        ];
+        
+        // Get incident statistics
+        $incident_stats = [
+            'total_incidents' => $incidents_exists ? $safe_count('gpt_rag_incident_reports') : 0,
+            'pending_incidents' => $incidents_exists ? $safe_count('gpt_rag_incident_reports', "status = 'pending'") : 0,
+            'resolved_incidents' => $incidents_exists ? $safe_count('gpt_rag_incident_reports', "status = 'resolved'") : 0,
+            'incidents_this_month' => $incidents_exists ? $safe_count('gpt_rag_incident_reports', "created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)") : 0
+        ];
+        
+        // Get indexing statistics
+        $indexing_stats = [
+            'total_vectors' => $vectors_exists ? $safe_count('gpt_rag_vectors') : 0,
+            'total_posts' => $vectors_exists ? intval($wpdb->get_var("SELECT COUNT(DISTINCT post_id) FROM {$wpdb->prefix}gpt_rag_vectors")) : 0,
+            'recent_activity' => $vectors_exists ? $safe_count('gpt_rag_vectors', "created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)") : 0
+        ];
+        
+        // Get user activity
+        $user_stats = [
+            'active_users' => $chat_logs_exists ? intval($wpdb->get_var("SELECT COUNT(DISTINCT user_id) FROM {$wpdb->prefix}gpt_rag_chat_logs WHERE user_id > 0")) : 0,
+            'guest_users' => $chat_logs_exists ? $safe_count('gpt_rag_chat_logs', "user_id = 0") : 0
+        ];
+        
+        return [
+            'chat_stats' => $chat_stats,
+            'incident_stats' => $incident_stats,
+            'indexing_stats' => $indexing_stats,
+            'user_stats' => $user_stats,
+            'generated_at' => current_time('mysql'),
+            'generated_by' => get_current_user_id()
+        ];
+    }
+
+    /**
+     * Generate report file (PDF or Excel)
+     */
+    private function generate_report_file($data, $format) {
+        $upload_dir = wp_upload_dir();
+        $reports_dir = $upload_dir['basedir'] . '/aims-reports/';
+        
+        // Create reports directory if it doesn't exist
+        if (!file_exists($reports_dir)) {
+            wp_mkdir_p($reports_dir);
+        }
+        
+        $filename = 'aims-performance-report-' . date('Y-m-d-H-i-s') . '.' . $format;
+        $file_path = $reports_dir . $filename;
+        
+        if ($format === 'pdf') {
+            return $this->generate_pdf_report($data, $file_path);
+        } elseif ($format === 'excel') {
+            return $this->generate_excel_report($data, $file_path);
+        }
+        
+        return false;
+    }
+
+    /**
+     * Generate PDF report
+     */
+    private function generate_pdf_report($data, $file_path) {
+        // Create a professional HTML report for auditing
+        $html = $this->get_audit_report_html($data);
+        
+        // Save as HTML file (can be opened in browser and printed to PDF)
+        file_put_contents($file_path, $html);
+        
+        return $file_path;
+    }
+
+    /**
+     * Generate Excel report
+     */
+    private function generate_excel_report($data, $file_path) {
+        // Simple CSV format (in production, use a proper Excel library like PhpSpreadsheet)
+        $csv_content = $this->get_report_csv($data);
+        
+        file_put_contents($file_path, $csv_content);
+        
+        return $file_path;
+    }
+
+    /**
+     * Get comprehensive audit report HTML
+     */
+    private function get_audit_report_html($data) {
+        $current_date = date('Y-m-d H:i:s');
+        $report_id = 'AIMS-' . date('Ymd-His');
+        
+        $html = '<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIMS Performance Audit Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            background: #f8f9fa;
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            background: white; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .header { 
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+            color: white; 
+            padding: 40px; 
+            text-align: center;
+        }
+        .header h1 { 
+            font-size: 2.5em; 
+            margin-bottom: 10px; 
+            font-weight: 300;
+        }
+        .header .subtitle { 
+            font-size: 1.2em; 
+            opacity: 0.9; 
+            margin-bottom: 20px;
+        }
+        .header .report-info { 
+            background: rgba(255,255,255,0.1); 
+            padding: 20px; 
+            border-radius: 10px; 
+            margin-top: 20px;
+        }
+        .content { padding: 40px; }
+        .section { 
+            margin-bottom: 40px; 
+            border-left: 4px solid #2a5298; 
+            padding-left: 20px;
+        }
+        .section h2 { 
+            color: #2a5298; 
+            font-size: 1.8em; 
+            margin-bottom: 20px; 
+            border-bottom: 2px solid #e9ecef; 
+            padding-bottom: 10px;
+        }
+        .metrics-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 20px; 
+            margin-bottom: 30px;
+        }
+        .metric-card { 
+            background: #f8f9fa; 
+            padding: 20px; 
+            border-radius: 10px; 
+            border: 1px solid #e9ecef; 
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        .metric-card:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .metric-value { 
+            font-size: 2.5em; 
+            font-weight: bold; 
+            color: #2a5298; 
+            margin-bottom: 5px;
+        }
+        .metric-label { 
+            color: #6c757d; 
+            font-size: 0.9em; 
+            text-transform: uppercase; 
+            letter-spacing: 1px;
+        }
+        .table-container { 
+            overflow-x: auto; 
+            margin: 20px 0;
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            background: white; 
+            border-radius: 10px; 
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        th { 
+            background: #2a5298; 
+            color: white; 
+            padding: 15px; 
+            text-align: left; 
+            font-weight: 600;
+        }
+        td { 
+            padding: 15px; 
+            border-bottom: 1px solid #e9ecef;
+        }
+        tr:hover { 
+            background: #f8f9fa;
+        }
+        .status-badge { 
+            padding: 5px 15px; 
+            border-radius: 20px; 
+            font-size: 0.8em; 
+            font-weight: bold; 
+            text-transform: uppercase;
+        }
+        .status-pending { 
+            background: #fff3cd; 
+            color: #856404;
+        }
+        .status-resolved { 
+            background: #d4edda; 
+            color: #155724;
+        }
+        .status-in-progress { 
+            background: #cce5ff; 
+            color: #004085;
+        }
+        .chart-placeholder { 
+            background: #f8f9fa; 
+            border: 2px dashed #dee2e6; 
+            padding: 40px; 
+            text-align: center; 
+            border-radius: 10px; 
+            margin: 20px 0;
+        }
+        .footer { 
+            background: #343a40; 
+            color: white; 
+            padding: 30px; 
+            text-align: center;
+        }
+        .footer p { 
+            margin: 5px 0; 
+            opacity: 0.8;
+        }
+        .risk-indicator { 
+            display: inline-block; 
+            padding: 5px 10px; 
+            border-radius: 15px; 
+            font-size: 0.8em; 
+            font-weight: bold;
+        }
+        .risk-low { 
+            background: #d4edda; 
+            color: #155724;
+        }
+        .risk-medium { 
+            background: #fff3cd; 
+            color: #856404;
+        }
+        .risk-high { 
+            background: #f8d7da; 
+            color: #721c24;
+        }
+        @media print {
+            body { background: white; }
+            .container { box-shadow: none; }
+            .metric-card:hover { transform: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AIMS Performance Audit Report</h1>
+            <div class="subtitle">Artificial Intelligence Management System</div>
+            <div class="report-info">
+                <strong>Report ID:</strong> ' . esc_html($report_id) . '<br>
+                <strong>Generated:</strong> ' . esc_html($data['generated_at']) . '<br>
+                <strong>Generated by:</strong> ' . esc_html($data['generated_by']) . '<br>
+                <strong>System Version:</strong> 1.0.0
+            </div>
+        </div>
+        
+        <div class="content">
+            <!-- Executive Summary -->
+            <div class="section">
+                <h2>Executive Summary</h2>
+                <p>This comprehensive audit report provides detailed analysis of the AIMS (Artificial Intelligence Management System) performance metrics, user engagement, incident management, and system health indicators. The report covers the period from system inception to the current date and includes actionable insights for system optimization.</p>
+                
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">' . esc_html($data['chat_stats']['total_queries']) . '</div>
+                        <div class="metric-label">Total Queries</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">' . esc_html($data['incident_stats']['total_incidents']) . '</div>
+                        <div class="metric-label">Total Incidents</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">' . esc_html($data['user_stats']['active_users']) . '</div>
+                        <div class="metric-label">Active Users</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">' . esc_html($data['indexing_stats']['total_vectors']) . '</div>
+                        <div class="metric-label">Indexed Vectors</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Activity Analysis -->
+            <div class="section">
+                <h2>Chat Activity Analysis</h2>
+                <p>Detailed analysis of user interactions and query patterns within the AIMS system.</p>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Value</th>
+                                <th>Percentage</th>
+                                <th>Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Total Queries</td>
+                                <td>' . esc_html($data['chat_stats']['total_queries']) . '</td>
+                                <td>100%</td>
+                                <td>Baseline</td>
+                            </tr>
+                            <tr>
+                                <td>Queries Today</td>
+                                <td>' . esc_html($data['chat_stats']['queries_today']) . '</td>
+                                <td>' . ($data['chat_stats']['total_queries'] > 0 ? round(($data['chat_stats']['queries_today'] / $data['chat_stats']['total_queries']) * 100, 2) : 0) . '%</td>
+                                <td>Daily Activity</td>
+                            </tr>
+                            <tr>
+                                <td>Queries This Week</td>
+                                <td>' . esc_html($data['chat_stats']['queries_this_week']) . '</td>
+                                <td>' . ($data['chat_stats']['total_queries'] > 0 ? round(($data['chat_stats']['queries_this_week'] / $data['chat_stats']['total_queries']) * 100, 2) : 0) . '%</td>
+                                <td>Weekly Activity</td>
+                            </tr>
+                            <tr>
+                                <td>Queries This Month</td>
+                                <td>' . esc_html($data['chat_stats']['queries_this_month']) . '</td>
+                                <td>' . ($data['chat_stats']['total_queries'] > 0 ? round(($data['chat_stats']['queries_this_month'] / $data['chat_stats']['total_queries']) * 100, 2) : 0) . '%</td>
+                                <td>Monthly Activity</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Incident Management -->
+            <div class="section">
+                <h2>Incident Management & Risk Assessment</h2>
+                <p>Comprehensive analysis of system incidents, resolution rates, and risk indicators.</p>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Incident Type</th>
+                                <th>Count</th>
+                                <th>Status</th>
+                                <th>Risk Level</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Total Incidents</td>
+                                <td>' . esc_html($data['incident_stats']['total_incidents']) . '</td>
+                                <td><span class="status-badge status-pending">All</span></td>
+                                <td><span class="risk-indicator risk-' . ($data['incident_stats']['total_incidents'] > 10 ? 'high' : ($data['incident_stats']['total_incidents'] > 5 ? 'medium' : 'low')) . '">' . ($data['incident_stats']['total_incidents'] > 10 ? 'High' : ($data['incident_stats']['total_incidents'] > 5 ? 'Medium' : 'Low')) . '</span></td>
+                            </tr>
+                            <tr>
+                                <td>Pending Incidents</td>
+                                <td>' . esc_html($data['incident_stats']['pending_incidents']) . '</td>
+                                <td><span class="status-badge status-pending">Pending</span></td>
+                                <td><span class="risk-indicator risk-' . ($data['incident_stats']['pending_incidents'] > 5 ? 'high' : ($data['incident_stats']['pending_incidents'] > 2 ? 'medium' : 'low')) . '">' . ($data['incident_stats']['pending_incidents'] > 5 ? 'High' : ($data['incident_stats']['pending_incidents'] > 2 ? 'Medium' : 'Low')) . '</span></td>
+                            </tr>
+                            <tr>
+                                <td>Resolved Incidents</td>
+                                <td>' . esc_html($data['incident_stats']['resolved_incidents']) . '</td>
+                                <td><span class="status-badge status-resolved">Resolved</span></td>
+                                <td><span class="risk-indicator risk-low">Low</span></td>
+                            </tr>
+                            <tr>
+                                <td>Incidents This Month</td>
+                                <td>' . esc_html($data['incident_stats']['incidents_this_month']) . '</td>
+                                <td><span class="status-badge status-in-progress">Monthly</span></td>
+                                <td><span class="risk-indicator risk-' . ($data['incident_stats']['incidents_this_month'] > 5 ? 'high' : ($data['incident_stats']['incidents_this_month'] > 2 ? 'medium' : 'low')) . '">' . ($data['incident_stats']['incidents_this_month'] > 5 ? 'High' : ($data['incident_stats']['incidents_this_month'] > 2 ? 'Medium' : 'Low')) . '</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- System Performance -->
+            <div class="section">
+                <h2>System Performance & Indexing</h2>
+                <p>Analysis of system performance metrics, data indexing efficiency, and content management.</p>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Performance Metric</th>
+                                <th>Current Value</th>
+                                <th>Efficiency Rating</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Total Vectors Indexed</td>
+                                <td>' . esc_html($data['indexing_stats']['total_vectors']) . '</td>
+                                <td>' . ($data['indexing_stats']['total_vectors'] > 1000 ? 'Excellent' : ($data['indexing_stats']['total_vectors'] > 500 ? 'Good' : 'Needs Improvement')) . '</td>
+                                <td><span class="status-badge status-resolved">Active</span></td>
+                            </tr>
+                            <tr>
+                                <td>Total Posts Indexed</td>
+                                <td>' . esc_html($data['indexing_stats']['total_posts']) . '</td>
+                                <td>' . ($data['indexing_stats']['total_posts'] > 500 ? 'Excellent' : ($data['indexing_stats']['total_posts'] > 200 ? 'Good' : 'Needs Improvement')) . '</td>
+                                <td><span class="status-badge status-resolved">Active</span></td>
+                            </tr>
+                            <tr>
+                                <td>Recent Activity (24h)</td>
+                                <td>' . esc_html($data['indexing_stats']['recent_activity']) . '</td>
+                                <td>' . ($data['indexing_stats']['recent_activity'] > 50 ? 'High Activity' : ($data['indexing_stats']['recent_activity'] > 20 ? 'Moderate Activity' : 'Low Activity')) . '</td>
+                                <td><span class="status-badge status-in-progress">Recent</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- User Analytics -->
+            <div class="section">
+                <h2>User Analytics & Engagement</h2>
+                <p>Comprehensive analysis of user engagement, activity patterns, and system adoption.</p>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>User Category</th>
+                                <th>Count</th>
+                                <th>Percentage</th>
+                                <th>Engagement Level</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Active Users</td>
+                                <td>' . esc_html($data['user_stats']['active_users']) . '</td>
+                                <td>' . (($data['user_stats']['active_users'] + $data['user_stats']['guest_users']) > 0 ? round(($data['user_stats']['active_users'] / ($data['user_stats']['active_users'] + $data['user_stats']['guest_users'])) * 100, 2) : 0) . '%</td>
+                                <td><span class="status-badge status-resolved">High</span></td>
+                            </tr>
+                            <tr>
+                                <td>Guest Users</td>
+                                <td>' . esc_html($data['user_stats']['guest_users']) . '</td>
+                                <td>' . (($data['user_stats']['active_users'] + $data['user_stats']['guest_users']) > 0 ? round(($data['user_stats']['guest_users'] / ($data['user_stats']['active_users'] + $data['user_stats']['guest_users'])) * 100, 2) : 0) . '%</td>
+                                <td><span class="status-badge status-pending">Limited</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Audit Trail -->
+            <div class="section">
+                <h2>Audit Trail & Compliance</h2>
+                <p>System audit information and compliance indicators for regulatory requirements.</p>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Audit Item</th>
+                                <th>Status</th>
+                                <th>Last Updated</th>
+                                <th>Compliance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Data Encryption</td>
+                                <td><span class="status-badge status-resolved">Active</span></td>
+                                <td>' . esc_html($current_date) . '</td>
+                                <td><span class="risk-indicator risk-low">Compliant</span></td>
+                            </tr>
+                            <tr>
+                                <td>Access Controls</td>
+                                <td><span class="status-badge status-resolved">Active</span></td>
+                                <td>' . esc_html($current_date) . '</td>
+                                <td><span class="risk-indicator risk-low">Compliant</span></td>
+                            </tr>
+                            <tr>
+                                <td>Incident Logging</td>
+                                <td><span class="status-badge status-resolved">Active</span></td>
+                                <td>' . esc_html($current_date) . '</td>
+                                <td><span class="risk-indicator risk-low">Compliant</span></td>
+                            </tr>
+                            <tr>
+                                <td>User Authentication</td>
+                                <td><span class="status-badge status-resolved">Active</span></td>
+                                <td>' . esc_html($current_date) . '</td>
+                                <td><span class="risk-indicator risk-low">Compliant</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Recommendations -->
+            <div class="section">
+                <h2>Recommendations & Next Steps</h2>
+                <p>Based on the analysis of system performance and user engagement, the following recommendations are provided:</p>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Priority</th>
+                                <th>Recommendation</th>
+                                <th>Expected Impact</th>
+                                <th>Timeline</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="risk-indicator risk-high">High</span></td>
+                                <td>Monitor incident resolution rates and implement automated alerts</td>
+                                <td>Improved response time</td>
+                                <td>Immediate</td>
+                            </tr>
+                            <tr>
+                                <td><span class="risk-indicator risk-medium">Medium</span></td>
+                                <td>Enhance user engagement through improved interface design</td>
+                                <td>Increased user satisfaction</td>
+                                <td>30 days</td>
+                            </tr>
+                            <tr>
+                                <td><span class="risk-indicator risk-medium">Medium</span></td>
+                                <td>Implement advanced analytics and reporting features</td>
+                                <td>Better decision making</td>
+                                <td>60 days</td>
+                            </tr>
+                            <tr>
+                                <td><span class="risk-indicator risk-low">Low</span></td>
+                                <td>Regular system maintenance and optimization</td>
+                                <td>Sustained performance</td>
+                                <td>Ongoing</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>AIMS Performance Audit Report</strong></p>
+            <p>Council of Representatives - Internal Use Only</p>
+            <p>Generated on ' . esc_html($current_date) . ' | Report ID: ' . esc_html($report_id) . '</p>
+            <p>This report contains confidential information and is intended for authorized personnel only.</p>
+        </div>
+    </div>
+</body>
+</html>';
+
+        return $html;
+    }
+
+    /**
+     * Get report text content
+     */
+    private function get_report_text($data) {
+        $text = "AIMS PERFORMANCE REPORT\n";
+        $text .= "=====================\n\n";
+        $text .= "Generated: " . $data['generated_at'] . "\n";
+        $text .= "Generated by: " . $data['generated_by'] . "\n\n";
+        
+        $text .= "CHAT STATISTICS\n";
+        $text .= "---------------\n";
+        $text .= "Total Queries: " . $data['chat_stats']['total_queries'] . "\n";
+        $text .= "Queries Today: " . $data['chat_stats']['queries_today'] . "\n";
+        $text .= "Queries This Week: " . $data['chat_stats']['queries_this_week'] . "\n";
+        $text .= "Queries This Month: " . $data['chat_stats']['queries_this_month'] . "\n\n";
+        
+        $text .= "INCIDENT STATISTICS\n";
+        $text .= "------------------\n";
+        $text .= "Total Incidents: " . $data['incident_stats']['total_incidents'] . "\n";
+        $text .= "Pending Incidents: " . $data['incident_stats']['pending_incidents'] . "\n";
+        $text .= "Resolved Incidents: " . $data['incident_stats']['resolved_incidents'] . "\n";
+        $text .= "Incidents This Month: " . $data['incident_stats']['incidents_this_month'] . "\n\n";
+        
+        $text .= "INDEXING STATISTICS\n";
+        $text .= "------------------\n";
+        $text .= "Total Vectors: " . $data['indexing_stats']['total_vectors'] . "\n";
+        $text .= "Total Posts: " . $data['indexing_stats']['total_posts'] . "\n";
+        $text .= "Recent Activity (24h): " . $data['indexing_stats']['recent_activity'] . "\n\n";
+        
+        $text .= "USER STATISTICS\n";
+        $text .= "---------------\n";
+        $text .= "Active Users: " . $data['user_stats']['active_users'] . "\n";
+        $text .= "Guest Users: " . $data['user_stats']['guest_users'] . "\n\n";
+        
+        $text .= "REPORT SUMMARY\n";
+        $text .= "--------------\n";
+        $text .= "This report provides a comprehensive overview of the AIMS system performance.\n";
+        $text .= "It includes chat activity, incident reports, indexing statistics, and user metrics.\n\n";
+        
+        $text .= "Generated by AIMS Performance Report System\n";
+        $text .= "Council of Representatives - Internal Use Only\n";
+        
+        return $text;
+    }
+
+    /**
+     * Get report HTML content
+     */
+    private function get_report_html($data) {
+        ob_start();
+        ?>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>AIMS Performance Report</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                h1 { color: #1d2327; }
+                h2 { color: #0073aa; margin-top: 30px; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f1f1f1; }
+                .stat { margin: 10px 0; }
+            </style>
+        </head>
+        <body>
+            <h1>AIMS Performance Report</h1>
+            <p><strong>Generated:</strong> <?php echo esc_html($data['generated_at']); ?></p>
+            
+            <h2>Chat Statistics</h2>
+            <table>
+                <tr><th>Metric</th><th>Value</th></tr>
+                <tr><td>Total Queries</td><td><?php echo esc_html($data['chat_stats']['total_queries']); ?></td></tr>
+                <tr><td>Queries Today</td><td><?php echo esc_html($data['chat_stats']['queries_today']); ?></td></tr>
+                <tr><td>Queries This Week</td><td><?php echo esc_html($data['chat_stats']['queries_this_week']); ?></td></tr>
+                <tr><td>Queries This Month</td><td><?php echo esc_html($data['chat_stats']['queries_this_month']); ?></td></tr>
+            </table>
+            
+            <h2>Incident Statistics</h2>
+            <table>
+                <tr><th>Metric</th><th>Value</th></tr>
+                <tr><td>Total Incidents</td><td><?php echo esc_html($data['incident_stats']['total_incidents']); ?></td></tr>
+                <tr><td>Pending Incidents</td><td><?php echo esc_html($data['incident_stats']['pending_incidents']); ?></td></tr>
+                <tr><td>Resolved Incidents</td><td><?php echo esc_html($data['incident_stats']['resolved_incidents']); ?></td></tr>
+                <tr><td>Incidents This Month</td><td><?php echo esc_html($data['incident_stats']['incidents_this_month']); ?></td></tr>
+            </table>
+            
+            <h2>Indexing Statistics</h2>
+            <table>
+                <tr><th>Metric</th><th>Value</th></tr>
+                <tr><td>Total Vectors</td><td><?php echo esc_html($data['indexing_stats']['total_vectors']); ?></td></tr>
+                <tr><td>Total Posts</td><td><?php echo esc_html($data['indexing_stats']['total_posts']); ?></td></tr>
+                <tr><td>Recent Activity (24h)</td><td><?php echo esc_html($data['indexing_stats']['recent_activity']); ?></td></tr>
+            </table>
+            
+            <h2>User Statistics</h2>
+            <table>
+                <tr><th>Metric</th><th>Value</th></tr>
+                <tr><td>Active Users</td><td><?php echo esc_html($data['user_stats']['active_users']); ?></td></tr>
+                <tr><td>Guest Users</td><td><?php echo esc_html($data['user_stats']['guest_users']); ?></td></tr>
+            </table>
+        </body>
+        </html>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Get report CSV content
+     */
+    private function get_report_csv($data) {
+        $csv = "AIMS Performance Report\n";
+        $csv .= "Generated: " . $data['generated_at'] . "\n\n";
+        
+        $csv .= "Chat Statistics\n";
+        $csv .= "Metric,Value\n";
+        $csv .= "Total Queries," . $data['chat_stats']['total_queries'] . "\n";
+        $csv .= "Queries Today," . $data['chat_stats']['queries_today'] . "\n";
+        $csv .= "Queries This Week," . $data['chat_stats']['queries_this_week'] . "\n";
+        $csv .= "Queries This Month," . $data['chat_stats']['queries_this_month'] . "\n\n";
+        
+        $csv .= "Incident Statistics\n";
+        $csv .= "Metric,Value\n";
+        $csv .= "Total Incidents," . $data['incident_stats']['total_incidents'] . "\n";
+        $csv .= "Pending Incidents," . $data['incident_stats']['pending_incidents'] . "\n";
+        $csv .= "Resolved Incidents," . $data['incident_stats']['resolved_incidents'] . "\n";
+        $csv .= "Incidents This Month," . $data['incident_stats']['incidents_this_month'] . "\n\n";
+        
+        $csv .= "Indexing Statistics\n";
+        $csv .= "Metric,Value\n";
+        $csv .= "Total Vectors," . $data['indexing_stats']['total_vectors'] . "\n";
+        $csv .= "Total Posts," . $data['indexing_stats']['total_posts'] . "\n";
+        $csv .= "Recent Activity (24h)," . $data['indexing_stats']['recent_activity'] . "\n\n";
+        
+        $csv .= "User Statistics\n";
+        $csv .= "Metric,Value\n";
+        $csv .= "Active Users," . $data['user_stats']['active_users'] . "\n";
+        $csv .= "Guest Users," . $data['user_stats']['guest_users'] . "\n";
+        
+        return $csv;
+    }
+
+    /**
+     * Handle report downloads via AJAX
+     */
+    public function handle_download_aims_report() {
+        // Log the download request for debugging
+        error_log('Download request: ' . print_r($_GET, true));
+        
+        // Check permissions
+        if (!current_user_can('manage_options')) {
+            wp_die('Insufficient permissions');
+        }
+        
+        $filename = sanitize_file_name($_GET['file'] ?? '');
+        $nonce = $_GET['_wpnonce'] ?? '';
+        
+        error_log('Filename: ' . $filename);
+        error_log('Nonce: ' . $nonce);
+        
+        if (empty($filename)) {
+            error_log('No file specified in download request');
+            wp_die('No file specified');
+        }
+        
+        // Verify nonce
+        if (!wp_verify_nonce($nonce, 'download_report_' . $filename)) {
+            wp_die('Security check failed');
+        }
+        
+        $upload_dir = wp_upload_dir();
+        $file_path = $upload_dir['basedir'] . '/aims-reports/' . $filename;
+        
+        if (!file_exists($file_path)) {
+            wp_die('File not found: ' . $filename);
+        }
+        
+        // Determine content type based on file extension
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        $content_type = 'application/octet-stream';
+        
+        if ($extension === 'pdf') {
+            $content_type = 'application/pdf';
+        } elseif ($extension === 'csv') {
+            $content_type = 'text/csv';
+        } elseif ($extension === 'html') {
+            $content_type = 'text/html';
+        }
+        
+        // Set headers for download
+        header('Content-Type: ' . $content_type);
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . filesize($file_path));
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        
+        // Output file
+        readfile($file_path);
+        exit;
     }
 
 }

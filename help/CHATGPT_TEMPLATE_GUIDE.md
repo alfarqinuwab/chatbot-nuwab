@@ -197,3 +197,4 @@ document.addEventListener('DOMContentLoaded', function() {
 
 **تم تطوير هذا القالب بواسطة فريق Nuwab**  
 *للمساعدة والدعم، يرجى التواصل معنا عبر support@nuwab.com*
+

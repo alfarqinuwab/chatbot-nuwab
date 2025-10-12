@@ -203,4 +203,65 @@ class Admin {
         
         return $stats;
     }
+    
+    /**
+     * Get comprehensive dashboard data for KPIs
+     */
+    public static function get_dashboard_data() {
+        global $wpdb;
+        
+        // Helper function to safely get count
+        $safe_count = function($table, $where = '') {
+            global $wpdb;
+            $query = "SELECT COUNT(*) FROM {$wpdb->prefix}{$table}";
+            if ($where) {
+                $query .= " WHERE {$where}";
+            }
+            $result = $wpdb->get_var($query);
+            return $result ? intval($result) : 0;
+        };
+        
+        // Check if tables exist
+        $chat_logs_exists = $wpdb->get_var("SHOW TABLES LIKE '{$wpdb->prefix}wp_gpt_rag_chat_logs'") == $wpdb->prefix . 'wp_gpt_rag_chat_logs';
+        $incidents_exists = $wpdb->get_var("SHOW TABLES LIKE '{$wpdb->prefix}gpt_rag_incident_reports'") == $wpdb->prefix . 'gpt_rag_incident_reports';
+        
+        // Get chat statistics
+        $total_queries = $chat_logs_exists ? $safe_count('wp_gpt_rag_chat_logs') : 0;
+        $queries_today = $chat_logs_exists ? $safe_count('wp_gpt_rag_chat_logs', "DATE(created_at) = CURDATE()") : 0;
+        
+        // Get incident statistics
+        $total_incidents = $incidents_exists ? $safe_count('gpt_rag_incident_reports') : 0;
+        $pending_incidents = $incidents_exists ? $safe_count('gpt_rag_incident_reports', "status = 'pending'") : 0;
+        $resolved_incidents = $incidents_exists ? $safe_count('gpt_rag_incident_reports', "status = 'resolved'") : 0;
+        $resolved_this_week = $incidents_exists ? $safe_count('gpt_rag_incident_reports', "status = 'resolved' AND resolved_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)") : 0;
+        
+        // Calculate risk level and score
+        $risk_score = 0;
+        $risk_level = 'low';
+        
+        if ($total_incidents > 0) {
+            // Calculate risk score based on pending incidents and total incidents
+            $pending_ratio = ($pending_incidents / $total_incidents) * 100;
+            $risk_score = min(100, $pending_ratio + ($pending_incidents * 10));
+            
+            if ($risk_score >= 70) {
+                $risk_level = 'high';
+            } elseif ($risk_score >= 40) {
+                $risk_level = 'medium';
+            } else {
+                $risk_level = 'low';
+            }
+        }
+        
+        return [
+            'total_queries' => $total_queries,
+            'queries_today' => $queries_today,
+            'total_incidents' => $total_incidents,
+            'pending_incidents' => $pending_incidents,
+            'resolved_incidents' => $resolved_incidents,
+            'resolved_this_week' => $resolved_this_week,
+            'risk_level' => $risk_level,
+            'risk_score' => round($risk_score)
+        ];
+    }
 }

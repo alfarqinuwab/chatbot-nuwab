@@ -319,6 +319,258 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             color: #1d2327;
         }
 
+        /* Dropdown Menu Styles */
+        .chat-actions {
+            position: relative;
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            min-width: 200px;
+            z-index: 1000;
+            display: none;
+            margin-top: 8px;
+        }
+
+        .dropdown-menu.show {
+            display: block;
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            border-bottom: 1px solid #f0f0f0;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 14px;
+            color: #1d2327;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .dropdown-item i {
+            width: 16px;
+            text-align: center;
+            color: #646970;
+        }
+
+        .dropdown-item:hover i {
+            color: #1d2327;
+        }
+
+        #reportProblemBtn:hover i {
+            color: #f39c12;
+        }
+
+        #deleteChatBtn:hover i {
+            color: #e74c3c;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            display: none;
+            z-index: 10000;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .modal-overlay.show {
+            display: block;
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlideIn 0.3s ease-out;
+            box-sizing: border-box;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .modal-header {
+            position: relative;
+            padding: 20px 24px;
+            border-bottom: 1px solid #e5e5e5;
+            min-height: 60px;
+        }
+
+        .modal-header h3 {
+            position: absolute;
+            right: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            margin: 0;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 18px;
+            font-weight: 600;
+            color: #1d2327;
+        }
+
+        .modal-close {
+            position: absolute;
+            left: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #646970;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: #f0f0f0;
+            color: #1d2327;
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            color: #1d2327;
+        }
+
+        .form-group select,
+        .form-group textarea,
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e5e5e5;
+            border-radius: 6px;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 14px;
+            transition: border-color 0.2s ease;
+            box-sizing: border-box;
+        }
+
+        .form-group select:focus,
+        .form-group textarea:focus,
+        .form-group input:focus {
+            outline: none;
+            border-color: #d1a85f;
+            box-shadow: 0 0 0 2px rgba(209, 168, 95, 0.2);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 24px;
+        }
+
+        .btn-cancel,
+        .btn-submit {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .btn-cancel {
+            background: #f0f0f0;
+            color: #646970;
+        }
+
+        .btn-cancel:hover {
+            background: #e5e5e5;
+            color: #1d2327;
+        }
+
+        .btn-submit {
+            background: #d1a85f;
+            color: white;
+        }
+
+        .btn-submit:hover {
+            background: #c89a4f;
+        }
+
+        .btn-submit:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-delete {
+            background: #e74c3c;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .btn-delete:hover {
+            background: #c0392b;
+        }
+
         .chat-messages {
             flex: 1;
             overflow-y: auto;
@@ -1375,12 +1627,21 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     <button class="chat-action" id="newChatHeaderBtn" title="<?php esc_attr_e('محادثة جديدة', 'wp-gpt-rag-chat'); ?>">
                         <i class="fas fa-plus"></i>
                     </button>
-                    <button class="chat-action" id="shareBtn" title="<?php esc_attr_e('مشاركة', 'wp-gpt-rag-chat'); ?>">
-                        <i class="fas fa-share"></i>
-                    </button>
                     <button class="chat-action" id="menuBtn" title="<?php esc_attr_e('القائمة', 'wp-gpt-rag-chat'); ?>">
                         <i class="fas fa-ellipsis-h"></i>
                     </button>
+                    
+                    <!-- Dropdown Menu -->
+                    <div class="dropdown-menu" id="dropdownMenu">
+                        <div class="dropdown-item" id="reportProblemBtn">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span><?php esc_html_e('الإبلاغ عن مشكلة', 'wp-gpt-rag-chat'); ?></span>
+                        </div>
+                        <div class="dropdown-item" id="deleteChatBtn">
+                            <i class="fas fa-trash"></i>
+                            <span><?php esc_html_e('حذف المحادثة', 'wp-gpt-rag-chat'); ?></span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1410,6 +1671,7 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 
                 <!-- Footer -->
                 <div class="chat-footer">
+                    مجلس النواب - للاستخدام الداخلي فقط - الإصدار 1.0.0 <br>
                     جميع الحقوق محفوظة © مجلس النواب 2025
                 </div>
             </div>
@@ -1430,6 +1692,96 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     <button class="send-button" id="sendBtn" title="<?php esc_attr_e('إرسال', 'wp-gpt-rag-chat'); ?>">
                         <i class="fas fa-paper-plane"></i>
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Problem Modal -->
+    <div class="modal-overlay" id="reportModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><?php esc_html_e('الإبلاغ عن مشكلة', 'wp-gpt-rag-chat'); ?></h3>
+                <button class="modal-close" id="closeReportModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="reportForm">
+                    <div class="form-group">
+                        <label for="problemType"><?php esc_html_e('نوع المشكلة', 'wp-gpt-rag-chat'); ?></label>
+                        <select id="problemType" name="problem_type" required>
+                            <option value=""><?php esc_html_e('اختر نوع المشكلة', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="wrong_information"><?php esc_html_e('معلومات خاطئة', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="bias"><?php esc_html_e('تحيز أو عدم موضوعية', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="hallucination"><?php esc_html_e('معلومات غير صحيحة أو وهمية', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="inappropriate_response"><?php esc_html_e('رد غير مناسب', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="technical_issue"><?php esc_html_e('مشكلة تقنية', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="privacy_concern"><?php esc_html_e('مخاوف الخصوصية', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="parliamentary_procedure"><?php esc_html_e('خطأ في الإجراءات البرلمانية', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="legal_advice"><?php esc_html_e('نصيحة قانونية خاطئة', 'wp-gpt-rag-chat'); ?></option>
+                            <option value="other"><?php esc_html_e('أخرى', 'wp-gpt-rag-chat'); ?></option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="problemDescription"><?php esc_html_e('وصف المشكلة', 'wp-gpt-rag-chat'); ?></label>
+                        <textarea 
+                            id="problemDescription" 
+                            name="problem_description" 
+                            rows="4" 
+                            placeholder="<?php esc_attr_e('يرجى وصف المشكلة بالتفصيل...', 'wp-gpt-rag-chat'); ?>"
+                            required
+                        ></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="userEmail"><?php esc_html_e('البريد الإلكتروني (اختياري)', 'wp-gpt-rag-chat'); ?></label>
+                        <input 
+                            type="email" 
+                            id="userEmail" 
+                            name="user_email" 
+                            placeholder="<?php esc_attr_e('example@domain.com', 'wp-gpt-rag-chat'); ?>"
+                        />
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn-cancel" id="cancelReport"><?php esc_html_e('إلغاء', 'wp-gpt-rag-chat'); ?></button>
+                        <button type="submit" class="btn-submit"><?php esc_html_e('إرسال التقرير', 'wp-gpt-rag-chat'); ?></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Chat Confirmation Modal -->
+    <div class="modal-overlay" id="deleteConfirmationModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><?php esc_html_e('حذف المحادثة', 'wp-gpt-rag-chat'); ?></h3>
+                <button class="modal-close" id="closeDeleteModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div style="text-align: center; padding: 20px 0;">
+                    <div style="font-size: 48px; color: #e74c3c; margin-bottom: 20px;">
+                        <i class="fas fa-trash"></i>
+                    </div>
+                    <h4 style="margin-bottom: 15px; color: #1d2327;">
+                        <?php esc_html_e('هل أنت متأكد من حذف هذه المحادثة؟', 'wp-gpt-rag-chat'); ?>
+                    </h4>
+                    <p style="color: #646970; margin-bottom: 25px;">
+                        <?php esc_html_e('سيتم حذف جميع الرسائل في هذه المحادثة ولن تتمكن من استردادها.', 'wp-gpt-rag-chat'); ?>
+                    </p>
+                    <div style="display: flex; gap: 12px; justify-content: center;">
+                        <button class="btn-cancel" id="cancelDelete">
+                            <?php esc_html_e('إلغاء', 'wp-gpt-rag-chat'); ?>
+                        </button>
+                        <button class="btn-delete" id="confirmDelete">
+                            <?php esc_html_e('حذف المحادثة', 'wp-gpt-rag-chat'); ?>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2340,10 +2692,150 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             // Mobile sidebar toggle
             const sidebar = document.getElementById('sidebar');
             const menuBtn = document.getElementById('menuBtn');
+            const dropdownMenu = document.getElementById('dropdownMenu');
             
             if (menuBtn) {
-                menuBtn.addEventListener('click', function() {
-                    sidebar.classList.toggle('open');
+                menuBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    dropdownMenu.classList.toggle('show');
+                });
+            }
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (dropdownMenu && !menuBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
+                    dropdownMenu.classList.remove('show');
+                }
+            });
+
+            // Dropdown menu item handlers
+            const reportProblemBtn = document.getElementById('reportProblemBtn');
+            const deleteChatBtn = document.getElementById('deleteChatBtn');
+
+            if (reportProblemBtn) {
+                reportProblemBtn.addEventListener('click', function() {
+                    dropdownMenu.classList.remove('show');
+                    // Show the report modal
+                    const reportModal = document.getElementById('reportModal');
+                    if (reportModal) {
+                        reportModal.classList.add('show');
+                    }
+                });
+            }
+
+            if (deleteChatBtn) {
+                deleteChatBtn.addEventListener('click', function() {
+                    dropdownMenu.classList.remove('show');
+                    // Show delete confirmation modal
+                    showDeleteConfirmationModal();
+                });
+            }
+
+            // Modal event handlers
+            const reportModal = document.getElementById('reportModal');
+            const closeReportModal = document.getElementById('closeReportModal');
+            const cancelReport = document.getElementById('cancelReport');
+            const reportForm = document.getElementById('reportForm');
+
+            // Close modal handlers
+            if (closeReportModal) {
+                closeReportModal.addEventListener('click', function() {
+                    reportModal.classList.remove('show');
+                });
+            }
+
+            if (cancelReport) {
+                cancelReport.addEventListener('click', function() {
+                    reportModal.classList.remove('show');
+                });
+            }
+
+            // Close modal when clicking overlay
+            if (reportModal) {
+                reportModal.addEventListener('click', function(e) {
+                    if (e.target === reportModal) {
+                        reportModal.classList.remove('show');
+                    }
+                });
+            }
+
+            // Form submission handler
+            if (reportForm) {
+                reportForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const submitBtn = reportForm.querySelector('.btn-submit');
+                    const originalText = submitBtn.textContent;
+                    
+                    // Disable submit button and show loading
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = '<?php echo esc_js(__('جاري الإرسال...', 'wp-gpt-rag-chat')); ?>';
+                    
+                    // Get form data
+                    const formData = new FormData(reportForm);
+                    formData.append('action', 'submit_incident_report');
+                    formData.append('nonce', '<?php echo wp_create_nonce('incident_report_nonce'); ?>');
+                    
+                    // Submit via AJAX
+                    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('<?php echo esc_js(__('تم إرسال التقرير بنجاح', 'wp-gpt-rag-chat')); ?>');
+                            reportModal.classList.remove('show');
+                            reportForm.reset();
+                        } else {
+                            alert('<?php echo esc_js(__('حدث خطأ في إرسال التقرير', 'wp-gpt-rag-chat')); ?>: ' + (data.data || ''));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('<?php echo esc_js(__('حدث خطأ في إرسال التقرير', 'wp-gpt-rag-chat')); ?>');
+                    })
+                    .finally(() => {
+                        // Re-enable submit button
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                    });
+                });
+            }
+
+            // Delete confirmation modal handlers
+            const deleteConfirmationModal = document.getElementById('deleteConfirmationModal');
+            const closeDeleteModal = document.getElementById('closeDeleteModal');
+            const cancelDelete = document.getElementById('cancelDelete');
+            const confirmDelete = document.getElementById('confirmDelete');
+
+            // Close delete modal handlers
+            if (closeDeleteModal) {
+                closeDeleteModal.addEventListener('click', function() {
+                    deleteConfirmationModal.classList.remove('show');
+                });
+            }
+
+            if (cancelDelete) {
+                cancelDelete.addEventListener('click', function() {
+                    deleteConfirmationModal.classList.remove('show');
+                });
+            }
+
+            // Close delete modal when clicking overlay
+            if (deleteConfirmationModal) {
+                deleteConfirmationModal.addEventListener('click', function(e) {
+                    if (e.target === deleteConfirmationModal) {
+                        deleteConfirmationModal.classList.remove('show');
+                    }
+                });
+            }
+
+            // Confirm delete handler
+            if (confirmDelete) {
+                confirmDelete.addEventListener('click', function() {
+                    deleteConfirmationModal.classList.remove('show');
+                    performChatDeletion();
                 });
             }
 
@@ -2465,6 +2957,79 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 sessionStorage.removeItem('chatgpt_chat_history');
             }
         });
+
+        // Function to show delete confirmation modal
+        function showDeleteConfirmationModal() {
+            const deleteConfirmationModal = document.getElementById('deleteConfirmationModal');
+            if (deleteConfirmationModal) {
+                deleteConfirmationModal.classList.add('show');
+            }
+        }
+
+        // Function to perform chat deletion
+        function performChatDeletion() {
+            // Clear chat messages and show welcome screen
+            const chatMessages = document.getElementById('chatMessages');
+            const welcomeScreen = document.getElementById('welcomeScreen');
+            
+            if (chatMessages && welcomeScreen) {
+                // Clear all messages
+                chatMessages.innerHTML = '';
+                
+                // Add the welcome screen back
+                chatMessages.appendChild(welcomeScreen);
+                
+                // Ensure welcome screen is visible and properly styled
+                welcomeScreen.style.display = 'flex';
+                welcomeScreen.style.visibility = 'visible';
+                welcomeScreen.style.opacity = '1';
+                welcomeScreen.style.flexDirection = 'column';
+                welcomeScreen.style.alignItems = 'center';
+                welcomeScreen.style.justifyContent = 'center';
+                welcomeScreen.style.height = '100%';
+                welcomeScreen.style.textAlign = 'center';
+                welcomeScreen.style.padding = '20px 40px';
+            }
+            
+            // Clear any stored chat data
+            localStorage.removeItem('chatHistory');
+            localStorage.removeItem('chatSession');
+            localStorage.removeItem('conversationId');
+            sessionStorage.removeItem('chatgpt_chat_history');
+            
+            // Reset any chat-related state
+            if (typeof clearChatHistory === 'function') {
+                clearChatHistory();
+            }
+            
+            // Hide any typing indicators or other chat elements
+            const typingIndicator = document.querySelector('.typing-indicator');
+            if (typingIndicator) {
+                typingIndicator.style.display = 'none';
+            }
+            
+            // Reset input field
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+                chatInput.value = '';
+                chatInput.style.height = 'auto';
+            }
+            
+            // Reset welcome input if it exists
+            const welcomeInput = document.getElementById('welcomeInput');
+            if (welcomeInput) {
+                welcomeInput.value = '';
+                welcomeInput.style.height = 'auto';
+            }
+            
+            // Hide the chat input container to show only welcome screen
+            const chatInputContainer = document.querySelector('.chat-input-container');
+            if (chatInputContainer) {
+                chatInputContainer.style.display = 'none';
+            }
+            
+            console.log('Chat deleted successfully - Welcome screen displayed');
+        }
     </script>
 </body>
 </html>

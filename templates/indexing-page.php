@@ -90,33 +90,84 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     
     <!-- Manual Re-indexing Search Section -->
     <div class="wp-gpt-rag-chat-manual-search">
-        <h2><?php esc_html_e('Manual Re-indexing', 'wp-gpt-rag-chat'); ?></h2>
-        <p><?php esc_html_e('Search for specific posts by ID or title to check their indexing status and re-index them individually.', 'wp-gpt-rag-chat'); ?></p>
+        <div class="manual-search-header">
+            <div class="search-title-section">
+                <h2>
+                    <span class="dashicons dashicons-search"></span>
+                    <?php esc_html_e('Manual Re-indexing', 'wp-gpt-rag-chat'); ?>
+                </h2>
+                <p><?php esc_html_e('Search for specific posts by ID or title to check their indexing status and re-index them individually.', 'wp-gpt-rag-chat'); ?></p>
+            </div>
+            <div class="search-stats">
+                <div class="stat-item">
+                    <span class="stat-number"><?php echo esc_html(number_format($stats['total_posts'])); ?></span>
+                    <span class="stat-label"><?php esc_html_e('Indexed Posts', 'wp-gpt-rag-chat'); ?></span>
+                </div>
+            </div>
+        </div>
         
         <div class="manual-search-form">
             <div class="search-input-group">
-                <input type="text" id="manual-search-input" placeholder="<?php esc_attr_e('Enter post ID or search by title...', 'wp-gpt-rag-chat'); ?>" class="search-input" />
-                <select id="manual-search-post-type" class="search-post-type">
-                    <option value="any"><?php esc_html_e('All Post Types', 'wp-gpt-rag-chat'); ?></option>
-                    <?php
-                    $post_types = get_post_types(['public' => true], 'objects');
-                    foreach ($post_types as $post_type) {
-                        if ($post_type->name !== 'attachment') {
-                            echo '<option value="' . esc_attr($post_type->name) . '">' . esc_html($post_type->label) . '</option>';
+                <div class="search-input-wrapper">
+                    <label for="manual-search-input" class="search-label">
+                        <span class="dashicons dashicons-admin-post"></span>
+                        <?php esc_html_e('Search Posts', 'wp-gpt-rag-chat'); ?>
+                    </label>
+                    <input type="text" id="manual-search-input" placeholder="<?php esc_attr_e('Enter post ID or search by title...', 'wp-gpt-rag-chat'); ?>" class="search-input" />
+                </div>
+                
+                <div class="search-filter-wrapper">
+                    <label for="manual-search-post-type" class="search-label">
+                        <span class="dashicons dashicons-category"></span>
+                        <?php esc_html_e('Post Type', 'wp-gpt-rag-chat'); ?>
+                    </label>
+                    <select id="manual-search-post-type" class="search-post-type">
+                        <option value="any"><?php esc_html_e('All Post Types', 'wp-gpt-rag-chat'); ?></option>
+                        <?php
+                        $post_types = get_post_types(['public' => true], 'objects');
+                        foreach ($post_types as $post_type) {
+                            if ($post_type->name !== 'attachment') {
+                                echo '<option value="' . esc_attr($post_type->name) . '">' . esc_html($post_type->label) . '</option>';
+                            }
                         }
-                    }
-                    ?>
-                    <option value="attachment"><?php esc_html_e('PDF Documents', 'wp-gpt-rag-chat'); ?></option>
-                </select>
-                <button type="button" id="manual-search-btn" class="button button-primary">
-                    <span class="dashicons dashicons-search"></span>
-                    <?php esc_html_e('Search', 'wp-gpt-rag-chat'); ?>
-                </button>
+                        ?>
+                        <option value="attachment"><?php esc_html_e('PDF Documents', 'wp-gpt-rag-chat'); ?></option>
+                    </select>
+                </div>
+                
+                <div class="search-button-wrapper">
+                    <button type="button" id="manual-search-btn" class="search-button">
+                        <span class="dashicons dashicons-search"></span>
+                        <span class="button-text"><?php esc_html_e('Search', 'wp-gpt-rag-chat'); ?></span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="search-options">
+                <div class="search-option">
+                    <input type="checkbox" id="search-include-drafts" class="search-checkbox">
+                    <label for="search-include-drafts"><?php esc_html_e('Include Draft Posts', 'wp-gpt-rag-chat'); ?></label>
+                </div>
+                <div class="search-option">
+                    <input type="checkbox" id="search-exact-match" class="search-checkbox">
+                    <label for="search-exact-match"><?php esc_html_e('Exact Match Only', 'wp-gpt-rag-chat'); ?></label>
+                </div>
             </div>
         </div>
         
         <div id="manual-search-results" class="search-results" style="display: none;">
-            <h3><?php esc_html_e('Search Results', 'wp-gpt-rag-chat'); ?></h3>
+            <div class="search-results-header">
+                <h3>
+                    <span class="dashicons dashicons-list-view"></span>
+                    <?php esc_html_e('Search Results', 'wp-gpt-rag-chat'); ?>
+                </h3>
+                <div class="results-actions">
+                    <button type="button" id="clear-search-results" class="button button-secondary">
+                        <span class="dashicons dashicons-dismiss"></span>
+                        <?php esc_html_e('Clear Results', 'wp-gpt-rag-chat'); ?>
+                    </button>
+                </div>
+            </div>
             <div class="search-results-list"></div>
         </div>
     </div>
@@ -640,102 +691,291 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 }
 
 .wp-gpt-rag-chat-manual-search {
-    background: #fff;
-    border: 1px solid #ccd0d4;
-    border-radius: 4px;
-    padding: 20px;
-    margin-bottom: 20px;
-    box-shadow: 0 1px 1px rgba(0,0,0,.04);
-    width: 100%;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
     max-width: 100%;
+    position: relative;
+    overflow: hidden;
 }
 
-.wp-gpt-rag-chat-manual-search h2 {
-    margin-top: 0;
-    margin-bottom: 15px;
+.wp-gpt-rag-chat-manual-search::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #2271b1, #00a32a, #d63638, #f0b849);
+    border-radius: 12px 12px 0 0;
+}
+
+.manual-search-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.search-title-section h2 {
+    margin: 0 0 10px 0;
     color: #1d2327;
-    font-size: 18px;
+    font-size: 24px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
-.wp-gpt-rag-chat-manual-search p {
-    margin-bottom: 20px;
-    color: #646970;
-    font-size: 14px;
+.search-title-section h2 .dashicons {
+    color: #2271b1;
+    font-size: 24px;
+}
+
+.search-title-section p {
+    margin: 0;
+    color: #6b7280;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.search-stats {
+    display: flex;
+    gap: 20px;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 15px 20px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.stat-number {
+    display: block;
+    font-size: 24px;
+    font-weight: 700;
+    color: #2271b1;
+    line-height: 1;
+}
+
+.stat-label {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 5px;
 }
 
 .manual-search-form {
-    margin-bottom: 20px;
+    margin-bottom: 25px;
 }
 
 .search-input-group {
+    display: grid;
+    grid-template-columns: 2fr 1fr auto;
+    gap: 15px;
+    align-items: end;
+    margin-bottom: 20px;
+}
+
+.search-input-wrapper,
+.search-filter-wrapper {
     display: flex;
-    gap: 10px;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.search-label {
+    display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    width: 100%;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.search-label .dashicons {
+    font-size: 16px;
+    color: #6b7280;
 }
 
 .search-input {
-    flex: 2;
-    min-width: 300px;
-    padding: 8px 12px;
-    border: 1px solid #8c8f94;
-    border-radius: 3px;
-    font-size: 14px;
-    background: #fff;
-    color: #2c3338;
-    line-height: 1.4;
-    box-shadow: 0 0 0 transparent;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 15px;
+    background: #ffffff;
+    color: #1f2937;
+    line-height: 1.5;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease-in-out;
 }
 
 .search-input:focus {
     border-color: #2271b1;
-    box-shadow: 0 0 0 1px #2271b1;
-    outline: 2px solid transparent;
-    outline-offset: -2px;
+    box-shadow: 0 0 0 3px rgba(34, 113, 177, 0.1);
+    outline: none;
 }
 
 .search-input::placeholder {
-    color: #8c8f94;
+    color: #9ca3af;
 }
 
 .search-post-type {
-    flex: 1;
-    min-width: 180px;
-    padding: 8px 12px;
-    border: 1px solid #8c8f94;
-    border-radius: 3px;
-    font-size: 14px;
-    background: #fff;
-    color: #2c3338;
-    line-height: 1.4;
-    box-shadow: 0 0 0 transparent;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 15px;
+    background: #ffffff;
+    color: #1f2937;
+    line-height: 1.5;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
 }
 
 .search-post-type:focus {
     border-color: #2271b1;
-    box-shadow: 0 0 0 1px #2271b1;
-    outline: 2px solid transparent;
-    outline-offset: -2px;
+    box-shadow: 0 0 0 3px rgba(34, 113, 177, 0.1);
+    outline: none;
 }
 
-#manual-search-btn {
-    flex: 0 0 auto;
-    min-width: 120px;
-    padding: 8px 16px;
-    font-size: 14px;
-    font-weight: 400;
-    line-height: 1.4;
-    border: 1px solid #2271b1;
-    border-radius: 3px;
-    background: #2271b1;
-    color: #fff;
-    text-decoration: none;
+.search-button-wrapper {
+    display: flex;
+    align-items: end;
+}
+
+.search-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #2271b1 0%, #1e5a96 100%);
+    color: #ffffff;
     cursor: pointer;
-    transition: all 0.15s ease-in-out;
-    box-shadow: 0 1px 0 #135e96;
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 2px 4px rgba(34, 113, 177, 0.3);
+    min-width: 140px;
+    justify-content: center;
+}
+
+.search-button:hover {
+    background: linear-gradient(135deg, #1e5a96 0%, #1a4d7a 100%);
+    box-shadow: 0 4px 8px rgba(34, 113, 177, 0.4);
+    transform: translateY(-1px);
+}
+
+.search-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(34, 113, 177, 0.3);
+}
+
+.search-button .dashicons {
+    font-size: 18px;
+}
+
+.search-options {
+    display: flex;
+    gap: 30px;
+    padding: 15px 0;
+    border-top: 1px solid #e5e7eb;
+}
+
+.search-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: #2271b1;
+    cursor: pointer;
+}
+
+.search-option label {
+    font-size: 14px;
+    color: #374151;
+    cursor: pointer;
+    user-select: none;
+}
+
+.search-results {
+    margin-top: 20px;
+    padding: 15px;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+}
+
+.search-results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.search-results-header h3 {
+    margin: 0;
+    color: #1d2327;
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.search-results-header h3 .dashicons {
+    color: #2271b1;
+    font-size: 16px;
+}
+
+.results-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .manual-search-header {
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    .search-input-group {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .search-options {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .search-stats {
+        flex-direction: column;
+        gap: 10px;
+    }
 }
 
 #manual-search-btn:hover {
@@ -787,22 +1027,22 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
 
 .search-results-table th {
     background: #f8f9fa;
-    border-bottom: 2px solid #ccd0d4;
-    padding: 12px 15px;
+    border-bottom: 1px solid #d1d5db;
+    padding: 10px 12px;
     text-align: left;
     font-weight: 600;
     color: #1d2327;
-    font-size: 13px;
+    font-size: 12px;
     position: sticky;
     top: 0;
     z-index: 10;
 }
 
 .search-results-table td {
-    padding: 10px 15px;
+    padding: 8px 12px;
     border-bottom: 1px solid #f0f0f1;
     vertical-align: top;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .search-results-table tr:hover {
@@ -864,83 +1104,185 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     color: #842029;
 }
 
-.search-result-btn {
+.cornuwab-search-result-btn {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    line-height: 1.4 !important;
+    border-radius: 4px !important;
+    border: 1px solid #8c8f94 !important;
+    background: #fff !important;
+    color: #2c3338 !important;
+    cursor: pointer !important;
+    text-decoration: none !important;
+    transition: all 0.15s ease-in-out !important;
+    box-shadow: none !important;
+    display: inline-block !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    min-width: 60px !important;
+    font-family: Arial, sans-serif !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    position: relative !important;
+    z-index: 1 !important;
+}
+
+.cornuwab-search-result-btn:hover {
+    background: #f0f0f1 !important;
+    border-color: #999 !important;
+    color: #2c3338 !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.cornuwab-search-result-btn:focus {
+    border-color: #2271b1 !important;
+    box-shadow: 0 0 0 1px #2271b1 !important;
+    outline: 2px solid transparent !important;
+    outline-offset: -2px !important;
+    color: #2c3338 !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.cornuwab-search-result-btn.primary {
+    background: #2271b1 !important;
+    color: #fff !important;
+    border-color: #2271b1 !important;
+    box-shadow: none !important;
+    font-weight: 500 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.cornuwab-search-result-btn.primary:hover {
+    background: #135e96 !important;
+    border-color: #135e96 !important;
+    color: #fff !important;
+    box-shadow: none !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.cornuwab-search-result-btn.primary:focus {
+    background: #135e96 !important;
+    border-color: #135e96 !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 2px #2271b1 !important;
+    outline: none !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.cornuwab-search-result-btn.primary:active {
+    background: #0a4b78 !important;
+    border-color: #0a4b78 !important;
+    color: #fff !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Force button text visibility */
+.cornuwab-search-result-btn * {
+    color: inherit !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.cornuwab-search-result-btn::before,
+.cornuwab-search-result-btn::after {
+    display: none !important;
+}
+
+/* Specific fix for primary buttons */
+.cornuwab-search-result-btn.primary {
+    text-shadow: none !important;
+    -webkit-text-stroke: none !important;
+    text-rendering: optimizeLegibility !important;
+    font-smooth: always !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* Force text content to be visible */
+.cornuwab-search-result-btn.primary:not(:empty) {
+    color: #fff !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* New button approach using div wrapper */
+.cornuwab-btn-wrapper {
+    display: inline-block;
     padding: 6px 12px;
     font-size: 12px;
-    font-weight: 400;
+    font-weight: 500;
     line-height: 1.4;
-    border-radius: 3px;
+    border-radius: 4px;
     border: 1px solid #8c8f94;
     background: #fff;
-    color: #2c3338;
     cursor: pointer;
     text-decoration: none;
     transition: all 0.15s ease-in-out;
-    box-shadow: 0 0 0 transparent;
-    display: inline-block;
+    box-shadow: none;
     text-align: center;
     white-space: nowrap;
     min-width: 60px;
+    font-family: Arial, sans-serif;
+    text-transform: none;
+    letter-spacing: normal;
+    opacity: 1;
+    visibility: visible;
+    position: relative;
+    z-index: 1;
+    margin-right: 6px;
 }
 
-.search-result-btn:hover {
+.cornuwab-btn-wrapper:hover {
     background: #f0f0f1;
     border-color: #999;
-    color: #2c3338;
-    text-decoration: none;
 }
 
-.search-result-btn:focus {
-    border-color: #2271b1;
-    box-shadow: 0 0 0 1px #2271b1;
-    outline: 2px solid transparent;
-    outline-offset: -2px;
-    color: #2c3338;
-    text-decoration: none;
-}
-
-.search-result-btn.primary {
+.cornuwab-btn-wrapper.primary {
     background: #2271b1;
     color: #fff;
     border-color: #2271b1;
-    box-shadow: 0 1px 0 #135e96;
 }
 
-.search-result-btn.primary:hover {
+.cornuwab-btn-wrapper.primary:hover {
     background: #135e96;
     border-color: #135e96;
-    color: #fff;
-    box-shadow: 0 1px 0 #0a4b78;
-    text-decoration: none;
 }
 
-.search-result-btn.primary:focus {
-    background: #135e96;
-    border-color: #135e96;
-    color: #fff;
-    box-shadow: 0 0 0 1px #fff, 0 0 0 3px #2271b1;
-    outline: 2px solid transparent;
-    outline-offset: -2px;
-    text-decoration: none;
-}
-
-.search-result-btn.primary:active {
-    background: #0a4b78;
-    border-color: #0a4b78;
-    color: #fff;
-    box-shadow: inset 0 2px 0 #0a4b78;
+.cornuwab-btn-text {
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    display: block;
+    opacity: 1;
+    visibility: visible;
+    text-align: center;
+    white-space: nowrap;
 }
 
 /* Responsive table adjustments */
 @media (max-width: 1200px) {
     .search-results-table th,
     .search-results-table td {
-        padding: 8px 10px;
-        font-size: 12px;
+        padding: 6px 8px;
+        font-size: 11px;
     }
     
     .search-result-title {
-        font-size: 13px;
+        font-size: 12px;
     }
     
     .search-result-meta {
@@ -948,30 +1290,30 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
     }
     
     .search-result-excerpt {
-        font-size: 11px;
-        max-height: 32px;
+        font-size: 10px;
+        max-height: 30px;
     }
 }
 
 @media (max-width: 768px) {
     .search-results-table {
-        font-size: 11px;
+        font-size: 10px;
     }
     
     .search-results-table th,
     .search-results-table td {
-        padding: 6px 8px;
+        padding: 4px 6px;
     }
     
     .search-result-actions {
         flex-direction: column;
-        gap: 4px;
+        gap: 3px;
     }
     
-    .search-result-btn {
+    .cornuwab-search-result-btn {
         padding: 4px 8px;
         font-size: 10px;
-        min-width: 50px;
+        min-width: 45px;
         white-space: nowrap;
     }
 }
@@ -6615,8 +6957,13 @@ jQuery(document).ready(function($) {
             
             results.forEach(function(result) {
                 var statusClass = result.is_indexed ? 'indexed' : 'not-indexed';
-                var statusText = result.is_indexed ? '<?php esc_js(__('Indexed', 'wp-gpt-rag-chat')); ?>' : '<?php esc_js(__('Not Indexed', 'wp-gpt-rag-chat')); ?>';
-                var actionText = result.is_indexed ? '<?php esc_js(__('Re-index', 'wp-gpt-rag-chat')); ?>' : '<?php esc_js(__('Index Now', 'wp-gpt-rag-chat')); ?>';
+                var statusText = result.is_indexed ? 'Indexed' : 'Not Indexed';
+                var actionText = result.is_indexed ? 'Re-index' : 'Index Now';
+                
+                // Debug: ensure actionText is not empty
+                if (!actionText || actionText.trim() === '') {
+                    actionText = 'Index Now';
+                }
                 
                 html += '<tr data-post-id="' + result.id + '">';
                 
@@ -6643,9 +6990,10 @@ jQuery(document).ready(function($) {
                 html += '<td>';
                 html += '<div class="search-result-actions">';
                 if (result.url) {
-                    html += '<button class="search-result-btn" onclick="window.open(\'' + result.url + '\', \'_blank\')" title="<?php esc_js(__('View Post', 'wp-gpt-rag-chat')); ?>"><?php esc_js(__('View', 'wp-gpt-rag-chat')); ?></button>';
+                    html += '<div class="cornuwab-btn-wrapper" data-post-id="' + result.id + '"><span class="cornuwab-btn-text">View</span></div>';
                 }
-                html += '<button class="search-result-btn primary" data-post-id="' + result.id + '" data-action="index" title="' + actionText + '">' + actionText + '</button>';
+                var buttonText = result.is_indexed ? 'Re-index' : 'Index Now';
+                html += '<div class="cornuwab-btn-wrapper primary" data-post-id="' + result.id + '" data-action="index" title="' + buttonText + '"><span class="cornuwab-btn-text">' + buttonText + '</span></div>';
                 html += '</div>';
                 html += '</td>';
                 
@@ -6658,8 +7006,72 @@ jQuery(document).ready(function($) {
         
         resultsList.html(html);
         
-        // Attach click handlers for index buttons
-        resultsList.find('.search-result-btn[data-action="index"]').on('click', function() {
+        // Attach click handlers for view buttons
+        resultsList.find('.cornuwab-btn-wrapper').on('click', function() {
+            if ($(this).data('action') === 'index') {
+                // Handle index button click
+                var postId = $(this).data('post-id');
+                var button = $(this);
+                
+                if (isIndexingInProgress) {
+                    CORNUWB.showNotification(
+                        '<?php esc_html_e('Indexing In Progress', 'wp-gpt-rag-chat'); ?>',
+                        '<?php esc_html_e('Indexing is already in progress. Please wait for it to complete.', 'wp-gpt-rag-chat'); ?>',
+                        'warning'
+                    );
+                    return;
+                }
+                
+                // Show loading state
+                button.find('.cornuwab-btn-text').text('<?php esc_js(__('Indexing...', 'wp-gpt-rag-chat')); ?>');
+                
+                // Start indexing
+                showGlobalProgress('single_post', button, '');
+                
+                $.post(wpGptRagChatAdmin.ajaxUrl, {
+                    action: 'wp_gpt_rag_chat_reindex_post_now',
+                    post_id: postId,
+                    nonce: wpGptRagChatAdmin.nonce
+                }, function(response) {
+                    // Handle response
+                    if (response.success) {
+                        button.find('.cornuwab-btn-text').text('<?php esc_js(__('Re-index', 'wp-gpt-rag-chat')); ?>');
+                        button.removeClass('primary').addClass('success');
+                        CORNUWB.showNotification(
+                            '<?php esc_html_e('Success', 'wp-gpt-rag-chat'); ?>',
+                            '<?php esc_html_e('Post indexed successfully!', 'wp-gpt-rag-chat'); ?>',
+                            'success'
+                        );
+                    } else {
+                        button.find('.cornuwab-btn-text').text('<?php esc_js(__('Index Now', 'wp-gpt-rag-chat')); ?>');
+                        CORNUWB.showNotification(
+                            '<?php esc_html_e('Error', 'wp-gpt-rag-chat'); ?>',
+                            response.data || '<?php esc_html_e('Failed to index post.', 'wp-gpt-rag-chat'); ?>',
+                            'error'
+                        );
+                    }
+                }).fail(function() {
+                    button.find('.cornuwab-btn-text').text('<?php esc_js(__('Index Now', 'wp-gpt-rag-chat')); ?>');
+                    CORNUWB.showNotification(
+                        '<?php esc_html_e('Error', 'wp-gpt-rag-chat'); ?>',
+                        '<?php esc_html_e('Network error occurred.', 'wp-gpt-rag-chat'); ?>',
+                        'error'
+                    );
+                }).always(function() {
+                    hideGlobalProgress();
+                });
+            } else {
+                // Handle view button click - find the URL from the result data
+                var row = $(this).closest('tr');
+                var postId = row.data('post-id');
+                if (postId) {
+                    window.open('<?php echo admin_url('post.php?post='); ?>' + postId + '&action=edit', '_blank');
+                }
+            }
+        });
+        
+        // Legacy handler for backward compatibility
+        resultsList.find('.cornuwab-btn-wrapper[data-action="index"]').on('click', function() {
             var postId = $(this).data('post-id');
             var button = $(this);
             

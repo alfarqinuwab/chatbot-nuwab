@@ -1616,10 +1616,24 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
             <div class="chat-header">
                 <div class="chat-logo">
                     <?php 
+                    // Try multiple ways to get the settings
                     $settings = \WP_GPT_RAG_Chat\Settings::get_settings();
-                    if (!empty($settings['chat_logo'])): ?>
-                        <img src="<?php echo esc_url($settings['chat_logo']); ?>" alt="<?php esc_attr_e('Chat Logo', 'wp-gpt-rag-chat'); ?>" class="chat-logo-img" />
+                    $chat_logo = $settings['chat_logo'] ?? '';
+                    
+                    // Alternative: Try getting from WordPress options directly
+                    if (empty($chat_logo)) {
+                        $wp_settings = get_option('wp_gpt_rag_chat_settings', array());
+                        $chat_logo = $wp_settings['chat_logo'] ?? '';
+                    }
+                    
+                    // Debug: Add console log to check settings
+                    echo '<!-- Debug: chat_logo = ' . esc_html($chat_logo) . ' -->';
+                    echo '<!-- Debug: settings array = ' . esc_html(print_r($settings, true)) . ' -->';
+                    
+                    if (!empty($chat_logo) && filter_var($chat_logo, FILTER_VALIDATE_URL)): ?>
+                        <img src="<?php echo esc_url($chat_logo); ?>" alt="<?php esc_attr_e('Chat Logo', 'wp-gpt-rag-chat'); ?>" class="chat-logo-img" />
                     <?php else: ?>
+                        <!-- Debug: Show default avatar when no logo is set -->
                         <img src="<?php echo esc_url(plugin_dir_url(dirname(__FILE__)) . 'assets/images/avatar_small.png'); ?>" alt="<?php esc_attr_e('Chat Avatar', 'wp-gpt-rag-chat'); ?>" class="chat-logo-default-img" />
                     <?php endif; ?>
                 </div>

@@ -104,6 +104,7 @@ class Plugin {
         add_action('wp_ajax_update_incident_status', [$this, 'handle_update_incident_status']);
         add_action('wp_ajax_assign_incident', [$this, 'handle_assign_incident']);
         add_action('wp_ajax_generate_incident_report', [$this, 'handle_generate_incident_report']);
+        add_action('wp_ajax_download_incident_report', [$this, 'handle_download_incident_report']);
         add_action('wp_ajax_wp_gpt_rag_chat_clear_newly_indexed', [$this, 'handle_clear_newly_indexed']);
         
         // Cron hooks for persistent indexing
@@ -4798,6 +4799,7 @@ class Plugin {
         $filename = 'incident-report-' . date('Y-m-d-H-i-s') . '.csv';
         $file_path = $upload_dir['path'] . '/' . $filename;
         
+        // Write file with UTF-8 encoding
         if (file_put_contents($file_path, $csv_content) === false) {
             wp_send_json_error(['message' => __('Failed to create report file', 'wp-gpt-rag-chat')]);
         }
@@ -4808,7 +4810,8 @@ class Plugin {
         wp_send_json_success([
             'message' => __('Report generated successfully', 'wp-gpt-rag-chat'),
             'report_url' => $file_url,
-            'filename' => $filename
+            'filename' => $filename,
+            'download_url' => admin_url('admin-ajax.php?action=download_incident_report&file=' . urlencode($filename) . '&nonce=' . wp_create_nonce('download_incident_report'))
         ]);
     }
 
@@ -4816,7 +4819,9 @@ class Plugin {
      * Generate CSV content for incidents
      */
     private function generate_incident_csv($incidents) {
-        $csv_content = "ID,Problem Type,Description,User Email,Status,Assigned To,Created At,Resolved At,Admin Notes\n";
+        // Add BOM for UTF-8 to ensure proper Arabic text display in Excel
+        $csv_content = "\xEF\xBB\xBF";
+        $csv_content .= "ID,Problem Type,Description,User Email,Status,Assigned To,Created At,Resolved At,Admin Notes\n";
         
         foreach ($incidents as $incident) {
             $assigned_to = '';
@@ -4825,21 +4830,82 @@ class Plugin {
                 $assigned_to = $assigned_user ? $assigned_user->display_name : 'Unknown User';
             }
             
+            // Format dates properly
+            $created_at = $incident->created_at ? date('Y-m-d H:i:s', strtotime($incident->created_at)) : '';
+            $resolved_at = $incident->resolved_at ? date('Y-m-d H:i:s', strtotime($incident->resolved_at)) : '';
+            
+            // Clean and escape text for CSV
+            $problem_description = $this->clean_text_for_csv($incident->problem_description);
+            $admin_notes = $this->clean_text_for_csv($incident->admin_notes ?: '');
+            
             $csv_content .= sprintf(
                 "%d,%s,\"%s\",%s,%s,%s,%s,%s,\"%s\"\n",
                 $incident->id,
                 $incident->problem_type,
-                str_replace('"', '""', $incident->problem_description),
+                $problem_description,
                 $incident->user_email,
                 $incident->status,
                 $assigned_to,
-                $incident->created_at,
-                $incident->resolved_at ?: '',
-                str_replace('"', '""', $incident->admin_notes ?: '')
+                $created_at,
+                $resolved_at,
+                $admin_notes
             );
         }
         
         return $csv_content;
+    }
+    
+    /**
+     * Clean text for CSV export to handle Arabic and special characters
+     */
+    private function clean_text_for_csv($text) {
+        if (empty($text)) {
+            return '';
+        }
+        
+        // Remove or replace problematic characters
+        $text = str_replace(["\r\n", "\r", "\n"], " ", $text);
+        $text = str_replace('"', '""', $text);
+        $text = trim($text);
+        
+        return $text;
+    }
+
+    /**
+     * Handle downloading incident report with proper UTF-8 headers
+     */
+    public function handle_download_incident_report() {
+        // Verify nonce
+        if (!wp_verify_nonce($_GET['nonce'] ?? '', 'download_incident_report')) {
+            wp_die(__('Security check failed', 'wp-gpt-rag-chat'));
+        }
+
+        // Check user capabilities
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have permission to download reports', 'wp-gpt-rag-chat'));
+        }
+
+        $filename = sanitize_file_name($_GET['file'] ?? '');
+        if (empty($filename)) {
+            wp_die(__('Invalid file', 'wp-gpt-rag-chat'));
+        }
+
+        $upload_dir = wp_upload_dir();
+        $file_path = $upload_dir['path'] . '/' . $filename;
+
+        if (!file_exists($file_path)) {
+            wp_die(__('File not found', 'wp-gpt-rag-chat'));
+        }
+
+        // Set proper headers for UTF-8 CSV download
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+        header('Pragma: public');
+        
+        // Output the file
+        readfile($file_path);
+        exit;
     }
 
     /**
@@ -4874,6 +4940,18 @@ class Plugin {
             wp_send_json_error(['message' => __('Incident not found', 'wp-gpt-rag-chat')]);
         }
 
+        // Get assigned user info
+        $assigned_user = null;
+        if (!empty($incident->assigned_to)) {
+            $assigned_user_obj = get_user_by('id', $incident->assigned_to);
+            if ($assigned_user_obj) {
+                $assigned_user = [
+                    'id' => $assigned_user_obj->ID,
+                    'name' => $assigned_user_obj->display_name
+                ];
+            }
+        }
+
         // Format the incident data
         $incident_data = [
             'id' => $incident->id,
@@ -4884,6 +4962,9 @@ class Plugin {
             'user_agent' => $incident->user_agent,
             'status' => $incident->status,
             'admin_notes' => $incident->admin_notes,
+            'assigned_to' => $incident->assigned_to,
+            'assigned_user' => $assigned_user,
+            'assigned_user_name' => $assigned_user ? $assigned_user['name'] : null,
             'created_at' => date_i18n('M j, Y g:i A', strtotime($incident->created_at)),
             'resolved_at' => $incident->resolved_at ? date_i18n('M j, Y g:i A', strtotime($incident->resolved_at)) : null
         ];

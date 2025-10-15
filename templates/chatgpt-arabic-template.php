@@ -1801,6 +1801,36 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
         </div>
     </div>
 
+    <!-- Success Modal -->
+    <div class="modal-overlay" id="successModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><?php esc_html_e('تم الإرسال بنجاح', 'wp-gpt-rag-chat'); ?></h3>
+                <button class="modal-close" id="closeSuccessModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div style="text-align: center; padding: 20px 0;">
+                    <div style="font-size: 48px; color: #28a745; margin-bottom: 20px;">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h4 style="margin-bottom: 15px; color: #1d2327;">
+                        <?php esc_html_e('تم إرسال التقرير بنجاح', 'wp-gpt-rag-chat'); ?>
+                    </h4>
+                    <p style="color: #646970; margin-bottom: 25px;">
+                        <?php esc_html_e('شكراً لك على إرسال التقرير. سنقوم بمراجعة المشكلة والعمل على حلها في أقرب وقت ممكن.', 'wp-gpt-rag-chat'); ?>
+                    </p>
+                    <div style="display: flex; gap: 12px; justify-content: center;">
+                        <button class="btn-submit" id="closeSuccessModalBtn">
+                            <?php esc_html_e('موافق', 'wp-gpt-rag-chat'); ?>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Usage modal elements
@@ -2798,7 +2828,11 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            alert('<?php echo esc_js(__('تم إرسال التقرير بنجاح', 'wp-gpt-rag-chat')); ?>');
+                            // Show success modal instead of alert
+                            const successModal = document.getElementById('successModal');
+                            if (successModal) {
+                                successModal.classList.add('show');
+                            }
                             reportModal.classList.remove('show');
                             reportForm.reset();
                         } else {
@@ -2850,6 +2884,33 @@ $settings = WP_GPT_RAG_Chat\Settings::get_settings();
                 confirmDelete.addEventListener('click', function() {
                     deleteConfirmationModal.classList.remove('show');
                     performChatDeletion();
+                });
+            }
+
+            // Success modal handlers
+            const successModal = document.getElementById('successModal');
+            const closeSuccessModal = document.getElementById('closeSuccessModal');
+            const closeSuccessModalBtn = document.getElementById('closeSuccessModalBtn');
+
+            // Close success modal handlers
+            if (closeSuccessModal) {
+                closeSuccessModal.addEventListener('click', function() {
+                    successModal.classList.remove('show');
+                });
+            }
+
+            if (closeSuccessModalBtn) {
+                closeSuccessModalBtn.addEventListener('click', function() {
+                    successModal.classList.remove('show');
+                });
+            }
+
+            // Close success modal when clicking overlay
+            if (successModal) {
+                successModal.addEventListener('click', function(e) {
+                    if (e.target === successModal) {
+                        successModal.classList.remove('show');
+                    }
                 });
             }
 

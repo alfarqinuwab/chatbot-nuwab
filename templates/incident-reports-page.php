@@ -83,10 +83,23 @@ $incidents = $wpdb->get_results($wpdb->prepare($query, $where_values));
 // Get unique problem types for filter
 $problem_types = $wpdb->get_results("SELECT DISTINCT problem_type FROM $table_name ORDER BY problem_type");
 
+// Get users for assignment dropdown
+$users = get_users(['role__in' => ['administrator', 'editor', 'author']]);
+
 ?>
 
 <div class="wrap">
     <h1><?php esc_html_e('Incident Reports', 'wp-gpt-rag-chat'); ?></h1>
+    
+    <!-- Report Generation Section -->
+    <div class="tablenav top" style="margin-bottom: 20px;">
+        <div class="alignleft actions">
+            <button type="button" class="button button-secondary" id="generate-report-btn" style="background: #007cba; color: white; border-color: #007cba;">
+                <span class="dashicons dashicons-download" style="vertical-align: middle; margin-right: 5px;"></span>
+                <?php esc_html_e('Generate Full Report', 'wp-gpt-rag-chat'); ?>
+            </button>
+        </div>
+    </div>
     
     <!-- Filters -->
     <div class="tablenav top">
@@ -158,6 +171,7 @@ $problem_types = $wpdb->get_results("SELECT DISTINCT problem_type FROM $table_na
                 <th><?php esc_html_e('Description', 'wp-gpt-rag-chat'); ?></th>
                 <th><?php esc_html_e('User', 'wp-gpt-rag-chat'); ?></th>
                 <th><?php esc_html_e('Status', 'wp-gpt-rag-chat'); ?></th>
+                <th><?php esc_html_e('Assign To', 'wp-gpt-rag-chat'); ?></th>
                 <th><?php esc_html_e('Date', 'wp-gpt-rag-chat'); ?></th>
                 <th><?php esc_html_e('Actions', 'wp-gpt-rag-chat'); ?></th>
             </tr>
@@ -165,7 +179,7 @@ $problem_types = $wpdb->get_results("SELECT DISTINCT problem_type FROM $table_na
         <tbody>
             <?php if (empty($incidents)): ?>
                 <tr>
-                    <td colspan="7" style="text-align: center; padding: 20px;">
+                    <td colspan="8" style="text-align: center; padding: 20px;">
                         <?php esc_html_e('No incident reports found.', 'wp-gpt-rag-chat'); ?>
                     </td>
                 </tr>
@@ -205,6 +219,24 @@ $problem_types = $wpdb->get_results("SELECT DISTINCT problem_type FROM $table_na
                             ">
                                 <?php echo esc_html(ucfirst($incident->status)); ?>
                             </span>
+                        </td>
+                        <td>
+                            <?php if (!empty($incident->assigned_to)): ?>
+                                <?php $assigned_user = get_user_by('id', $incident->assigned_to); ?>
+                                <?php if ($assigned_user): ?>
+                                    <span class="assigned-user" style="background: #e7f3ff; color: #0066cc; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                                        <?php echo esc_html($assigned_user->display_name); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="assigned-user" style="background: #f0f0f0; color: #666; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                                        <?php esc_html_e('Unknown User', 'wp-gpt-rag-chat'); ?>
+                                    </span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="unassigned" style="background: #f8f8f8; color: #999; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                                    <?php esc_html_e('Unassigned', 'wp-gpt-rag-chat'); ?>
+                                </span>
+                            <?php endif; ?>
                         </td>
                         <td><?php echo esc_html(date_i18n('M j, Y g:i A', strtotime($incident->created_at))); ?></td>
                         <td>
@@ -317,7 +349,11 @@ function displayIncidentDetails(incident) {
             <strong><?php esc_html_e('Problem Type:', 'wp-gpt-rag-chat'); ?></strong> ${incident.problem_type}<br>
             <strong><?php esc_html_e('Date:', 'wp-gpt-rag-chat'); ?></strong> ${incident.created_at}<br>
             <strong><?php esc_html_e('User:', 'wp-gpt-rag-chat'); ?></strong> ${incident.user_email || '<?php esc_html_e('Guest', 'wp-gpt-rag-chat'); ?>'}<br>
-            <strong><?php esc_html_e('IP Address:', 'wp-gpt-rag-chat'); ?></strong> ${incident.user_ip}
+            <strong><?php esc_html_e('IP Address:', 'wp-gpt-rag-chat'); ?></strong> ${incident.user_ip}<br>
+            <strong><?php esc_html_e('Assigned To:', 'wp-gpt-rag-chat'); ?></strong> 
+            <span id="assigned-user-display" style="background: ${incident.assigned_to ? '#e7f3ff' : '#f8f8f8'}; color: ${incident.assigned_to ? '#0066cc' : '#999'}; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                ${incident.assigned_to ? incident.assigned_user_name : '<?php esc_html_e('Unassigned', 'wp-gpt-rag-chat'); ?>'}
+            </span>
         </div>
         
         <div style="margin-bottom: 20px;">
@@ -361,11 +397,35 @@ function displayIncidentDetails(incident) {
             </form>
         </div>
         
+        <!-- Assignment Section -->
+        <div style="margin: 20px 0; padding: 20px; background: #f0f8ff; border-radius: 8px; border-left: 4px solid #0066cc;">
+            <h4 style="margin-top: 0; color: #0066cc;"><?php esc_html_e('Assign Incident', 'wp-gpt-rag-chat'); ?></h4>
+            <form id="assignmentForm" style="margin-bottom: 15px;">
+                <div style="margin-bottom: 15px;">
+                    <label for="assignTo" style="display: block; margin-bottom: 5px; font-weight: 500;">
+                        <?php esc_html_e('Assign To:', 'wp-gpt-rag-chat'); ?>
+                    </label>
+                    <select id="assignTo" name="assigned_to" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 250px;">
+                        <option value=""><?php esc_html_e('Unassigned', 'wp-gpt-rag-chat'); ?></option>
+                        <?php foreach ($users as $user): ?>
+                            <option value="<?php echo esc_attr($user->ID); ?>"><?php echo esc_html($user->display_name); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <button type="submit" class="button button-secondary" style="margin-right: 10px;">
+                    <?php esc_html_e('Update Assignment', 'wp-gpt-rag-chat'); ?>
+                </button>
+            </form>
+        </div>
+        
         <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
             <strong><?php esc_html_e('User Agent:', 'wp-gpt-rag-chat'); ?></strong><br>
             <small style="color: #666; word-break: break-all;">${incident.user_agent}</small>
         </div>
     `;
+    
+    // Set current assignment
+    setCurrentAssignment(incident);
     
     // Add event listener for status update form
     document.getElementById('statusUpdateForm').addEventListener('submit', function(e) {
@@ -418,10 +478,177 @@ function updateIncidentStatus(incidentId) {
         submitBtn.textContent = originalText;
     });
 }
+
+// Handle assignment form submission
+document.addEventListener('submit', function(e) {
+    if (e.target.id === 'assignmentForm') {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const incidentId = document.querySelector('.view-incident[data-id]').dataset.id;
+        const assignedTo = formData.get('assigned_to');
+        
+        // Show loading state
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = '<?php esc_js(__('Updating...', 'wp-gpt-rag-chat')); ?>';
+        
+        // Prepare AJAX data
+        const ajaxData = new FormData();
+        ajaxData.append('action', 'assign_incident');
+        ajaxData.append('incident_id', incidentId);
+        ajaxData.append('assigned_to', assignedTo);
+        ajaxData.append('nonce', '<?php echo wp_create_nonce('incident_assignment_nonce'); ?>');
+        
+        // Submit via AJAX
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            body: ajaxData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update the modal display
+                const assignedDisplay = document.getElementById('assigned-user-display');
+                if (data.data.assigned_user) {
+                    assignedDisplay.textContent = data.data.assigned_user.name;
+                    assignedDisplay.style.background = '#e7f3ff';
+                    assignedDisplay.style.color = '#0066cc';
+                } else {
+                    assignedDisplay.textContent = '<?php esc_js(__('Unassigned', 'wp-gpt-rag-chat')); ?>';
+                    assignedDisplay.style.background = '#f8f8f8';
+                    assignedDisplay.style.color = '#999';
+                }
+                
+                // Update the table row
+                updateTableRowAssignment(incidentId, data.data.assigned_user);
+                
+                // Show success message
+                alert('<?php echo esc_js(__('Assignment updated successfully', 'wp-gpt-rag-chat')); ?>');
+            } else {
+                alert('<?php echo esc_js(__('Failed to update assignment', 'wp-gpt-rag-chat')); ?>: ' + (data.data || ''));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('<?php echo esc_js(__('Failed to update assignment', 'wp-gpt-rag-chat')); ?>');
+        })
+        .finally(() => {
+            // Re-enable submit button
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        });
+    }
+});
+
+// Handle report generation button
+document.addEventListener('click', function(e) {
+    if (e.target.id === 'generate-report-btn') {
+        generateFullReport();
+    }
+});
+
+// Generate full report function
+function generateFullReport() {
+    const button = document.getElementById('generate-report-btn');
+    const originalText = button.innerHTML;
+    
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<span class="dashicons dashicons-update" style="vertical-align: middle; margin-right: 5px; animation: spin 1s linear infinite;"></span><?php esc_js(__('Generating Report...', 'wp-gpt-rag-chat')); ?>';
+    
+    // Prepare form data
+    const formData = new FormData();
+    formData.append('action', 'generate_incident_report');
+    formData.append('nonce', '<?php echo wp_create_nonce('generate_incident_report'); ?>');
+    
+    // Submit via AJAX
+    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Create download link
+            const downloadLink = document.createElement('a');
+            downloadLink.href = data.data.report_url;
+            downloadLink.download = data.data.filename;
+            downloadLink.style.display = 'none';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            
+            // Show success message
+            alert('<?php echo esc_js(__('Report generated successfully!', 'wp-gpt-rag-chat')); ?>');
+        } else {
+            alert('<?php echo esc_js(__('Failed to generate report', 'wp-gpt-rag-chat')); ?>: ' + (data.data || ''));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('<?php echo esc_js(__('Failed to generate report', 'wp-gpt-rag-chat')); ?>');
+    })
+    .finally(() => {
+        // Re-enable button
+        button.disabled = false;
+        button.innerHTML = originalText;
+    });
+}
+
+// Set current assignment when modal opens
+function setCurrentAssignment(incident) {
+    const assignSelect = document.getElementById('assignTo');
+    if (assignSelect && incident.assigned_to) {
+        assignSelect.value = incident.assigned_to;
+    } else if (assignSelect) {
+        assignSelect.value = '';
+    }
+}
+
+// Update table row assignment display
+function updateTableRowAssignment(incidentId, assignedUser) {
+    // Find the table row for this incident
+    const tableRows = document.querySelectorAll('tbody tr');
+    tableRows.forEach(row => {
+        const firstCell = row.querySelector('td:first-child');
+        if (firstCell && firstCell.textContent.trim() === incidentId.toString()) {
+            // Find the assignment column (6th column - after ID, Type, Description, User, Status, Assign To)
+            const assignmentCell = row.querySelector('td:nth-child(6)');
+            if (assignmentCell) {
+                if (assignedUser) {
+                    assignmentCell.innerHTML = `
+                        <span class="assigned-user" style="background: #e7f3ff; color: #0066cc; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                            ${assignedUser.name}
+                        </span>
+                    `;
+                } else {
+                    assignmentCell.innerHTML = `
+                        <span class="unassigned" style="background: #f8f8f8; color: #999; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                            <?php esc_html_e('Unassigned', 'wp-gpt-rag-chat'); ?>
+                        </span>
+                    `;
+                }
+            }
+        }
+    });
+}
+
 </script>
 
 <style>
 .status-pending { background: #f0ad4e !important; }
 .status-in_progress { background: #5bc0de !important; }
 .status-resolved { background: #5cb85c !important; }
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#generate-report-btn:hover {
+    background: #005a87 !important;
+    border-color: #005a87 !important;
+}
 </style>

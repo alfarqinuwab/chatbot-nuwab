@@ -102,6 +102,8 @@ class Plugin {
         add_action('wp_ajax_nopriv_submit_incident_report', [$this, 'handle_submit_incident_report']);
         add_action('wp_ajax_get_incident_details', [$this, 'handle_get_incident_details']);
         add_action('wp_ajax_update_incident_status', [$this, 'handle_update_incident_status']);
+        add_action('wp_ajax_assign_incident', [$this, 'handle_assign_incident']);
+        add_action('wp_ajax_generate_incident_report', [$this, 'handle_generate_incident_report']);
         add_action('wp_ajax_wp_gpt_rag_chat_clear_newly_indexed', [$this, 'handle_clear_newly_indexed']);
         
         // Cron hooks for persistent indexing
@@ -111,21 +113,6 @@ class Plugin {
         add_action('wp_ajax_wp_gpt_rag_chat_get_export_history', [$this, 'handle_get_export_history']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_diagnostics_data', [$this, 'handle_get_diagnostics_data']);
         add_action('wp_ajax_wp_gpt_rag_chat_get_process_status', [$this, 'handle_get_process_status']);
-        
-        // Custom Tables AJAX handlers
-        add_action('wp_ajax_wp_gpt_rag_chat_index_custom_table', [$this, 'handle_index_custom_table']);
-        add_action('wp_ajax_wp_gpt_rag_chat_index_custom_table_batch', [$this, 'handle_index_custom_table_batch']);
-        add_action('wp_ajax_wp_gpt_rag_chat_clear_custom_table_index', [$this, 'handle_clear_custom_table_index']);
-        add_action('wp_ajax_wp_gpt_rag_chat_clear_all_custom_indexes', [$this, 'handle_clear_all_custom_indexes']);
-        add_action('wp_ajax_wp_gpt_rag_chat_index_single_record', [$this, 'handle_index_single_record']);
-        add_action('wp_ajax_wp_gpt_rag_chat_get_table_records', [$this, 'handle_get_table_records']);
-        add_action('wp_ajax_wp_gpt_rag_chat_get_custom_table_records', [$this, 'handle_get_custom_table_records']);
-        add_action('wp_ajax_wp_gpt_rag_chat_search_custom_records', [$this, 'handle_search_custom_records']);
-        add_action('wp_ajax_wp_gpt_rag_chat_debug_table_query', [$this, 'handle_debug_table_query']);
-        add_action('wp_ajax_wp_gpt_rag_chat_test_simple_index', [$this, 'handle_test_simple_index']);
-        add_action('wp_ajax_wp_gpt_rag_chat_test_direct_insert', [$this, 'handle_test_direct_insert']);
-        add_action('wp_ajax_wp_gpt_rag_chat_save_custom_mappings', [$this, 'handle_save_custom_mappings']);
-        add_action('wp_ajax_wp_gpt_rag_chat_index_all_custom_tables', [$this, 'handle_index_all_custom_tables']);
         
         // WP-Cron hooks
         add_action('wp_gpt_rag_chat_index_content', [$this, 'cron_index_content']);
@@ -334,16 +321,6 @@ class Plugin {
                 'manage_options',
                 'wp-gpt-rag-chat-indexing',
                 [$this, 'indexing_page']
-            );
-            
-            // Custom Tables submenu
-            add_submenu_page(
-                'wp-gpt-rag-chat-dashboard',
-                __('Custom Tables', 'wp-gpt-rag-chat'),
-                __('Custom Tables', 'wp-gpt-rag-chat'),
-                'manage_options',
-                'wp-gpt-rag-chat-custom-tables',
-                [$this, 'custom_tables_page']
             );
             
             // Analytics & Logs submenu
@@ -587,10 +564,6 @@ class Plugin {
      */
     public function indexing_page() {
         include WP_GPT_RAG_CHAT_PLUGIN_DIR . 'templates/indexing-page.php';
-    }
-    
-    public function custom_tables_page() {
-        include WP_GPT_RAG_CHAT_PLUGIN_DIR . 'templates/custom-tables-page-final.php';
     }
     
     /**
@@ -4707,16 +4680,166 @@ class Plugin {
             status varchar(20) DEFAULT 'pending',
             admin_notes text DEFAULT '',
             resolved_at datetime DEFAULT NULL,
+            assigned_to int(11) DEFAULT NULL,
+            assigned_at datetime DEFAULT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY status (status),
             KEY problem_type (problem_type),
             KEY user_id (user_id),
+            KEY assigned_to (assigned_to),
             KEY timestamp (timestamp)
         ) $charset_collate;";
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+        
+        // Add new columns if they don't exist (for existing installations)
+        $this->migrate_incident_reports_table();
+    }
+    
+    /**
+     * Migrate incident reports table to add assignment columns
+     */
+    private function migrate_incident_reports_table() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'gpt_rag_incident_reports';
+        
+        // Check if assigned_to column exists
+        $column_exists = $wpdb->get_results("SHOW COLUMNS FROM $table_name LIKE 'assigned_to'");
+        if (empty($column_exists)) {
+            $wpdb->query("ALTER TABLE $table_name ADD COLUMN assigned_to int(11) DEFAULT NULL AFTER resolved_at");
+            $wpdb->query("ALTER TABLE $table_name ADD COLUMN assigned_at datetime DEFAULT NULL AFTER assigned_to");
+            $wpdb->query("ALTER TABLE $table_name ADD KEY assigned_to (assigned_to)");
+        }
+    }
+
+    /**
+     * Handle incident assignment updates
+     */
+    public function handle_assign_incident() {
+        // Verify nonce
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'incident_assignment_nonce')) {
+            wp_send_json_error(['message' => __('Security check failed', 'wp-gpt-rag-chat')]);
+        }
+
+        // Check user capabilities
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('You do not have permission to assign incidents', 'wp-gpt-rag-chat')]);
+        }
+
+        $incident_id = intval($_POST['incident_id'] ?? 0);
+        $assigned_to = intval($_POST['assigned_to'] ?? 0);
+
+        if ($incident_id <= 0) {
+            wp_send_json_error(['message' => __('Invalid incident ID', 'wp-gpt-rag-chat')]);
+        }
+
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'gpt_rag_incident_reports';
+
+        // Update assignment
+        $result = $wpdb->update(
+            $table_name,
+            [
+                'assigned_to' => $assigned_to > 0 ? $assigned_to : null,
+                'assigned_at' => $assigned_to > 0 ? current_time('mysql') : null
+            ],
+            ['id' => $incident_id],
+            ['%d', '%s'],
+            ['%d']
+        );
+
+        if ($result === false) {
+            wp_send_json_error(['message' => __('Failed to update assignment', 'wp-gpt-rag-chat')]);
+        }
+
+        // Get assigned user info
+        $assigned_user = null;
+        if ($assigned_to > 0) {
+            $assigned_user = get_user_by('id', $assigned_to);
+        }
+
+        wp_send_json_success([
+            'message' => __('Incident assignment updated successfully', 'wp-gpt-rag-chat'),
+            'assigned_user' => $assigned_user ? [
+                'id' => $assigned_user->ID,
+                'name' => $assigned_user->display_name,
+                'email' => $assigned_user->user_email
+            ] : null
+        ]);
+    }
+
+    /**
+     * Handle generating incident report
+     */
+    public function handle_generate_incident_report() {
+        // Verify nonce
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'generate_incident_report')) {
+            wp_send_json_error(['message' => __('Security check failed', 'wp-gpt-rag-chat')]);
+        }
+
+        // Check user capabilities
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('You do not have permission to generate reports', 'wp-gpt-rag-chat')]);
+        }
+
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'gpt_rag_incident_reports';
+
+        // Get all incidents
+        $incidents = $wpdb->get_results("SELECT * FROM $table_name ORDER BY created_at DESC");
+
+        // Generate CSV content
+        $csv_content = $this->generate_incident_csv($incidents);
+
+        // Create temporary file
+        $upload_dir = wp_upload_dir();
+        $filename = 'incident-report-' . date('Y-m-d-H-i-s') . '.csv';
+        $file_path = $upload_dir['path'] . '/' . $filename;
+        
+        if (file_put_contents($file_path, $csv_content) === false) {
+            wp_send_json_error(['message' => __('Failed to create report file', 'wp-gpt-rag-chat')]);
+        }
+
+        // Return file URL
+        $file_url = $upload_dir['url'] . '/' . $filename;
+        
+        wp_send_json_success([
+            'message' => __('Report generated successfully', 'wp-gpt-rag-chat'),
+            'report_url' => $file_url,
+            'filename' => $filename
+        ]);
+    }
+
+    /**
+     * Generate CSV content for incidents
+     */
+    private function generate_incident_csv($incidents) {
+        $csv_content = "ID,Problem Type,Description,User Email,Status,Assigned To,Created At,Resolved At,Admin Notes\n";
+        
+        foreach ($incidents as $incident) {
+            $assigned_to = '';
+            if (!empty($incident->assigned_to)) {
+                $assigned_user = get_user_by('id', $incident->assigned_to);
+                $assigned_to = $assigned_user ? $assigned_user->display_name : 'Unknown User';
+            }
+            
+            $csv_content .= sprintf(
+                "%d,%s,\"%s\",%s,%s,%s,%s,%s,\"%s\"\n",
+                $incident->id,
+                $incident->problem_type,
+                str_replace('"', '""', $incident->problem_description),
+                $incident->user_email,
+                $incident->status,
+                $assigned_to,
+                $incident->created_at,
+                $incident->resolved_at ?: '',
+                str_replace('"', '""', $incident->admin_notes ?: '')
+            );
+        }
+        
+        return $csv_content;
     }
 
     /**
@@ -5704,1150 +5827,6 @@ class Plugin {
         // Output file
         readfile($file_path);
         exit;
-    }
-    
-    /**
-     * Handle custom table indexing
-     */
-    public function handle_index_custom_table() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        $table_name = sanitize_text_field($_POST['table_name'] ?? '');
-        if (empty($table_name)) {
-            wp_send_json_error(['message' => __('Table name is required', 'wp-gpt-rag-chat')]);
-        }
-        
-        global $wpdb;
-        $full_table_name = $wpdb->prefix . $table_name;
-        
-        // Check if table exists
-        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$full_table_name'");
-        if (!$table_exists) {
-            wp_send_json_error(['message' => __('Table does not exist', 'wp-gpt-rag-chat')]);
-        }
-        
-        // Get table data
-        $records = $wpdb->get_results("SELECT * FROM `$full_table_name` LIMIT 100");
-        
-        if (empty($records)) {
-            wp_send_json_error(['message' => __('No records found in table', 'wp-gpt-rag-chat')]);
-        }
-        
-        // Process records for indexing
-        $indexed_count = 0;
-        foreach ($records as $record) {
-            // Create a searchable content string
-            $content_parts = [];
-            foreach ($record as $field => $value) {
-                // More lenient check - include any non-empty string
-                if (is_string($value) && trim($value) !== '') {
-                    // Create structured content with field labels
-                    $content_parts[] = $field . ': ' . $value;
-                }
-            }
-            $content = implode(' | ', $content_parts);
-            
-            // Store in custom vectors table
-            $result = $wpdb->insert(
-                $wpdb->prefix . 'wp_gpt_rag_chat_vectors',
-                [
-                    'post_id' => 0, // Custom table records don't have post IDs
-                    'chunk_id' => 'custom_' . $table_name . '_' . $indexed_count,
-                    'content' => $content,
-                    'metadata' => json_encode([
-                        'table_name' => $table_name,
-                        'record_data' => $record,
-                        'indexed_at' => current_time('mysql')
-                    ]),
-                    'created_at' => current_time('mysql')
-                ]
-            );
-            
-            if ($result) {
-                $indexed_count++;
-            }
-        }
-        
-        wp_send_json_success([
-            'message' => sprintf(__('Successfully indexed %d records from %s', 'wp-gpt-rag-chat'), $indexed_count, $table_name),
-            'indexed_count' => $indexed_count
-        ]);
-    }
-    
-    /**
-     * Handle saving custom table field mappings
-     */
-    public function handle_save_custom_mappings() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        $form_data = $_POST['form_data'] ?? '';
-        parse_str($form_data, $mappings);
-        
-        // Save mappings to options
-        update_option('wp_gpt_rag_chat_custom_mappings', $mappings);
-        
-        wp_send_json_success(['message' => __('Field mappings saved successfully', 'wp-gpt-rag-chat')]);
-    }
-    
-    /**
-     * Handle indexing all custom tables
-     */
-    public function handle_index_all_custom_tables() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        $custom_tables = [
-            'committee_achievement',
-            'member_achievement_bp_topics',
-            'member_achievement_ipg_nuwab',
-            'member_achievement_prop_topics',
-            'member_achievement_ques_topics',
-            'minister_details',
-            'mp_detail',
-            'sitting_agenda',
-            'sitting_attachment',
-            'topics_agreements',
-            'topics_billproposals',
-            'topics_bills',
-            'topics_decrees',
-            'topics_generaltopics',
-            'topics_interrogation',
-            'topics_investigation',
-            'topics_proposal',
-            'topics_questions'
-        ];
-        
-        $total_indexed = 0;
-        $processed_tables = [];
-        
-        global $wpdb;
-        foreach ($custom_tables as $table_name) {
-            $full_table_name = $wpdb->prefix . $table_name;
-            
-            // Check if table exists
-            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$full_table_name'");
-            if (!$table_exists) {
-                continue;
-            }
-            
-            // Get table data
-            $records = $wpdb->get_results("SELECT * FROM `$full_table_name`");
-            
-            if (empty($records)) {
-                continue;
-            }
-            
-            // Process records for indexing
-            $indexed_count = 0;
-            foreach ($records as $record) {
-                // Create a searchable content string
-                $content_parts = [];
-                foreach ($record as $field => $value) {
-                    // More lenient check - include any non-empty string
-                if (is_string($value) && trim($value) !== '') {
-                        // Create structured content with field labels
-                    $content_parts[] = $field . ': ' . $value;
-                    }
-                }
-                $content = implode(' | ', $content_parts);
-                
-                // Store in custom vectors table
-                $result = $wpdb->insert(
-                    $wpdb->prefix . 'wp_gpt_rag_chat_vectors',
-                    [
-                        'post_id' => 0,
-                        'chunk_id' => 'custom_' . $table_name . '_' . $indexed_count,
-                        'content' => $content,
-                        'metadata' => json_encode([
-                            'table_name' => $table_name,
-                            'record_data' => $record,
-                            'indexed_at' => current_time('mysql')
-                        ]),
-                        'created_at' => current_time('mysql')
-                    ]
-                );
-                
-                if ($result) {
-                    $indexed_count++;
-                }
-            }
-            
-            $total_indexed += $indexed_count;
-            $processed_tables[] = $table_name . ' (' . $indexed_count . ' records)';
-        }
-        
-        wp_send_json_success([
-            'message' => sprintf(__('Successfully indexed %d records from %d tables', 'wp-gpt-rag-chat'), $total_indexed, count($processed_tables)),
-            'total_indexed' => $total_indexed,
-            'processed_tables' => $processed_tables
-        ]);
-    }
-    
-    /**
-     * Handle custom table batch indexing with progress tracking
-     */
-    public function handle_index_custom_table_batch() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        $table_name = sanitize_text_field($_POST['table_name'] ?? '');
-        $offset = intval($_POST['offset'] ?? 0);
-        $limit = intval($_POST['limit'] ?? 10);
-        
-        if (empty($table_name)) {
-            wp_send_json_error(['message' => __('Table name is required', 'wp-gpt-rag-chat')]);
-        }
-        
-        global $wpdb;
-        // Try with prefix first, then without prefix
-        $full_table_name = $wpdb->prefix . $table_name;
-        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$full_table_name'");
-        
-        if (!$table_exists) {
-            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_name'");
-            $full_table_name = $table_name; // Use table name without prefix
-        }
-        
-        if (!$table_exists) {
-            wp_send_json_error(['message' => __('Table does not exist', 'wp-gpt-rag-chat')]);
-        }
-        
-        // Get batch of records
-        $records = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM `$full_table_name` LIMIT %d OFFSET %d",
-            $limit,
-            $offset
-        ));
-        
-        // Debug: Log the query and results
-        error_log("Custom Table Indexing Debug:");
-        error_log("Table: $full_table_name");
-        error_log("Query: SELECT * FROM `$full_table_name` LIMIT $limit OFFSET $offset");
-        error_log("Records found: " . count($records));
-        
-        if (!empty($records)) {
-            error_log("First record sample: " . print_r($records[0], true));
-        }
-        
-        if (empty($records)) {
-            wp_send_json_success([
-                'processed_count' => 0,
-                'message' => 'No more records to process'
-            ]);
-        }
-        
-        // Process records for indexing
-        $indexed_count = 0;
-        foreach ($records as $record) {
-            // Create a searchable content string
-            $content_parts = [];
-            foreach ($record as $field => $value) {
-                // More lenient check - include any non-empty string
-                if (is_string($value) && trim($value) !== '') {
-                    // Create structured content with field labels
-                    $content_parts[] = $field . ': ' . $value;
-                }
-            }
-            $content = implode(' | ', $content_parts);
-            
-            // Debug: Log content processing
-            error_log("Content parts count: " . count($content_parts));
-            error_log("Content length: " . strlen($content));
-            error_log("Content preview: " . substr($content, 0, 100));
-            
-            // Skip if no content was found
-            if (empty($content)) {
-                error_log("Skipping record - no content");
-                continue;
-            }
-            
-            // Debug: Log before insert
-            error_log("About to insert record with content length: " . strlen($content));
-            
-            // Store in custom vectors table (with correct column structure)
-            $vector_id = 'custom_' . $table_name . '_' . ($offset + $indexed_count) . '_' . time();
-            
-            $insert_data = [
-                'post_id' => 0,
-                'content' => $content,
-                'metadata' => json_encode([
-                    'table_name' => $table_name,
-                    'record_data' => $record,
-                    'indexed_at' => current_time('mysql')
-                ]),
-                'created_at' => current_time('mysql'),
-                'vector_id' => $vector_id
-            ];
-            
-            $result = $wpdb->insert(
-                $wpdb->prefix . 'wp_gpt_rag_chat_vectors',
-                $insert_data
-            );
-            
-            if ($result) {
-                $indexed_count++;
-                
-                // Debug: Log the insert result
-                error_log("Custom table record inserted with vector_id: " . $vector_id);
-                
-                // Create embedding and send to Pinecone
-                try {
-                    $this->index_custom_table_to_pinecone($content, $vector_id, $table_name, $record);
-                    error_log("SUCCESS: Record sent to Pinecone successfully!");
-                } catch (\Exception $e) {
-                    error_log("ERROR: Failed to send to Pinecone: " . $e->getMessage());
-                    // Continue processing other records even if one fails
-                }
-            }
-        }
-        
-        wp_send_json_success([
-            'processed_count' => $indexed_count,
-            'message' => sprintf(__('Processed %d records from %s', 'wp-gpt-rag-chat'), $indexed_count, $table_name),
-            'debug_info' => [
-                'table_name' => $table_name,
-                'full_table_name' => $full_table_name,
-                'records_found' => count($records),
-                'total_records_in_table' => $wpdb->get_var("SELECT COUNT(*) FROM `$full_table_name`"),
-                'content_processing_debug' => !empty($records) ? [
-                    'first_record_fields' => array_keys((array)$records[0]),
-                    'first_record_sample' => array_slice((array)$records[0], 0, 3, true),
-                    'content_parts_count' => count(array_filter((array)$records[0], function($v) { return is_string($v) && trim($v) !== ''; })),
-                    'content_length' => strlen(implode(' ', array_filter((array)$records[0], function($v) { return is_string($v) && trim($v) !== ''; })))
-                ] : null
-            ]
-        ]);
-    }
-    
-    /**
-     * Handle clearing custom table index
-     */
-    public function handle_clear_custom_table_index() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        $table_name = sanitize_text_field($_POST['table_name'] ?? '');
-        if (empty($table_name)) {
-            wp_send_json_error(['message' => __('Table name is required', 'wp-gpt-rag-chat')]);
-        }
-        
-        global $wpdb;
-        
-        // Delete all vectors for this table
-        $deleted = $wpdb->delete(
-            $wpdb->prefix . 'wp_gpt_rag_chat_vectors',
-            [
-                'metadata' => $wpdb->prepare('%s', '%"table_name":"' . $table_name . '"%')
-            ],
-            ['%s']
-        );
-        
-        // Use LIKE query for metadata matching
-        $deleted = $wpdb->query($wpdb->prepare(
-            "DELETE FROM `{$wpdb->prefix}wp_gpt_rag_chat_vectors` WHERE metadata LIKE %s",
-            '%"table_name":"' . $table_name . '"%'
-        ));
-        
-        wp_send_json_success([
-            'message' => sprintf(__('Cleared %d indexed records for %s', 'wp-gpt-rag-chat'), $deleted, $table_name),
-            'deleted_count' => $deleted
-        ]);
-    }
-    
-    /**
-     * Handle clearing all custom table indexes
-     */
-    public function handle_clear_all_custom_indexes() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        global $wpdb;
-        
-        // Get list of all custom tables
-        $custom_tables = [
-            'committee_achievement',
-            'member_achievement_bp_topics', 
-            'member_achievement_ipg_nuwab',
-            'member_achievement_prop_topics',
-            'member_achievement_ques_topics',
-            'minister_details',
-            'mp_detail',
-            'sitting_agenda',
-            'sitting_attachment',
-            'topics_agreements',
-            'topics_bills',
-            'topics_billproposals',
-            'topics_decrees',
-            'topics_generaltopics',
-            'topics_interrogation',
-            'topics_investigation',
-            'topics_proposal',
-            'topics_questions'
-        ];
-        
-        $total_deleted = 0;
-        $deleted_by_table = [];
-        
-        // Delete indexes for each custom table
-        foreach ($custom_tables as $table_name) {
-            $deleted = $wpdb->query($wpdb->prepare(
-                "DELETE FROM `{$wpdb->prefix}wp_gpt_rag_chat_vectors` WHERE metadata LIKE %s",
-                '%"table_name":"' . $table_name . '"%'
-            ));
-            
-            if ($deleted > 0) {
-                $deleted_by_table[$table_name] = $deleted;
-                $total_deleted += $deleted;
-            }
-        }
-        
-        wp_send_json_success([
-            'message' => sprintf(__('Cleared %d total indexed records from all custom tables', 'wp-gpt-rag-chat'), $total_deleted),
-            'deleted_count' => $total_deleted,
-            'deleted_by_table' => $deleted_by_table
-        ]);
-    }
-    
-    /**
-     * Handle indexing a single record
-     */
-    public function handle_index_single_record() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        $table_name = sanitize_text_field($_POST['table_name'] ?? '');
-        $record_id = intval($_POST['record_id'] ?? 0);
-        
-        if (empty($table_name) || $record_id <= 0) {
-            wp_send_json_error(['message' => __('Table name and valid record ID are required', 'wp-gpt-rag-chat')]);
-        }
-        
-        global $wpdb;
-        
-        // Try with prefix first, then without prefix
-        $full_table_name = $wpdb->prefix . $table_name;
-        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$full_table_name'");
-        
-        if (!$table_exists) {
-            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_name'");
-            $full_table_name = $table_name; // Use table name without prefix
-        }
-        
-        if (!$table_exists) {
-            wp_send_json_error(['message' => __('Table does not exist', 'wp-gpt-rag-chat')]);
-        }
-        
-        // Get the specific record
-        $record = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM `$full_table_name` WHERE `{$table_name}id` = %d",
-            $record_id
-        ));
-        
-        if (!$record) {
-            wp_send_json_error(['message' => sprintf(__('Record with ID %d not found in table %s', 'wp-gpt-rag-chat'), $record_id, $table_name)]);
-        }
-        
-        // Create structured content
-        $content_parts = [];
-        foreach ($record as $field => $value) {
-            if (is_string($value) && trim($value) !== '') {
-                $content_parts[] = $field . ': ' . $value;
-            }
-        }
-        $content = implode(' | ', $content_parts);
-        
-        if (empty($content)) {
-            wp_send_json_error(['message' => __('No content found in record', 'wp-gpt-rag-chat')]);
-        }
-        
-        // Generate unique vector ID
-        $vector_id = 'single_' . $table_name . '_' . $record_id . '_' . time();
-        
-        // Insert into vectors table
-        $result = $wpdb->insert(
-            $wpdb->prefix . 'wp_gpt_rag_chat_vectors',
-            [
-                'post_id' => 0,
-                'content' => $content,
-                'metadata' => json_encode([
-                    'table_name' => $table_name,
-                    'record_id' => $record_id,
-                    'record_data' => $record,
-                    'indexed_at' => current_time('mysql')
-                ]),
-                'created_at' => current_time('mysql'),
-                'vector_id' => $vector_id
-            ]
-        );
-        
-        if ($result) {
-            // Also send to Pinecone
-            try {
-                $this->index_custom_table_to_pinecone($content, $vector_id, $table_name, $record);
-                error_log("Single record sent to Pinecone successfully!");
-            } catch (\Exception $e) {
-                error_log("ERROR: Failed to send single record to Pinecone: " . $e->getMessage());
-                // Still return success for local DB insert, but note Pinecone failure
-            }
-            
-            wp_send_json_success([
-                'message' => sprintf(__('Record %d from %s indexed successfully', 'wp-gpt-rag-chat'), $record_id, $table_name),
-                'vector_id' => $vector_id,
-                'content_length' => strlen($content),
-                'content_preview' => substr($content, 0, 200) . '...',
-                'record_data' => $record
-            ]);
-        } else {
-            wp_send_json_error(['message' => 'Failed to insert record: ' . $wpdb->last_error]);
-        }
-    }
-    
-    /**
-     * Index custom table content to Pinecone
-     */
-    private function index_custom_table_to_pinecone($content, $vector_id, $table_name, $record) {
-        // Get settings
-        $settings = \WP_GPT_RAG_Chat\Settings::get_settings();
-        $api_key = $settings['openai_api_key'] ?? '';
-        
-        if (empty($api_key)) {
-            throw new \Exception('OpenAI API key not configured');
-        }
-        
-        // Create embedding using OpenAI
-        $embedding = $this->create_embedding($content, $api_key, $settings);
-        
-        if (empty($embedding)) {
-            throw new \Exception('Failed to create embedding');
-        }
-        
-        // Prepare metadata for Pinecone
-        $metadata = [
-            'title' => 'Custom Table Record',
-            'content' => $content,
-            'type' => 'custom_table',
-            'table_name' => $table_name,
-            'created_at' => current_time('mysql'),
-            'source' => 'custom_table_indexing'
-        ];
-        
-        // Add record-specific metadata
-        if (isset($record->topictitle)) {
-            $metadata['title'] = $record->topictitle;
-        } elseif (isset($record->subject)) {
-            $metadata['title'] = $record->subject;
-        }
-        
-        // Prepare the vector for Pinecone
-        $vector = [
-            'id' => $vector_id,
-            'values' => $embedding,
-            'metadata' => $metadata
-        ];
-        
-        // Debug logging
-        error_log('Custom Table Pinecone Debug - Vector ID: ' . $vector_id);
-        error_log('Custom Table Pinecone Debug - Content Length: ' . strlen($content));
-        error_log('Custom Table Pinecone Debug - Embedding Dimensions: ' . count($embedding));
-        error_log('Custom Table Pinecone Debug - Metadata: ' . json_encode($metadata));
-        
-        // Send to Pinecone
-        $pinecone = new \WP_GPT_RAG_Chat\Pinecone();
-        $result = $pinecone->upsert_vectors([$vector]);
-        
-        // Debug logging for result
-        error_log('Custom Table Pinecone Debug - Upsert Result: ' . print_r($result, true));
-        
-        return $result;
-    }
-    
-    /**
-     * Handle getting table records with indexing status
-     */
-    public function handle_get_table_records() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        $table_name = sanitize_text_field($_POST['table_name'] ?? '');
-        
-        if (empty($table_name)) {
-            wp_send_json_error(['message' => __('Table name is required', 'wp-gpt-rag-chat')]);
-        }
-        
-        global $wpdb;
-        
-        // Try with prefix first, then without prefix
-        $full_table_name = $wpdb->prefix . $table_name;
-        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$full_table_name'");
-        
-        if (!$table_exists) {
-            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_name'");
-            if ($table_exists) {
-                $full_table_name = $table_name; // Use table name without prefix
-            }
-        }
-        
-        if (!$table_exists) {
-            wp_send_json_error(['message' => __('Table does not exist', 'wp-gpt-rag-chat')]);
-        }
-        
-        // Get pagination parameters
-        $offset = intval($_POST['offset'] ?? 0);
-        $limit = intval($_POST['limit'] ?? 10);
-        
-        // Get total count first
-        $total_records = $wpdb->get_var("SELECT COUNT(*) FROM `$full_table_name`");
-        
-        // Get paginated records from the table
-        $records = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM `$full_table_name` ORDER BY `{$table_name}id` ASC LIMIT %d OFFSET %d",
-            $limit,
-            $offset
-        ));
-        
-        if (empty($records)) {
-            wp_send_json_success([
-                'records' => [],
-                'indexed_records' => [],
-                'total_records' => $total_records,
-                'indexed_count' => 0
-            ]);
-        }
-        
-        // Get indexed record IDs
-        $indexed_records = [];
-        foreach ($records as $record) {
-            $record_id = $record->{"{$table_name}id"};
-            $exists = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM `{$wpdb->prefix}wp_gpt_rag_chat_vectors` WHERE metadata LIKE %s",
-                '%"table_name":"' . $table_name . '"%'
-            ));
-            
-            if ($exists > 0) {
-                // Check if this specific record is indexed
-                $specific_exists = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM `{$wpdb->prefix}wp_gpt_rag_chat_vectors` WHERE metadata LIKE %s AND metadata LIKE %s",
-                    '%"table_name":"' . $table_name . '"%',
-                    '%"record_id":' . $record_id . '%'
-                ));
-                
-                if ($specific_exists > 0) {
-                    $indexed_records[] = $record_id;
-                }
-            }
-        }
-        
-        // Format records for display
-        $formatted_records = [];
-        foreach ($records as $record) {
-            $record_id = $record->{"{$table_name}id"};
-            $title = '';
-            
-            // Try to find a title field
-            if (isset($record->topictitle)) {
-                $title = $record->topictitle;
-            } elseif (isset($record->subject)) {
-                $title = $record->subject;
-            } elseif (isset($record->title)) {
-                $title = $record->title;
-            } elseif (isset($record->name)) {
-                $title = $record->name;
-            }
-            
-            $formatted_records[] = [
-                'id' => $record_id,
-                'title' => $title,
-                'subject' => $title, // For compatibility
-                'data' => $record
-            ];
-        }
-        
-        wp_send_json_success([
-            'records' => $formatted_records,
-            'indexed_records' => $indexed_records,
-            'total_records' => $total_records,
-            'indexed_count' => count($indexed_records)
-        ]);
-    }
-    
-    /**
-     * Handle getting custom table records for the main table display
-     */
-    public function handle_get_custom_table_records() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        $page = intval($_POST['page'] ?? 1);
-        $per_page = intval($_POST['per_page'] ?? 10);
-        $offset = ($page - 1) * $per_page;
-        
-        global $wpdb;
-        
-        // Get all custom tables
-        $custom_tables = [
-            'committee_achievement',
-            'member_achievement_bp_topics', 
-            'member_achievement_ipg_nuwab',
-            'member_achievement_prop_topics',
-            'member_achievement_ques_topics',
-            'minister_details',
-            'mp_detail',
-            'sitting_agenda',
-            'sitting_attachment',
-            'topics_agreements',
-            'topics_bills',
-            'topics_billproposals',
-            'topics_decrees',
-            'topics_generaltopics',
-            'topics_interrogation',
-            'topics_investigation',
-            'topics_proposal',
-            'topics_questions'
-        ];
-        
-        // Get records from all tables
-        $all_records = [];
-        $total_count = 0;
-        
-        foreach ($custom_tables as $table_name) {
-            // Try with prefix first, then without prefix
-            $full_table_name = $wpdb->prefix . $table_name;
-            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$full_table_name'");
-            
-            if (!$table_exists) {
-                $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_name'");
-                if ($table_exists) {
-                    $full_table_name = $table_name;
-                }
-            }
-            
-            if ($table_exists) {
-                $records = $wpdb->get_results($wpdb->prepare(
-                    "SELECT * FROM `$full_table_name` ORDER BY `{$table_name}id` ASC LIMIT %d OFFSET %d",
-                    $per_page,
-                    $offset
-                ));
-                
-                foreach ($records as $record) {
-                    $record_id = $record->{"{$table_name}id"};
-                    $title = '';
-                    
-                    // Try to find a title field
-                    if (isset($record->topictitle)) {
-                        $title = $record->topictitle;
-                    } elseif (isset($record->subject)) {
-                        $title = $record->subject;
-                    } elseif (isset($record->title)) {
-                        $title = $record->title;
-                    } elseif (isset($record->name)) {
-                        $title = $record->name;
-                    }
-                    
-                    // Check if indexed
-                    $is_indexed = $wpdb->get_var($wpdb->prepare(
-                        "SELECT COUNT(*) FROM `{$wpdb->prefix}wp_gpt_rag_chat_vectors` WHERE metadata LIKE %s AND metadata LIKE %s",
-                        '%"table_name":"' . $table_name . '"%',
-                        '%"record_id":' . $record_id . '%'
-                    )) > 0;
-                    
-                    $all_records[] = [
-                        'id' => $record_id,
-                        'title' => $title ?: 'No Title',
-                        'table_name' => $table_name,
-                        'is_indexed' => $is_indexed,
-                        'updated' => date('Y-m-d H:i:s'),
-                        'data' => $record
-                    ];
-                }
-                
-                $total_count += $wpdb->get_var("SELECT COUNT(*) FROM `$full_table_name`");
-            }
-        }
-        
-        // Sort by ID and apply pagination
-        usort($all_records, function($a, $b) {
-            return $a['id'] - $b['id'];
-        });
-        
-        $paginated_records = array_slice($all_records, $offset, $per_page);
-        $total_pages = ceil($total_count / $per_page);
-        
-        // Get stats
-        $indexed_count = $wpdb->get_var("SELECT COUNT(*) FROM `{$wpdb->prefix}wp_gpt_rag_chat_vectors` WHERE metadata LIKE '%\"type\":\"custom_table\"%'");
-        
-        wp_send_json_success([
-            'items' => $paginated_records,
-            'pagination' => [
-                'current_page' => $page,
-                'total_pages' => $total_pages,
-                'total_items' => $total_count,
-                'per_page' => $per_page
-            ],
-            'stats' => [
-                'total_tables' => count($custom_tables),
-                'total_records' => $total_count,
-                'indexed_records' => $indexed_count
-            ]
-        ]);
-    }
-    
-    /**
-     * Handle searching custom records
-     */
-    public function handle_search_custom_records() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        $search_term = sanitize_text_field($_POST['search_term'] ?? '');
-        $table_name = sanitize_text_field($_POST['table_name'] ?? '');
-        
-        if (empty($search_term)) {
-            wp_send_json_error(['message' => __('Search term is required', 'wp-gpt-rag-chat')]);
-        }
-        
-        global $wpdb;
-        
-        $results = [];
-        
-        if ($table_name === 'any') {
-            // Search all tables
-            $custom_tables = [
-                'committee_achievement',
-                'member_achievement_bp_topics', 
-                'member_achievement_ipg_nuwab',
-                'member_achievement_prop_topics',
-                'member_achievement_ques_topics',
-                'minister_details',
-                'mp_detail',
-                'sitting_agenda',
-                'sitting_attachment',
-                'topics_agreements',
-                'topics_bills',
-                'topics_billproposals',
-                'topics_decrees',
-                'topics_generaltopics',
-                'topics_interrogation',
-                'topics_investigation',
-                'topics_proposal',
-                'topics_questions'
-            ];
-        } else {
-            $custom_tables = [$table_name];
-        }
-        
-        foreach ($custom_tables as $table) {
-            // Try with prefix first, then without prefix
-            $full_table_name = $wpdb->prefix . $table;
-            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$full_table_name'");
-            
-            if (!$table_exists) {
-                $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table'");
-                if ($table_exists) {
-                    $full_table_name = $table;
-                }
-            }
-            
-            if ($table_exists) {
-                // Search in title fields
-                $search_query = $wpdb->prepare(
-                    "SELECT * FROM `$full_table_name` WHERE 
-                    (`topictitle` LIKE %s OR `subject` LIKE %s OR `title` LIKE %s OR `name` LIKE %s OR `{$table}id` = %s)
-                    LIMIT 10",
-                    '%' . $search_term . '%',
-                    '%' . $search_term . '%',
-                    '%' . $search_term . '%',
-                    '%' . $search_term . '%',
-                    $search_term
-                );
-                
-                $records = $wpdb->get_results($search_query);
-                
-                foreach ($records as $record) {
-                    $record_id = $record->{"{$table}id"};
-                    $title = '';
-                    
-                    // Try to find a title field
-                    if (isset($record->topictitle)) {
-                        $title = $record->topictitle;
-                    } elseif (isset($record->subject)) {
-                        $title = $record->subject;
-                    } elseif (isset($record->title)) {
-                        $title = $record->title;
-                    } elseif (isset($record->name)) {
-                        $title = $record->name;
-                    }
-                    
-                    // Check if indexed
-                    $is_indexed = $wpdb->get_var($wpdb->prepare(
-                        "SELECT COUNT(*) FROM `{$wpdb->prefix}wp_gpt_rag_chat_vectors` WHERE metadata LIKE %s AND metadata LIKE %s",
-                        '%"table_name":"' . $table . '"%',
-                        '%"record_id":' . $record_id . '%'
-                    )) > 0;
-                    
-                    $results[] = [
-                        'id' => $record_id,
-                        'title' => $title ?: 'No Title',
-                        'table_name' => $table,
-                        'is_indexed' => $is_indexed,
-                        'data' => $record
-                    ];
-                }
-            }
-        }
-        
-        wp_send_json_success([
-            'results' => $results
-        ]);
-    }
-    
-    /**
-     * Debug table query handler
-     */
-    public function handle_debug_table_query() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        $table_name = sanitize_text_field($_POST['table_name'] ?? '');
-        $offset = intval($_POST['offset'] ?? 0);
-        $limit = intval($_POST['limit'] ?? 10);
-        
-        if (empty($table_name)) {
-            wp_send_json_error(['message' => __('Table name is required', 'wp-gpt-rag-chat')]);
-        }
-        
-        global $wpdb;
-        
-        // Try with prefix first, then without prefix
-        $full_table_name = $wpdb->prefix . $table_name;
-        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$full_table_name'");
-        
-        if (!$table_exists) {
-            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_name'");
-            $full_table_name = $table_name; // Use table name without prefix
-        }
-        
-        if (!$table_exists) {
-            wp_send_json_error(['message' => __('Table does not exist', 'wp-gpt-rag-chat')]);
-        }
-        
-        // Get total count
-        $total_count = $wpdb->get_var("SELECT COUNT(*) FROM `$full_table_name`");
-        
-        // Get sample records
-        $records = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM `$full_table_name` LIMIT %d OFFSET %d",
-            $limit,
-            $offset
-        ));
-        
-        // Analyze first record
-        $sample_record = null;
-        $content_analysis = [];
-        
-        if (!empty($records)) {
-            $sample_record = $records[0];
-            $content_parts = [];
-            foreach ($sample_record as $field => $value) {
-                $content_analysis[$field] = [
-                    'value' => $value,
-                    'type' => gettype($value),
-                    'is_string' => is_string($value),
-                    'is_empty' => empty($value),
-                    'length' => is_string($value) ? strlen($value) : 0
-                ];
-                // More lenient check - include any non-empty string
-                if (is_string($value) && trim($value) !== '') {
-                    // Create structured content with field labels
-                    $content_parts[] = $field . ': ' . $value;
-                }
-            }
-        }
-        
-        wp_send_json_success([
-            'table_name' => $table_name,
-            'full_table_name' => $full_table_name,
-            'total_count' => $total_count,
-            'records_found' => count($records),
-            'sample_record' => $sample_record,
-            'content_analysis' => $content_analysis,
-            'content_parts_count' => isset($content_parts) ? count($content_parts) : 0,
-            'query' => "SELECT * FROM `$full_table_name` LIMIT $limit OFFSET $offset"
-        ]);
-    }
-    
-    /**
-     * Test simple indexing handler
-     */
-    public function handle_test_simple_index() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        global $wpdb;
-        
-        // Get one record from committee_achievement
-        $record = $wpdb->get_row("SELECT * FROM `committee_achievement` LIMIT 1");
-        
-        if (!$record) {
-            wp_send_json_error(['message' => 'No records found']);
-        }
-        
-        // Create content string - very simple approach
-        $content_parts = [];
-        foreach ($record as $field => $value) {
-            if (is_string($value) && $value !== '') {
-                $content_parts[] = $value;
-            }
-        }
-        $content = implode(' ', $content_parts);
-        
-        // Check what columns exist in the vectors table (with prefix)
-        $vectors_table = $wpdb->prefix . 'wp_gpt_rag_chat_vectors';
-        $columns = $wpdb->get_results("DESCRIBE `$vectors_table`");
-        $column_names = array_column($columns, 'Field');
-        
-        // Build insert data based on available columns
-        $insert_data = [];
-        
-        if (in_array('post_id', $column_names)) {
-            $insert_data['post_id'] = 0;
-        }
-        if (in_array('content', $column_names)) {
-            $insert_data['content'] = $content;
-        }
-        if (in_array('metadata', $column_names)) {
-            $insert_data['metadata'] = json_encode([
-                'table_name' => 'committee_achievement',
-                'test' => true
-            ]);
-        }
-        if (in_array('created_at', $column_names)) {
-            $insert_data['created_at'] = current_time('mysql');
-        }
-        
-        // Insert into vectors table (with prefix)
-        $result = $wpdb->insert(
-            $vectors_table,
-            $insert_data
-        );
-        
-        if ($result) {
-            wp_send_json_success([
-                'message' => 'Test record indexed successfully',
-                'content_length' => strlen($content),
-                'content_preview' => substr($content, 0, 100),
-                'content_parts' => count($content_parts),
-                'table_columns' => $column_names,
-                'insert_data' => $insert_data
-            ]);
-        } else {
-            wp_send_json_error([
-                'message' => 'Failed to insert record: ' . $wpdb->last_error,
-                'table_columns' => $column_names,
-                'insert_data' => $insert_data
-            ]);
-        }
-    }
-    
-    /**
-     * Test direct insert handler
-     */
-    public function handle_test_direct_insert() {
-        check_ajax_referer('wp_gpt_rag_chat_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'wp-gpt-rag-chat')]);
-        }
-        
-        global $wpdb;
-        
-        // Check table structure first
-        $columns = $wpdb->get_results("DESCRIBE `{$wpdb->prefix}wp_gpt_rag_chat_vectors`");
-        $column_names = array_column($columns, 'Field');
-        
-        // Try to insert a simple test record with proper vector_id
-        $test_content = "Test content for committee_achievement table - " . date('Y-m-d H:i:s');
-        $vector_id = 'test_' . time() . '_' . wp_rand(1000, 9999);
-        
-        $insert_data = [
-            'content' => $test_content,
-            'metadata' => json_encode([
-                'table_name' => 'committee_achievement',
-                'test' => true,
-                'test_time' => current_time('mysql')
-            ])
-        ];
-        
-        // Add required columns if they exist
-        if (in_array('vector_id', $column_names)) {
-            $insert_data['vector_id'] = $vector_id;
-        }
-        if (in_array('post_id', $column_names)) {
-            $insert_data['post_id'] = 0;
-        }
-        if (in_array('created_at', $column_names)) {
-            $insert_data['created_at'] = current_time('mysql');
-        }
-        
-        $result = $wpdb->insert(
-            $wpdb->prefix . 'wp_gpt_rag_chat_vectors',
-            $insert_data
-        );
-        
-        if ($result) {
-            wp_send_json_success([
-                'message' => 'Direct insert successful - ID: ' . $wpdb->insert_id,
-                'content' => $test_content,
-                'table' => $wpdb->prefix . 'wp_gpt_rag_chat_vectors',
-                'vector_id' => $vector_id,
-                'table_columns' => $column_names,
-                'insert_data' => $insert_data
-            ]);
-        } else {
-            wp_send_json_error([
-                'message' => 'Direct insert failed: ' . $wpdb->last_error,
-                'table' => $wpdb->prefix . 'wp_gpt_rag_chat_vectors',
-                'table_columns' => $column_names,
-                'insert_data' => $insert_data
-            ]);
-        }
     }
 
 }

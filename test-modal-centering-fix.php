@@ -227,3 +227,4 @@ echo "<p>Modal should now appear in the exact center of the page.</p>\n";
 echo "<p>No more side positioning issues.</p>\n";
 echo "<p>All functionality should work perfectly.</p>\n";
 ?>
+

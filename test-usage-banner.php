@@ -227,3 +227,4 @@ echo "<p>Usage banner should now appear on first load with Arabic message.</p>\n
 echo "<p>Users must check 'I Understand' checkbox before proceeding.</p>\n";
 echo "<p>Banner will remember acknowledgment and not show again.</p>\n";
 ?>
+

@@ -73,3 +73,4 @@ echo "<p><strong>Restore:</strong> To restore security, run the restore script o
 echo "<h3>Test Complete!</h3>\n";
 echo "<p>The analytics page should now be accessible without any permission errors.</p>\n";
 ?>
+

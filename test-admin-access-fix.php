@@ -106,3 +106,4 @@ echo "<li>Check if the plugin is active</li>\n";
 echo "<li>Verify user has administrator role</li>\n";
 echo "</ol>\n";
 ?>
+

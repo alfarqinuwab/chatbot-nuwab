@@ -122,3 +122,4 @@ echo "<h3>Test Complete!</h3>\n";
 echo "<p>All permission checks should now be removed from the main page methods.</p>\n";
 echo "<p>If you're still getting permission errors, there might be other sources of permission checks.</p>\n";
 ?>
+

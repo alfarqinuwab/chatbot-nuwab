@@ -352,3 +352,4 @@ class Audit_Trail {
         ];
     }
 }
+

@@ -279,3 +279,4 @@ echo "<p>Usage modal should now appear on first load only.</p>\n";
 echo "<p>User agreement should be saved in cookies for 30 days.</p>\n";
 echo "<p>Modal should not appear on return visits.</p>\n";
 ?>
+

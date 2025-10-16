@@ -237,3 +237,4 @@ echo "<p>Checkbox text should now be 'موافق' (Agree) in white color.</p>\n"
 echo "<p>All functionality should remain the same.</p>\n";
 echo "<p>Text should be clearly visible on the red gradient background.</p>\n";
 ?>
+

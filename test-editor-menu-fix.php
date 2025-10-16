@@ -99,3 +99,4 @@ echo "</ol>\n";
 echo "<h3>Test Complete!</h3>\n";
 echo "<p>If the fix is working correctly, editors should see their own 'Nuwab AI Assistant' menu with Dashboard and Analytics & Logs options.</p>\n";
 ?>
+

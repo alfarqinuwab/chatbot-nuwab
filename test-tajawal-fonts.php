@@ -196,3 +196,4 @@ echo "<p>All fonts should now use Tajawal font family consistently.</p>\n";
 echo "<p>The sensitive input warning modal and chat interface should have uniform typography.</p>\n";
 echo "<p>Arabic text should render beautifully with proper RTL support.</p>\n";
 ?>
+

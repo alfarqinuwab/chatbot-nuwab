@@ -87,3 +87,4 @@ echo "<h3>Access URL:</h3>\n";
 echo "<p>You can access the About Plugin page at:</p>\n";
 echo "<code>wp-admin/admin.php?page=wp-gpt-rag-chat-about</code>\n";
 ?>
+

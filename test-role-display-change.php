@@ -125,3 +125,4 @@ echo "<h3>Test Complete!</h3>\n";
 echo "<p>Administrator role should now display as 'Administrator' instead of 'AIMS Manager (Administrator)'.</p>\n";
 echo "<p>Editor role should continue to display as 'Log Viewer' as before.</p>\n";
 ?>
+

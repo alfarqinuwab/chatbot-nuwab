@@ -89,3 +89,4 @@ echo "</ul>\n";
 echo "<h3>Test Complete!</h3>\n";
 echo "<p>If all checks show the expected results, the analytics page should be accessible.</p>\n";
 ?>
+

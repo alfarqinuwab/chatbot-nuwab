@@ -140,3 +140,4 @@ echo "<h3>Test Complete!</h3>\n";
 echo "<p>The duplicate menu issue should now be completely resolved.</p>\n";
 echo "<p>You should see only one 'Nuwab AI Assistant' menu with the appropriate submenus for your role.</p>\n";
 ?>
+

@@ -197,3 +197,4 @@ echo "<p>Sensitive input detection should now be fully functional in the chat in
 echo "<p>Users will be warned and blocked from sending messages containing sensitive information.</p>\n";
 echo "<p>The system supports multiple types of sensitive data detection with Arabic interface.</p>\n";
 ?>
+

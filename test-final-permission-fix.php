@@ -116,3 +116,4 @@ echo "<h3>Test Complete!</h3>\n";
 echo "<p>All permission checks have been removed from the plugin.</p>\n";
 echo "<p>If you're still getting permission errors, the issue might be outside the plugin (WordPress core, other plugins, or caching).</p>\n";
 ?>
+

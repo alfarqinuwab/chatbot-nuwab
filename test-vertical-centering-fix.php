@@ -239,3 +239,4 @@ echo "<p>Modal should now appear in the exact vertical center of the page.</p>\n
 echo "<p>No more upper positioning issues.</p>\n";
 echo "<p>All functionality should work perfectly.</p>\n";
 ?>
+

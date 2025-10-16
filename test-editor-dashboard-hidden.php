@@ -149,3 +149,4 @@ echo "<h3>Test Complete!</h3>\n";
 echo "<p>Editor dashboard should now show only relevant information without management sections.</p>\n";
 echo "<p>Administrator dashboard should continue to show all sections as before.</p>\n";
 ?>
+

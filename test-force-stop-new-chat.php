@@ -99,3 +99,4 @@ echo "</ol>\n";
 echo "<h3>Test Complete!</h3>\n";
 echo "<p>If the AI processing is immediately stopped when New Chat is clicked during processing, and no AI response appears on screen, then the force stop functionality is working correctly.</p>\n";
 ?>
+

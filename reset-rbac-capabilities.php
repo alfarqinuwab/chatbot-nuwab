@@ -94,3 +94,4 @@ echo "<h3>Test Complete!</h3>\n";
 echo "<p>Capabilities have been reset and added to all user roles.</p>\n";
 echo "<p>Editors should now be able to see the plugin menu with limited access.</p>\n";
 ?>
+

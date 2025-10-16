@@ -208,3 +208,4 @@ echo "<p>Checkbox should now be clearly visible with proper styling.</p>\n";
 echo "<p>White background, gray border, blue when checked.</p>\n";
 echo "<p>Custom checkmark appears when checked.</p>\n";
 ?>
+

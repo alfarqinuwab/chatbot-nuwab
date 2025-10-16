@@ -204,3 +204,4 @@ echo "<p>Real-time validation should now prevent submission until sensitive cont
 echo "<p>Users cannot bypass the validation by clicking cancel on the warning modal.</p>\n";
 echo "<p>Visual indicators provide clear feedback about sensitive content detection.</p>\n";
 ?>
+

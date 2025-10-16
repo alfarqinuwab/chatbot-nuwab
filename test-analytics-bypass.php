@@ -60,3 +60,4 @@ echo "</ul>\n";
 echo "<h3>Test Complete!</h3>\n";
 echo "<p>If the template loads above, the analytics page should work.</p>\n";
 ?>
+

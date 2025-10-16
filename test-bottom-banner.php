@@ -266,3 +266,4 @@ echo "<p>Usage banner should now appear at the bottom of the screen.</p>\n";
 echo "<p>Banner should slide up from bottom with smooth animation.</p>\n";
 echo "<p>All functionality should work the same as before.</p>\n";
 ?>
+

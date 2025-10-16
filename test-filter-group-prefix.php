@@ -169,3 +169,4 @@ echo "<p>All filter-group classes now use the wp-gpt-rag-filter-group prefix.</p
 echo "<p>Width constraints have been removed for more flexible field sizing.</p>\n";
 echo "<p>The layout should work better across different screen sizes.</p>\n";
 ?>
+

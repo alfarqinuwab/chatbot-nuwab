@@ -54,3 +54,4 @@ echo "<p><strong>Direct Access:</strong> If user has edit_posts, allow access</p
 echo "<h3>Test Complete!</h3>\n";
 echo "<p>This simplified approach should work for all editor users.</p>\n";
 ?>
+

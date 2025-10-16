@@ -162,3 +162,4 @@ echo "<p>Password and API key detection should now be fully functional.</p>\n";
 echo "<p>Users will be warned and blocked from sharing passwords, API keys, and tokens.</p>\n";
 echo "<p>The system supports multiple languages and service-specific key formats.</p>\n";
 ?>
+

@@ -159,3 +159,4 @@ echo "<p>Password detection should now work with and without colons/semicolons.<
 echo "<p>API key detection should be more flexible with separators.</p>\n";
 echo "<p>All patterns should catch natural writing variations.</p>\n";
 ?>
+

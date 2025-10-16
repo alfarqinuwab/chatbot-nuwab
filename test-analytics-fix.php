@@ -80,3 +80,4 @@ echo "</ul>\n";
 echo "<h3>Test Complete!</h3>\n";
 echo "<p>If the fix is working correctly, editors should be able to access the Analytics & Logs page without permission errors.</p>\n";
 ?>
+

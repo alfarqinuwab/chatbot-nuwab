@@ -396,3 +396,4 @@ class Audit_Logger {
         );
     }
 }
+

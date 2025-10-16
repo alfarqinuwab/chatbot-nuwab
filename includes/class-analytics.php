@@ -436,6 +436,112 @@ class Analytics {
     }
     
     /**
+     * Get quality metrics for dashboard
+     */
+    public function get_quality_metrics($days = 30) {
+        global $wpdb;
+        
+        $logs_table = $wpdb->prefix . 'wp_gpt_rag_chat_logs';
+        $gaps_table = $wpdb->prefix . 'wp_gpt_rag_chat_content_gaps';
+        
+        // Response accuracy (responses with sources)
+        $total_responses = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$logs_table}
+            WHERE role = 'assistant' AND created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $days
+        ));
+        
+        $responses_with_sources = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$logs_table}
+            WHERE role = 'assistant' AND rag_sources IS NOT NULL AND rag_sources != ''
+            AND created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $days
+        ));
+        
+        $response_accuracy = $total_responses > 0 ? round(($responses_with_sources / $total_responses) * 100, 1) : 0;
+        
+        // Source attribution percentage
+        $source_attribution = $total_responses > 0 ? round(($responses_with_sources / $total_responses) * 100, 1) : 0;
+        
+        // Content gaps resolution
+        $total_gaps = $wpdb->get_var("SELECT COUNT(*) FROM {$gaps_table}");
+        $gaps_resolved = $wpdb->get_var("SELECT COUNT(*) FROM {$gaps_table} WHERE status = 'resolved'");
+        $gap_resolution_rate = $total_gaps > 0 ? round(($gaps_resolved / $total_gaps) * 100, 1) : 0;
+        
+        // User satisfaction (convert thumbs up/down to 1-5 scale)
+        $rating_stats = $wpdb->get_row($wpdb->prepare(
+            "SELECT 
+                COUNT(CASE WHEN rating = 1 THEN 1 END) as thumbs_up,
+                COUNT(CASE WHEN rating = -1 THEN 1 END) as thumbs_down,
+                COUNT(CASE WHEN rating IS NOT NULL THEN 1 END) as total_rated
+            FROM {$logs_table}
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $days
+        ));
+        
+        // Convert to 1-5 scale (thumbs up = 5, thumbs down = 1, neutral = 3)
+        $user_satisfaction = 0;
+        if ($rating_stats->total_rated > 0) {
+            $positive_ratio = $rating_stats->thumbs_up / $rating_stats->total_rated;
+            $user_satisfaction = round(1 + ($positive_ratio * 4), 1); // Scale from 1-5
+        }
+        
+        // Calculate trends (compare with previous period)
+        $previous_period_start = $days * 2;
+        $previous_period_end = $days;
+        
+        // Previous period accuracy
+        $prev_responses = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$logs_table}
+            WHERE role = 'assistant' 
+            AND created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)
+            AND created_at < DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $previous_period_start, $previous_period_end
+        ));
+        
+        $prev_responses_with_sources = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$logs_table}
+            WHERE role = 'assistant' AND rag_sources IS NOT NULL AND rag_sources != ''
+            AND created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)
+            AND created_at < DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $previous_period_start, $previous_period_end
+        ));
+        
+        $prev_accuracy = $prev_responses > 0 ? round(($prev_responses_with_sources / $prev_responses) * 100, 1) : 0;
+        $accuracy_trend = $response_accuracy - $prev_accuracy;
+        
+        // Previous period satisfaction
+        $prev_rating_stats = $wpdb->get_row($wpdb->prepare(
+            "SELECT 
+                COUNT(CASE WHEN rating = 1 THEN 1 END) as thumbs_up,
+                COUNT(CASE WHEN rating = -1 THEN 1 END) as thumbs_down,
+                COUNT(CASE WHEN rating IS NOT NULL THEN 1 END) as total_rated
+            FROM {$logs_table}
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)
+            AND created_at < DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $previous_period_start, $previous_period_end
+        ));
+        
+        $prev_satisfaction = 0;
+        if ($prev_rating_stats->total_rated > 0) {
+            $prev_positive_ratio = $prev_rating_stats->thumbs_up / $prev_rating_stats->total_rated;
+            $prev_satisfaction = round(1 + ($prev_positive_ratio * 4), 1);
+        }
+        $satisfaction_trend = $user_satisfaction - $prev_satisfaction;
+        
+        return [
+            'response_accuracy' => $response_accuracy,
+            'source_attribution' => $source_attribution,
+            'gaps_resolved' => (int) $gaps_resolved,
+            'total_gaps' => (int) $total_gaps,
+            'gap_resolution_rate' => $gap_resolution_rate,
+            'user_satisfaction' => $user_satisfaction,
+            'accuracy_trend' => $accuracy_trend,
+            'satisfaction_trend' => $satisfaction_trend
+        ];
+    }
+    
+    /**
      * Cleanup old logs based on retention policy
      */
     public function cleanup_old_logs() {

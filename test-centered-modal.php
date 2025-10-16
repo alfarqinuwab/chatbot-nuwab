@@ -237,3 +237,4 @@ echo "<p>Modal should now appear in the center of the page without overlay.</p>\
 echo "<p>All functionality should remain the same.</p>\n";
 echo "<p>Modal should be perfectly centered and responsive.</p>\n";
 ?>
+

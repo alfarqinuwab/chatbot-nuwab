@@ -91,3 +91,4 @@ echo "<h3>Test Complete!</h3>\n";
 echo "<p>The analytics page should now be completely accessible without any permission checks.</p>\n";
 echo "<p>If you're still getting errors, there might be a caching issue or the changes haven't been applied yet.</p>\n";
 ?>
+

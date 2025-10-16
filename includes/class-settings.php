@@ -445,10 +445,6 @@ class Settings {
         $sanitized['allow_anonymous'] = isset($input['allow_anonymous']) ? (bool) $input['allow_anonymous'] : true;
         $sanitized['response_mode'] = sanitize_text_field($input['response_mode'] ?? 'hybrid');
         
-        // Template settings
-        $sanitized['chat_logo'] = esc_url_raw($input['chat_logo'] ?? '');
-        $sanitized['show_chat_in_footer'] = isset($input['show_chat_in_footer']) ? (bool) $input['show_chat_in_footer'] : false;
-        
         // Advanced settings
         $sanitized['debug_mode'] = isset($input['debug_mode']) ? (bool) $input['debug_mode'] : false;
         $sanitized['logging_level'] = sanitize_text_field($input['logging_level'] ?? 'error');

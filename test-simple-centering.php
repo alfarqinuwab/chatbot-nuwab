@@ -213,3 +213,4 @@ echo "<p>Modal should now appear in the exact center of the screen.</p>\n";
 echo "<p>Simple transform-based centering solution.</p>\n";
 echo "<p>No more side positioning issues.</p>\n";
 ?>
+

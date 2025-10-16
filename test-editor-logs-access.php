@@ -120,3 +120,4 @@ echo "<h3>Test Complete!</h3>\n";
 echo "<p>The Analytics & Logs submenu should now be available to editors.</p>\n";
 echo "<p>If you're still having issues, the problem might be caching or other WordPress restrictions.</p>\n";
 ?>
+

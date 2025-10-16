@@ -150,3 +150,4 @@ echo "<h3>Test Complete!</h3>\n";
 echo "<p>Editor tab links should now use the correct editor-specific URLs.</p>\n";
 echo "<p>All navigation and functionality should work correctly for both editors and administrators.</p>\n";
 ?>
+

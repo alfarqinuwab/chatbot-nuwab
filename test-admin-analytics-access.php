@@ -70,3 +70,4 @@ echo "<h3>Test Complete!</h3>\n";
 echo "<p>If you're logged in, the analytics page should now be accessible through WordPress admin.</p>\n";
 echo "<p>Try clicking the links above to test access.</p>\n";
 ?>
+

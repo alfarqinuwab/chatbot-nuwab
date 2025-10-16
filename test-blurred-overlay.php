@@ -234,3 +234,4 @@ echo "<p>Modal should now appear with a blurred overlay background.</p>\n";
 echo "<p>Background content should be blurred for better focus.</p>\n";
 echo "<p>All functionality should remain the same.</p>\n";
 ?>
+

@@ -78,3 +78,4 @@ echo "<li>If capabilities are missing, check role assignments</li>\n";
 echo "<li>Try deactivating and reactivating the plugin</li>\n";
 echo "</ol>\n";
 ?>
+

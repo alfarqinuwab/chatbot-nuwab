@@ -89,3 +89,4 @@ echo "<p>This ensures the RBAC class is properly namespaced and accessible.</p>\
 echo "<h3>Test Complete!</h3>\n";
 echo "<p>If the fix is working correctly, the logs page should load without errors for editor users.</p>\n";
 ?>
+
